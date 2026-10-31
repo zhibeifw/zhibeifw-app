@@ -1,6 +1,6 @@
 # 智悲佛网 App
 
-索达吉堪布历年讲法录音的手机 App，iOS 和 Android 原生版。
+功能特色:
 
 - 不用注册账号，不收集任何个人信息，没有统计、广告和推送
 - 在线收听，也可以下载到手机离线收听
@@ -42,7 +42,7 @@ cd android
 ./gradlew testDebugUnitTest    # 单元测试
 ```
 
-正式包需要签名密钥，从 `~/.gradle/gradle.properties` 读取 `ZBFW_UPLOAD_STORE_FILE`、`ZBFW_UPLOAD_STORE_PASSWORD`、`ZBFW_UPLOAD_KEY_ALIAS`、`ZBFW_UPLOAD_KEY_PASSWORD`，仓库里没有也不应该有密钥。
+正式包需要签名密钥，从 `~/.gradle/gradle.properties` 读取 `ZBFW_UPLOAD_STORE_FILE`、`ZBFW_UPLOAD_STORE_PASSWORD`、`ZBFW_UPLOAD_KEY_ALIAS`、`ZBFW_UPLOAD_KEY_PASSWORD`，仓库里没有密钥。
 
 **版本号**：两端都读根目录的 `Version.xcconfig`。`MARKETING_VERSION` 是发布日期（如 `2026.10.31`），`CURRENT_PROJECT_VERSION` 是日期加两位当天序号（如 `2026103107`）。
 
