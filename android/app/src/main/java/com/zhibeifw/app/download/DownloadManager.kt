@@ -1,0 +1,324 @@
+package com.zhibeifw.app.download
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.setValue
+import com.zhibeifw.app.core.DlStatus
+import com.zhibeifw.app.core.orphanCoverKeys
+import com.zhibeifw.app.data.AppFiles
+import com.zhibeifw.app.data.DlItem
+import com.zhibeifw.app.data.Store
+import com.zhibeifw.app.net.buildUrl
+import java.io.File
+import kotlin.math.abs
+import kotlin.math.min
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+
+// 下载。与 iOS DownloadManager.swift 是同一套做法。
+//  真正的下载、排队、同时下几个、断网重试都交给系统（Android 系统 DownloadManager，iOS URLSession 后台会话），
+//  这里只做系统不管的事：记下载记录、下完移入资料库、显示进度、失败时整批提示一次、对账。
+//  - 有网就下，不分 Wi-Fi 还是流量，不提示；
+//  - 暂停：系统没有公开的暂停，从系统里删掉，继续时从头下（iOS 用系统的续传数据）；
+//  - 系统报失败：回到“未下载”；整批结束只提示一次；
+//  - 存储空间不足：提示一次。
+
+/** 系统交回来的下载事件（在主线程上处理）。 */
+sealed class DownloadEvent {
+    data class Progress(val id: String, val written: Long, val total: Long) : DownloadEvent()
+
+    /** 下完：系统下好的文件，复制进资料库后交还系统删掉 */
+    data class Finished(val id: String, val file: File) : DownloadEvent()
+    data class Failed(val id: String, val diskFull: Boolean) : DownloadEvent()
+}
+
+/** 系统的下载服务（测试或换实现时可替换）。 */
+interface SystemDownloads {
+    fun setHandler(h: (DownloadEvent) -> Unit)
+
+    /** 交给系统下载（标题、说明显示在系统通知栏里）。 */
+    fun start(id: String, url: String, title: String, description: String)
+
+    /** 停下并从系统里删掉（暂停、取消都用它；系统没有公开的暂停）。 */
+    fun stop(id: String)
+
+    /** 下完的文件已复制进资料库：交还系统删掉。 */
+    fun release(id: String)
+
+    /** 系统里还在下（含排队、等网络、刚下完待收尾）的集；candidates 是数据库里没下完的集，用来认出系统里的下载。 */
+    suspend fun activeIds(candidates: Collection<String>): Set<String>
+}
+
+/** 进度节流：变化够 1% 且距上次够 0.25 秒才放行（线程安全，在查询线程上调用）。 */
+class ProgressThrottle {
+    private var lastRatio = -1.0
+    private var lastAt = 0L
+    @Synchronized
+    fun pass(written: Long, total: Long, now: Long = System.currentTimeMillis()): Boolean {
+        val ratio = if (total > 0) written.toDouble() / total else 0.0
+        if (lastRatio >= 0 && (abs(ratio - lastRatio) < 0.01 || now - lastAt < 250)) return false
+        lastRatio = ratio; lastAt = now
+        return true
+    }
+}
+
+data class DlProgress(
+    val status: DlStatus,
+    val written: Long,
+    val total: Long,
+    val seriesId: String
+) {
+    val ratio get() = if (total > 0) min(1.0, written.toDouble() / total) else 0.0
+}
+
+class DownloadManager(
+    val system: SystemDownloads,
+    val store: Store,
+    val files: AppFiles,
+) {
+    val items = mutableStateMapOf<String, DlProgress>()
+
+    /** 整批结束有失败时 +1（界面据此弹一次“部分下载失败，请稍后重试”）。 */
+    var failedBatch by mutableIntStateOf(0); private set
+    var diskFull by mutableIntStateOf(0); private set
+
+    var origin: suspend () -> String? = { null }
+    var onChange: (() -> Unit)? = null
+
+    /** 整批结束有失败：“部分下载失败，请稍后重试”（整批只提示一次）。 */
+    var onBatchFailed: (() -> Unit)? = null
+
+    /** 存储空间不足：“手机存储空间不足，下载失败”。 */
+    var onDiskFull: (() -> Unit)? = null
+
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** 正在交给系统（还在等线路）的集：对账时别把它们当成中断 */
+    private val starting = HashSet<String>()
+    private var failedInBatch = 0
+    private var diskFullShown = false
+
+    init {
+        system.setHandler(::handle)
+    }
+
+    /** notify：状态变了才通知各页面重新读库；单纯的进度变化不通知（界面直接读 items）。 */
+    private fun set(id: String, v: DlProgress?, notify: Boolean = true) {
+        if (v == null) items.remove(id) else items[id] = v
+        if (notify) onChange?.invoke()
+    }
+
+    /** 有没有排队或正在下的集 */
+    val hasActive get() = items.values.any { it.status == DlStatus.QUEUED || it.status == DlStatus.DOWNLOADING }
+
+    private fun finishBatchIfIdle() {
+        if (hasActive) return
+        if (failedInBatch > 0) {
+            failedInBatch = 0; failedBatch++; onBatchFailed?.invoke()
+        }
+        diskFullShown = false
+    }
+
+    /** 把一批集交给系统下载（已在下或已下载的忽略；已暂停的从头重下）。 */
+    fun enqueue(list: List<DlItem>) {
+        val seen = HashSet<String>()
+        val todo =
+            list.filter { seen.add(it.episodeId) && (items[it.episodeId]?.status.let { s -> s == null || s == DlStatus.PAUSED }) }
+        if (todo.isEmpty()) return
+        val fresh = todo.filter { items[it.episodeId]?.status != DlStatus.PAUSED }
+        if (fresh.isNotEmpty()) runCatching { store.queuedMany(fresh) } // 整批一个事务
+        for (it in todo) {
+            runCatching { store.setDlState(it.episodeId, DlStatus.DOWNLOADING) }
+            items[it.episodeId] =
+                DlProgress(DlStatus.DOWNLOADING, 0, items[it.episodeId]?.total ?: 0, it.seriesId)
+            starting.add(it.episodeId)
+        }
+        onChange?.invoke()
+        scope.launch {
+            val o = origin()
+            for (it in todo) {
+                starting.remove(it.episodeId)
+                if (items[it.episodeId]?.status != DlStatus.DOWNLOADING) continue // 等线路期间被暂停或取消了
+                if (o == null) {
+                    fail(it.episodeId); continue
+                }
+                runCatching {
+                    system.start(
+                        it.episodeId,
+                        buildUrl(o, it.audioPath),
+                        it.episodeTitle,
+                        it.seriesTitle
+                    )
+                }
+                    .onFailure { _ -> fail(it.episodeId) }
+            }
+            finishBatchIfIdle()
+        }
+    }
+
+    private fun handle(e: DownloadEvent) {
+        when (e) {
+            is DownloadEvent.Progress -> {
+                val cur = items[e.id] ?: return
+                if (cur.status != DlStatus.DOWNLOADING) return
+                set(
+                    e.id,
+                    DlProgress(DlStatus.DOWNLOADING, e.written, e.total, cur.seriesId),
+                    notify = false
+                )
+            }
+
+            is DownloadEvent.Finished -> {
+                scope.launch { finish(e.id, e.file); finishBatchIfIdle() }; return
+            }
+
+            is DownloadEvent.Failed -> if (e.diskFull) diskFullFail(e.id) else if (store.getDownload(
+                    e.id
+                ) != null
+            ) fail(e.id)
+        }
+        finishBatchIfIdle()
+    }
+
+    private suspend fun finish(id: String, file: File) {
+        val r = store.getDownload(id)
+        if (r == null || r.state == DlStatus.DONE) {
+            system.release(id); return
+        }
+        val rel = files.finalRelative(id, r.audioPath)
+        val final = files.absolute(rel)
+        val ok = withContext(Dispatchers.IO) {
+            runCatching {
+                file.copyTo(
+                    final,
+                    overwrite = true
+                ); file.length() > 0
+            }.getOrElse { final.delete(); false }
+        }
+        system.release(id)
+        if (!ok) {
+            diskFullFail(id); return
+        }
+        runCatching { store.setDlDone(id, rel) }
+        set(id, DlProgress(DlStatus.DONE, 1, 1, r.seriesId))
+    }
+
+    private fun fail(id: String) {
+        system.stop(id)
+        runCatching { store.removeDownload(id) }
+        set(id, null)
+        failedInBatch++
+    }
+
+    private fun diskFullFail(id: String) {
+        system.stop(id)
+        runCatching { store.removeDownload(id) }
+        set(id, null)
+        if (!diskFullShown) {
+            diskFullShown = true; diskFull++; onDiskFull?.invoke()
+        }
+    }
+
+    fun pause(id: String) {
+        val cur = items[id] ?: return
+        if (cur.status != DlStatus.QUEUED && cur.status != DlStatus.DOWNLOADING) return
+        system.stop(id)
+        runCatching { store.setDlPaused(id, 0) }
+        set(id, cur.copy(status = DlStatus.PAUSED, written = 0))
+        finishBatchIfIdle()
+    }
+
+    fun pauseAll(seriesId: String? = null) {
+        items.filter { (it.value.status == DlStatus.QUEUED || it.value.status == DlStatus.DOWNLOADING) && (seriesId == null || it.value.seriesId == seriesId) }.keys.toList()
+            .forEach(::pause)
+    }
+
+    fun cancel(id: String) {
+        val cur = items[id] ?: return
+        if (cur.status == DlStatus.DONE) return
+        system.stop(id)
+        runCatching { store.removeDownload(id) }
+        set(id, null)
+        finishBatchIfIdle()
+        cleanupCovers()
+    }
+
+    fun cancelSeries(seriesId: String? = null) {
+        items.filter { (seriesId == null || it.value.seriesId == seriesId) && it.value.status != DlStatus.DONE }.keys.toList()
+            .forEach(::cancel)
+    }
+
+    fun resumePaused(seriesId: String? = null) {
+        enqueue(
+            store.allDownloads()
+                .filter { it.state == DlStatus.PAUSED && (seriesId == null || it.seriesId == seriesId) }
+                .map { it.item })
+    }
+
+    /** 删除下载（文件和记录；没下完的先停下）。 */
+    fun removeDownload(id: String) {
+        items[id]?.let {
+            if (it.status != DlStatus.DONE) {
+                cancel(id); return
+            }
+        }
+        store.getDownload(id)?.localFile?.let { files.absolute(it).delete() }
+        runCatching { store.removeDownload(id) }
+        set(id, null)
+        cleanupCovers()
+    }
+
+    fun removeSeries(seriesId: String) {
+        for (r in store.downloadsOfSeries(seriesId)) removeDownload(r.episodeId)
+    }
+
+    /** 没有任何下载记录的课，本机保存的封面删掉。 */
+    fun cleanupCovers() {
+        val keys = files.coversDir.listFiles()?.map { it.name }?.filter { it.endsWith(".jpg") }
+            ?.map { it.removeSuffix(".jpg") } ?: emptyList()
+        for (k in orphanCoverKeys(keys, store.seriesIdsWithDownloads())) File(
+            files.coversDir,
+            "$k.jpg"
+        ).delete()
+    }
+
+    /** 对账（启动、回到前台）：系统里还在下的保持“下载中”；没下完、系统里也没有的记为已暂停（继续时从头下）。 */
+    suspend fun reconcile() {
+        for (r in store.doneDownloads()) {
+            val lf = r.localFile
+            if (lf != null && files.absolute(lf).exists()) {
+                if (items[r.episodeId]?.status != DlStatus.DONE) items[r.episodeId] =
+                    DlProgress(DlStatus.DONE, 1, 1, r.seriesId)
+            } else {
+                runCatching { store.removeDownload(r.episodeId) }
+                items.remove(r.episodeId)
+            }
+        }
+        val pending = store.allDownloads().filter { it.state != DlStatus.DONE }
+        val active = system.activeIds(pending.map { it.episodeId })
+        for (r in pending) {
+            val id = r.episodeId
+            if (id in active || id in starting) {
+                if (items[id] == null) items[id] =
+                    DlProgress(DlStatus.DOWNLOADING, 0, r.total, r.seriesId)
+                continue
+            }
+            if (r.state != DlStatus.PAUSED || r.bytes != 0L) runCatching {
+                store.setDlPaused(
+                    id,
+                    0
+                )
+            }
+            items[id] = DlProgress(DlStatus.PAUSED, 0, r.total, r.seriesId)
+        }
+        // 旧版本自己下载时留下的半截文件
+        withContext(Dispatchers.IO) { files.partDir.listFiles()?.forEach { it.delete() } }
+        cleanupCovers()
+        finishBatchIfIdle()
+        onChange?.invoke()
+    }
+}

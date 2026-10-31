@@ -1,0 +1,22 @@
+#!/bin/sh
+# 提交前自动检查：发现密钥特征就拒绝提交。
+# 安装：sh tools/install-hooks.sh
+set -e
+
+if ! command -v gitleaks >/dev/null 2>&1; then
+  echo "没有找到 gitleaks，不能提交。先安装：brew install gitleaks" >&2
+  exit 1
+fi
+
+# 只查这次要提交的内容
+gitleaks git --staged --redact --no-banner
+
+# 文件名带 key / secret / token / keystore / credentials 的先停下（总原则第 4 条）
+names=$(git diff --cached --name-only --diff-filter=A | grep -iE 'secret|token|keystore|credentials|\.env|\.jks$|\.p12$|\.p8$' | grep -v '\.env\.example$' \
+  | grep -vE '(^|/)(design-tokens\.json|Tokens\.kt|Tokens\.swift)$' || true)
+# 例外：.env.example 只有占位；design-tokens.json / Tokens.kt / Tokens.swift 是设计令牌（颜色、尺寸），不是密钥
+if [ -n "$names" ]; then
+  echo "这些文件名看起来像密钥，确认不是再提交（确认后用 git commit --no-verify）：" >&2
+  echo "$names" >&2
+  exit 1
+fi

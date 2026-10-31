@@ -1,0 +1,275 @@
+{
+  "_说明": "图标名（沿用 Ionicons 命名，index.json 分类的 icon 字段也用这些名字）→ 两端系统图标。iOS 用苹果 SF Symbols（系统自带，按名字取）；Android 用 Google Material Symbols（Outlined，24px；SVG 从 github.com/google/material-design-icons 下载到 doc/icons-material/，Apache 2.0，要在官网 licenses 页署名）。fill=true 用实心版本。用户 2026-10-22 定：两端图标都改用各自系统的。",
+  "icons": {
+    "accessibility-outline": {
+      "sf": "figure.stand",
+      "material": "accessibility_new",
+      "fill": false
+    },
+    "arrow-down": {
+      "sf": "arrow.down",
+      "material": "arrow_downward",
+      "fill": false
+    },
+    "arrow-down-circle": {
+      "sf": "arrow.down.circle.fill",
+      "material": "arrow_circle_down",
+      "fill": true
+    },
+    "arrow-down-circle-outline": {
+      "sf": "arrow.down.circle",
+      "material": "arrow_circle_down",
+      "fill": false
+    },
+    "arrow-forward-circle-outline": {
+      "sf": "arrow.forward.circle",
+      "material": "arrow_circle_right",
+      "fill": false
+    },
+    "arrow-up": {
+      "sf": "arrow.up",
+      "material": "arrow_upward",
+      "fill": false
+    },
+    "book-outline": {
+      "sf": "book",
+      "material": "menu_book",
+      "fill": false
+    },
+    "bookmark": {
+      "sf": "bookmark.fill",
+      "material": "bookmark",
+      "fill": true
+    },
+    "bookmark-outline": {
+      "sf": "bookmark",
+      "material": "bookmark",
+      "fill": false
+    },
+    "bulb-outline": {
+      "sf": "lightbulb",
+      "material": "lightbulb",
+      "fill": false
+    },
+    "chatbubble-ellipses-outline": {
+      "sf": "ellipsis.bubble",
+      "material": "chat",
+      "fill": false
+    },
+    "checkmark": {
+      "sf": "checkmark",
+      "material": "check",
+      "fill": false
+    },
+    "checkmark-circle": {
+      "sf": "checkmark.circle.fill",
+      "material": "check_circle",
+      "fill": true
+    },
+    "checkmark-circle-outline": {
+      "sf": "checkmark.circle",
+      "material": "check_circle",
+      "fill": false
+    },
+    "chevron-back": {
+      "sf": "chevron.backward",
+      "material": "arrow_back",
+      "fill": false
+    },
+    "chevron-forward": {
+      "sf": "chevron.forward",
+      "material": "chevron_right",
+      "fill": false
+    },
+    "close": {
+      "sf": "xmark",
+      "material": "close",
+      "fill": false
+    },
+    "close-circle-outline": {
+      "sf": "xmark.circle",
+      "material": "cancel",
+      "fill": false
+    },
+    "cloudy-outline": {
+      "sf": "cloud",
+      "material": "cloud",
+      "fill": false
+    },
+    "ellipsis-horizontal": {
+      "sf": "ellipsis",
+      "material": "more_horiz",
+      "fill": false
+    },
+    "flame-outline": {
+      "sf": "flame",
+      "material": "local_fire_department",
+      "fill": false
+    },
+    "flower-outline": {
+      "sf": "camera.macro",
+      "material": "local_florist",
+      "fill": false
+    },
+    "grid": {
+      "sf": "square.grid.2x2.fill",
+      "material": "grid_view",
+      "fill": true
+    },
+    "grid-outline": {
+      "sf": "square.grid.2x2",
+      "material": "grid_view",
+      "fill": false
+    },
+    "heart-outline": {
+      "sf": "heart",
+      "material": "favorite",
+      "fill": false
+    },
+    "home": {
+      "sf": "house.fill",
+      "material": "home",
+      "fill": true
+    },
+    "home-outline": {
+      "sf": "house",
+      "material": "home",
+      "fill": false
+    },
+    "infinite-outline": {
+      "sf": "infinity",
+      "material": "all_inclusive",
+      "fill": false
+    },
+    "information-circle-outline": {
+      "sf": "info.circle",
+      "material": "info",
+      "fill": false
+    },
+    "leaf-outline": {
+      "sf": "leaf",
+      "material": "eco",
+      "fill": false
+    },
+    "library-outline": {
+      "sf": "books.vertical",
+      "material": "library_books",
+      "fill": false
+    },
+    "mic-outline": {
+      "sf": "mic",
+      "material": "mic",
+      "fill": false
+    },
+    "moon": {
+      "sf": "moon.fill",
+      "material": "bedtime",
+      "fill": true
+    },
+    "moon-outline": {
+      "sf": "moon",
+      "material": "bedtime",
+      "fill": false
+    },
+    "musical-notes": {
+      "sf": "music.note",
+      "material": "music_note",
+      "fill": false
+    },
+    "pause": {
+      "sf": "pause.fill",
+      "material": "pause",
+      "fill": true
+    },
+    "pause-circle-outline": {
+      "sf": "pause.circle",
+      "material": "pause_circle",
+      "fill": false
+    },
+    "people-outline": {
+      "sf": "person.2",
+      "material": "group",
+      "fill": false
+    },
+    "planet-outline": {
+      "sf": "globe.asia.australia",
+      "material": "public",
+      "fill": false
+    },
+    "play": {
+      "sf": "play.fill",
+      "material": "play_arrow",
+      "fill": true
+    },
+    "refresh": {
+      "sf": "arrow.clockwise",
+      "material": "refresh",
+      "fill": false
+    },
+    "school-outline": {
+      "sf": "graduationcap",
+      "material": "school",
+      "fill": false
+    },
+    "search": {
+      "sf": "magnifyingglass",
+      "material": "search",
+      "fill": false
+    },
+    "search-outline": {
+      "sf": "magnifyingglass",
+      "material": "search",
+      "fill": false
+    },
+    "shield-checkmark-outline": {
+      "sf": "checkmark.shield",
+      "material": "verified_user",
+      "fill": false
+    },
+    "stack": {
+      "sf": "square.stack.fill",
+      "material": "library_music",
+      "fill": true
+    },
+    "stack-outline": {
+      "sf": "square.stack",
+      "material": "library_music",
+      "fill": false
+    },
+    "star-outline": {
+      "sf": "star",
+      "material": "star",
+      "fill": false
+    },
+    "stop": {
+      "sf": "stop.fill",
+      "material": "stop",
+      "fill": true
+    },
+    "sunny-outline": {
+      "sf": "sun.max",
+      "material": "light_mode",
+      "fill": false
+    },
+    "swap-vertical": {
+      "sf": "arrow.up.arrow.down",
+      "material": "swap_vert",
+      "fill": false
+    },
+    "time-outline": {
+      "sf": "clock",
+      "material": "history",
+      "fill": false
+    },
+    "trash-outline": {
+      "sf": "trash",
+      "material": "delete",
+      "fill": false
+    },
+    "water-outline": {
+      "sf": "drop",
+      "material": "water_drop",
+      "fill": false
+    }
+  }
+}

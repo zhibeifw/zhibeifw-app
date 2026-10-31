@@ -1,0 +1,19 @@
+智悲佛网 App
+Copyright 2026 智悲佛网
+
+本产品的代码以 Apache License 2.0 授权，见 LICENSE。
+
+“智悲佛网”名称及 Logo（android/app/src/main/res、ios/ZhibeiFW 中的应用图标、启动图标等图片）
+是智悲佛网的标识，不在 Apache License 2.0 的授权范围内（参见该许可证第 6 条）。
+
+------------------------------------------------------------------------
+
+本产品包含以下第三方素材：
+
+Material Symbols（Android 版使用的图标，doc/icons-material/ 及由其生成的
+android/app/src/main/java/com/zhibeifw/app/design/generated/Icons.kt）
+Copyright Google LLC
+Licensed under the Apache License, Version 2.0
+https://github.com/google/material-design-icons
+
+iOS 版使用苹果系统自带的 SF Symbols 和系统字体，均不随本仓库分发。

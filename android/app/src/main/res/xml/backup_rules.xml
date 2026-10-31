@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 已下载的音频不参与备份（与 v1.0 一致） -->
+<full-backup-content>
+    <exclude domain="file" path="audio/" />
+</full-backup-content>

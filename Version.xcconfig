@@ -1,0 +1,7 @@
+// 两端共用的版本号：打包只改这一个文件。
+// iOS 工程把它当作 App 目标的基础配置读取；Android 的 app/build.gradle.kts 也读这个文件。
+// MARKETING_VERSION：打包当天的日期 年.月.日（关于页“版本 2026.10.30(03)”括号前那段）
+// CURRENT_PROJECT_VERSION：日期去掉点 + 两位当天序号，从 01 开始（iOS CFBundleVersion、Android versionCode）
+// 两端一起打包、用同一个号；只改了一端也照样两端都打，关于页看到的号永远对得上同一份代码。
+MARKETING_VERSION = 2026.10.31
+CURRENT_PROJECT_VERSION = 2026103108

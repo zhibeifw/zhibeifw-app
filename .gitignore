@@ -1,0 +1,46 @@
+# 密钥与证书：一律不进仓库
+*.jks
+*.keystore
+keystore.properties
+*.p12
+*.p8
+*.pem
+*.mobileprovision
+*.cer
+credentials.json
+*service-account*.json
+.env
+.env.*
+id_rsa*
+id_ed25519*
+
+# 课程内容与发布文件（在服务器上，不进代码仓库）
+domains.json
+index.json
+upgrade.json
+update.json
+*.mp3
+*.m4a
+*.aac
+*.wav
+
+# 构建产物
+build/
+.gradle/
+.kotlin/
+DerivedData/
+*.apk
+*.aab
+*.ipa
+*.xcarchive
+dist/
+
+# 本机与 IDE 个人文件
+local.properties
+android/.idea/
+*.iml
+xcuserdata/
+*.xcuserstate
+.DS_Store
+*.log
+__pycache__/

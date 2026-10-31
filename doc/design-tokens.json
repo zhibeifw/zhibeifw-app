@@ -1,0 +1,649 @@
+{
+  "_说明": "智悲佛网 App 设计令牌（两端共用的唯一数值来源）。由 v1.0 的 src/theme 与各组件常量整理（2026-10-21）。两端用脚本从本文件生成 Swift / Kotlin 常量，界面代码只引用令牌名、不写数字。尺寸单位：iOS 为 pt、Android 为 dp（数值相同）。颜色：#RRGGBB 或 #RRGGBBAA（最后两位是透明度）。改数值只改这里，并说明来源（PRD 章节或用户决定）。",
+  "color": {
+    "_来源": "PRD 10.2；深浅模式都跟随系统，App 内不提供手动切换",
+    "background": {
+      "light": "#FFFFFF",
+      "dark": "#000000"
+    },
+    "backgroundSecondary": {
+      "light": "#F2F2F7",
+      "dark": "#1C1C1E"
+    },
+    "labelPrimary": {
+      "light": "#000000",
+      "dark": "#FFFFFF"
+    },
+    "labelSecondary": {
+      "light": "#6C6C70",
+      "dark": "#98989F"
+    },
+    "labelTertiary": {
+      "light": "#8E8E93",
+      "dark": "#8E8E93"
+    },
+    "separator": {
+      "light": "#E8E8E8",
+      "dark": "#38383B"
+    },
+    "grabber": {
+      "light": "#C6C6C8",
+      "dark": "#48484A"
+    },
+    "progressTrack": {
+      "light": "#E5E5EA",
+      "dark": "#3A3A3C"
+    },
+    "progressFill": {
+      "light": "#3A3A3C",
+      "dark": "#E5E5EA"
+    },
+    "menuSurface": {
+      "light": "#FAFAFCF7",
+      "dark": "#2C2C2EF7"
+    },
+    "menuBand": {
+      "light": "#EFEFF4",
+      "dark": "#00000080"
+    },
+    "danger": {
+      "light": "#E5342B",
+      "dark": "#FF453A"
+    },
+    "iconDisabled": {
+      "light": "#C6C6C8",
+      "dark": "#48484A"
+    },
+    "onColor": {
+      "light": "#FFFFFF",
+      "dark": "#FFFFFF",
+      "_说明": "彩色色块、滑动按钮、分类磁贴上的白字"
+    },
+    "glassSurface": {
+      "light": "#FFFFFFD1",
+      "dark": "#2C2C2EC7",
+      "_说明": "悬浮导航的半透明底（PRD 10.7，不模糊）"
+    },
+    "glassBorder": {
+      "light": "#00000014",
+      "dark": "#FFFFFF24"
+    },
+    "navDrop": {
+      "light": "#0000000F",
+      "dark": "#FFFFFF1F",
+      "_说明": "悬浮导航当前标签下的“水滴”"
+    },
+    "_新增来源": "以下由 PRD 10.2 / 10.6 补入（2026-10-21 原生版）",
+    "highContrast": {
+      "_说明": "iOS 打开“增强对比度”时用的颜色（HIG 要求支持；用户 2026-10-22 定）。背景、次背景、主文字直接用系统语义色（值与我们相同，系统自带高对比版本）；下面几项我们比系统默认更深，单独给高对比值",
+      "labelSecondary": {
+        "light": "#3A3A3C",
+        "dark": "#D1D1D6"
+      },
+      "labelTertiary": {
+        "light": "#5C5C61",
+        "dark": "#AEAEB2"
+      },
+      "separator": {
+        "light": "#C6C6C8",
+        "dark": "#545458"
+      },
+      "iconDisabled": {
+        "light": "#8E8E93",
+        "dark": "#636366"
+      },
+      "danger": {
+        "light": "#D70015",
+        "dark": "#FF6961"
+      }
+    }
+  },
+  "contentPalette": {
+    "_说明": "无封面时的占位色块与搜索页分类磁贴；深浅模式同一组、不反色；按 ID 稳定取色（TEST-SPEC“封面占位色块”“分类方块”）",
+    "colors": ["#D9691F", "#3D7EBF", "#6B4FA0", "#D65C7A", "#3F8F8F", "#7A8B3C", "#3F8F6B", "#7A3B36"],
+    "names": ["橙", "蓝", "紫", "粉红", "青", "橄榄", "绿", "褐红"],
+    "_categoryExtra": "分类方块多出的 10 种颜色（用户 2026-10-31 要 18 个分类颜色不重复）；只给分类方块用，封面占位色块仍只用上面 8 种（保证同一个 ID 的占位色不变）",
+    "categoryExtraColors": ["#C2453A", "#B0761C", "#A3468E", "#4A56A6", "#5A6B7D", "#3D7A3D", "#8A5A3A", "#2A86A6", "#8E3A5E", "#4A4F57"],
+    "categoryExtraNames": ["朱红", "琥珀", "品红", "靛蓝", "石板灰", "森林绿", "可可", "湖蓝", "酒红", "炭灰"]
+  },
+  "font": {
+    "_来源": "PRD 10.4；字号随系统字体缩放，高度用最小高度、不写死",
+    "family": {
+      "ios": "系统字体（San Francisco + 苹方），不打包",
+      "android": "Noto Sans SC Regular / Bold（assets/fonts/，打包）"
+    },
+    "style": {
+      "pageTitle": {
+        "size": 34,
+        "weight": 700,
+        "lineHeight": 41
+      },
+      "sectionTitle": {
+        "size": 20,
+        "weight": 600,
+        "lineHeight": 25
+      },
+      "navTitle": {
+        "size": 17,
+        "weight": 600,
+        "lineHeight": 22
+      },
+      "listRowTitle": {
+        "size": 17,
+        "weight": 600,
+        "lineHeight": 22
+      },
+      "cardTitle": {
+        "size": 15,
+        "weight": 600,
+        "lineHeight": 20
+      },
+      "buttonText": {
+        "size": 15,
+        "weight": 600,
+        "lineHeight": 20
+      },
+      "tileText": {
+        "size": 17,
+        "weight": 700,
+        "lineHeight": 22
+      },
+      "body": {
+        "size": 17,
+        "weight": 400,
+        "lineHeight": 22
+      },
+      "caption": {
+        "size": 13,
+        "weight": 400,
+        "lineHeight": 18
+      },
+      "menuItem": {
+        "size": 17,
+        "weight": 400,
+        "lineHeight": 22
+      },
+      "navLabel": {
+        "size": 12,
+        "weightSelected": 700,
+        "weightNormal": 500,
+        "lineHeight": 14,
+        "maxScale": 1.15
+      },
+      "seriesTitle": {
+        "size": 22,
+        "weight": 700,
+        "lineHeight": 28
+      },
+      "playerTitle": {
+        "size": 22,
+        "weight": 700,
+        "lineHeight": 28
+      },
+      "aboutName": {
+        "size": 24,
+        "weight": 700,
+        "lineHeight": 30
+      },
+      "buttonLarge": {
+        "size": 17,
+        "weight": 600,
+        "lineHeight": 22
+      },
+      "bannerText": {
+        "size": 15,
+        "weight": 400,
+        "lineHeight": 20
+      },
+      "bannerAction": {
+        "size": 15,
+        "weight": 600,
+        "lineHeight": 20
+      },
+      "description": {
+        "size": 15,
+        "weight": 400,
+        "lineHeight": 20
+      },
+      "moreLink": {
+        "size": 15,
+        "weight": 600,
+        "lineHeight": 20
+      },
+      "captionStrong": {
+        "size": 13,
+        "weight": 600,
+        "lineHeight": 18
+      },
+      "rateChip": {
+        "size": 17,
+        "weight": 400,
+        "lineHeight": 22
+      },
+      "rateChipSelected": {
+        "size": 19,
+        "weight": 600,
+        "lineHeight": 24
+      },
+      "rateLabel": {
+        "size": 17,
+        "weight": 600,
+        "lineHeight": 22
+      },
+      "sheetSeriesTitle": {
+        "size": 28,
+        "weight": 700,
+        "lineHeight": 34
+      },
+      "sheetBody": {
+        "size": 17,
+        "weight": 400,
+        "lineHeight": 26
+      },
+      "seekNumber": {
+        "size": 11,
+        "weight": 700,
+        "lineHeight": 13
+      }
+    },
+    "largeTextScale": 1.6,
+    "_largeTextScale": "系统字号缩放 ≥ 1.6 改用单列 / 纵向堆叠布局",
+    "maxScale": {
+      "_说明": "各处字号随系统放大的上限（倍数），超过就不再放大，避免挤坏一行的布局",
+      "navTitle": 1.3,
+      "button": 1.3,
+      "capsule": 1.35,
+      "rateLabel": 1.3,
+      "rateChip": 1.2
+    },
+    "minScale": {
+      "_说明": "一行放不下时允许缩小到的比例（iOS minimumScaleFactor）",
+      "buttonLarge": 0.8
+    }
+  },
+  "space": {
+    "_来源": "PRD 10.5；基础栅格 4",
+    "scale": [4, 8, 12, 16, 20, 28, 36],
+    "pageMargin": 20,
+    "pageMarginTablet": 32,
+    "sectionGap": 28,
+    "sectionTitleToRow": 8,
+    "cardGap": 12,
+    "cardImageToTitle": 8,
+    "tabletBreakpoint": 600,
+    "minTouchTarget": {
+      "ios": 44,
+      "android": 48
+    },
+    "textGap": 2,
+    "_textGap": "标题与副标题之间、文字与小箭头之间",
+    "searchBarInset": 8,
+    "_searchBarInset": "iOS 系统搜索栏（UISearchBar 极简样式）自带的左右内边距，页面边距减去它，搜索框才和页面内容对齐"
+  },
+  "radius": {
+    "_来源": "PRD 10.5；iOS 用连续圆角，Android 标准圆角",
+    "cardLarge": 14,
+    "cardSmall": 12,
+    "tile": 12,
+    "thumbnail": 8,
+    "menu": 14,
+    "ratePanel": 26,
+    "pill": "full"
+  },
+  "line": {
+    "separator": "1pt/1dp 取整到整数物理像素（3 倍屏 3 像素），颜色 separator；不要用 0.5 或 hairline"
+  },
+  "card": {
+    "_来源": "PRD 10.5；W 为窗口宽度",
+    "largeWidthPhone": "W - 68",
+    "smallWidthPhone": "floor((W - 32) / 1.5)",
+    "_smallWidthPhone": "小卡（编辑精选、各分类行）：一屏 1.5 张（首卡左边距 20 + 卡间距 12，W = 390 时 238）。2026-10-31 用户看了 1.7 张和 1.5 张两台模拟器对比后定 1.5 张，原来是 floor((W - 64) / 2) 一屏 2 张（163），封面上的字太小",
+    "largeWidthTablet": 360,
+    "smallWidthTablet": 200,
+    "aspect": "16:9",
+    "seriesRowCoverWidth": "round(W * 0.44)",
+    "tileColumns": {
+      "phone": 2,
+      "tablet": 4
+    },
+    "seriesRowMaxWidth": 640
+  },
+  "nav": {
+    "_来源": "PRD 10.6 F、10.7",
+    "capsuleHeight": 52,
+    "menuHeight": 66,
+    "collapsedHeight": 44,
+    "collapsedGap": 8,
+    "stackGap": 14,
+    "sideMargin": 16,
+    "bottomMargin": 8,
+    "tabletMaxWidth": 560,
+    "iconSize": 26,
+    "dropInset": 6,
+    "collapseMs": 180,
+    "collapseEasing": "easeOut(quad)",
+    "collapseRule": {
+      "downAccumulate": 24,
+      "leaveTopAfter": 60,
+      "backToTopWithin": 8
+    },
+    "iconGlyph": 24,
+    "_iconGlyph": "底部导航图标实际绘制尺寸（iconSize 是图标框）",
+    "androidBarHeight": 80,
+    "_androidBarHeight": "Material 3 NavigationBar 的高度（系统规定 80dp），只用来给列表底部留空"
+  },
+  "menu": {
+    "_来源": "PRD 10.6 N",
+    "width": 252,
+    "widthCheckable": 296,
+    "itemHeight": 52,
+    "groupBand": 8,
+    "anchorGap": 6,
+    "itemPaddingH": 16,
+    "iconGap": 12,
+    "iconSize": 22,
+    "dim": false,
+    "shadow": {
+      "opacity": 0.2,
+      "radius": 24,
+      "offsetY": 8,
+      "androidElevation": 12
+    },
+    "borderWidth": 0.5,
+    "checkIconScale": 0.8
+  },
+  "ratePicker": {
+    "_来源": "PRD 8",
+    "rates": [0.8, 1, 1.3, 1.5, 1.8, 2],
+    "sideMargin": 12,
+    "paddingH": 22,
+    "paddingV": 14,
+    "anchorGap": 8,
+    "maxWidth": 520,
+    "chip": 44,
+    "chipSelected": 52,
+    "chipMin": 30,
+    "gapRatio": 0.25,
+    "_gapRatio": "档位之间的空隙 = 档位直径 × 0.25（屏窄时档位跟着缩小，最小 chipMin）"
+  },
+  "progressBar": {
+    "_来源": "PRD 10.6 O",
+    "height": 6,
+    "heightDragging": 10,
+    "touchHeight": 44,
+    "accessibilityStepSec": 10,
+    "thumb": 16,
+    "_thumb": "播放进度的圆形把手（两端一样）：Android 用 Material 3 滑块配成媒体进度样式——圆形把手、轨道高 height（6）、不留缝、末端不画小圆点（用户 2026-10-23 嫌默认样式丑）；iOS 用 UIKit 系统滑块换成同样的深色小圆点和细轨道（用户 2026-10-31 定，和 Android 一致）"
+  },
+  "pageHeader": {
+    "rowHeight": 52,
+    "backButtonVisual": 36,
+    "backButtonTouch": 44,
+    "iconSize": 26,
+    "_iconSize": "Android 顶部栏图标框（主页“i”、返回键、排序）；Material 图标在框里占 20/24，26 时实际图形约 22，和 iOS 系统顶部栏图标（约 22pt）一样大。2026-10-31 用户要两端一样大，原来是 20（图形约 17）",
+    "androidLargeExpanded": 112,
+    "_androidLargeExpanded": "Android 大标题顶部栏（LargeTopAppBar）展开高度。Material 默认 152，大标题上方空白太多，调到 112（官方参数 expandedHeight）"
+  },
+  "player": {
+    "portraitMaxWidth": 600,
+    "_说明": "平板竖屏时播放页内容限宽；横屏两栏尺寸见 PRD 10.7",
+    "seekBackSeconds": 15,
+    "seekForwardSeconds": 30,
+    "_seek": "后退 15 秒、前进 30 秒（用户 2026-10-22 定，原来是 ±10）。图标两端都用系统自带的（iOS SF Symbols gobackward.15 / goforward.30；Android Media3 的 ICON_SKIP_BACK_15 / ICON_SKIP_FORWARD_30），锁屏、通知栏同一套",
+    "dragStart": 12
+  },
+  "sheet": {
+    "openMs": 280,
+    "closeMs": 220,
+    "dismissDistance": 110,
+    "dismissVelocity": 0.9,
+    "maxWidth": 600,
+    "scrimOpacity": 0.35
+  },
+  "glassShadow": {
+    "opacity": 0.1,
+    "radius": 10,
+    "offsetY": 3,
+    "androidElevation": 3
+  },
+  "component": {
+    "_来源": "PRD 10.6 各组件的尺寸（原生版开工时从 PRD 文字规格补入；以前散在组件代码里）",
+    "pageTitle": {
+      "topGap": 8,
+      "bottomGap": 12,
+      "infoIcon": 28
+    },
+    "quickPill": {
+      "height": 40,
+      "gap": 8,
+      "bottomGap": 16
+    },
+    "banner": {
+      "height": 44,
+      "radius": 12,
+      "paddingH": 16,
+      "topGap": 0,
+      "bottomGap": 16
+    },
+    "updatingHint": { "_说明": "主页后台更新时顶部的“正在更新…”：在顶栏正中，系统转圈在左、小字在右（2026-10-30 用户定，按常见做法；位置选了居中左右排）。iOS 转圈用系统 small 尺寸，Android 用下面的尺寸；gap 是圈和字之间的距离", "indicatorSize": 14, "strokeWidth": 2, "gap": 6 },
+    "retryButton": {
+      "height": 44,
+      "paddingH": 28,
+      "topGap": 16
+    },
+    "sectionTitle": {
+      "arrowGap": 4,
+      "arrowSize": 15,
+      "minTouch": 44,
+      "inlineArrowScale": 0.8,
+      "_inlineArrowScale": "正文里的小箭头（播放页课程名、系列页分类名后）相对字号的比例"
+    },
+    "searchField": {
+      "height": 44,
+      "iconSize": 18,
+      "iconGap": 8,
+      "paddingH": 14,
+      "topGap": 12,
+      "cancelGap": 12,
+      "maxLength": 30
+    },
+    "tile": {
+      "height": 96,
+      "iconSize": 26,
+      "iconOpacity": 0.6,
+      "padding": 14,
+      "gap": 12,
+      "topGap": 16
+    },
+    "listRow": {
+      "minHeight": 72,
+      "thumbWidth": 96,
+      "thumbHeight": 54,
+      "gap": 12,
+      "paddingV": 9
+    },
+    "seriesRow": {
+      "coverRatio": 0.44,
+      "gap": 12,
+      "textGap": 12,
+      "metaGap": 4
+    },
+    "recentRow": {
+      "thumbWidth": 112,
+      "thumbHeight": 63,
+      "gap": 12,
+      "paddingV": 14,
+      "actionsTop": 8
+    },
+    "episodeRow": {
+      "paddingV": 12,
+      "titleToActions": 8,
+      "pillHeight": 44,
+      "pillPaddingH": 14,
+      "pillIconTouch": 52,
+      "pillGap": 8,
+      "playIcon": 17,
+      "replayIcon": 20,
+      "miniBarWidth": 34,
+      "miniBarHeight": 4,
+      "statusGap": 10,
+      "statusIcon": 18,
+      "ring": 22,
+      "ringLine": 2.5,
+      "moreIcon": 20,
+      "moreTouch": 44,
+      "ringMinArc": 0.02,
+      "_ring": "下载状态圆环直径；两端都用系统的圆形进度，ringMinArc 是刚开始时也露出的一小段",
+      "gaugeNative": 52,
+      "_gaugeNative": "iOS 系统 Gauge（accessoryCircularCapacity）的默认直径，用来等比缩到 ring 的大小",
+      "ringIcon": 11,
+      "_ringIcon": "下载环中间的系统图标（停止 / 暂停）大小"
+    },
+    "seriesHeader": {
+      "coverMargin": 36,
+      "coverRadius": 12,
+      "coverTop": 8,
+      "titleTop": 16,
+      "buttonsTop": 16,
+      "buttonHeight": 50,
+      "buttonGap": 12,
+      "buttonIcon": 18,
+      "buttonIconGap": 8,
+      "descTop": 16,
+      "descLines": 3,
+      "moreFade": 40,
+      "infoTop": 10,
+      "separatorTop": 20,
+      "sectionTop": 20,
+      "sectionBottom": 4,
+      "shadow": {
+        "opacity": 0.18,
+        "radius": 30,
+        "offsetY": 12,
+        "androidElevation": 16
+      }
+    },
+    "capsule": {
+      "thumb": 36,
+      "thumbRadius": 8,
+      "paddingH": 8,
+      "textGap": 10,
+      "playIcon": 22,
+      "forwardIcon": 30,
+      "iconTouch": 44,
+      "emptyIcon": 20,
+      "thumbInset": 4
+    },
+    "navMenu": {
+      "labelGap": 2
+    },
+    "about": {
+      "logoWidth": 150,
+      "logoTop": 36,
+      "nameTop": 16,
+      "rowsTop": 40,
+      "rowMinHeight": 56,
+      "footerTop": 40,
+      "footerGap": 4
+    },
+    "player": {
+      "grabberWidth": 36,
+      "grabberHeight": 5,
+      "grabberTop": 8,
+      "coverSideMargin": 20,
+      "coverMinPad": 24,
+      "coverRadius": 14,
+      "coverMinRatio": 0.6,
+      "bottomPad": 32,
+      "titleToBar": 28,
+      "barToControls": 36,
+      "controlsSideMargin": 22,
+      "timeTop": 8,
+      "seekIcon": 40,
+      "playIcon": 52,
+      "moonIcon": 24,
+      "moreButton": 36,
+      "moreIcon": 20,
+      "courseGap": 2,
+      "tabletPortraitMaxWidth": 640,
+      "landscapeTablet": {
+        "cover": 500,
+        "right": 420,
+        "gap": 64,
+        "side": 56
+      },
+      "landscapePhone": {
+        "cover": 330,
+        "right": 340,
+        "gap": 44,
+        "side": 60,
+        "coverHeightInset": 48,
+        "tightGap": 18
+      },
+      "dismissDistance": 140,
+      "coverShadow": {
+        "opacity": 0.18,
+        "radius": 30,
+        "offsetY": 12,
+        "androidElevation": 16
+      },
+      "courseMinHeight": 26,
+      "_courseMinHeight": "播放页课程名一行（点了前往课程）的最小点按高度"
+    },
+    "sheet": {
+      "topExposed": 48,
+      "radius": 14,
+      "closeButton": 30,
+      "headerHeight": 56,
+      "contentTop": 8,
+      "categoryTop": 4,
+      "bodyTop": 16,
+      "closeIconScale": 0.55
+    },
+    "emptyState": {
+      "paddingH": 40
+    },
+    "splash": {
+      "logoWidth": 120,
+      "androidLogoWidth": 96,
+      "_说明": "iOS 启动 Logo 120pt；Android 系统启动画面只显示图标区中间的圆，小米裁得更小、120dp 时外圈被切，改为 96dp（2026-10-30）。Android 的值写在 res/drawable/splash_icon.xml，改这里要一起改"
+    },
+    "init": {
+      "spinnerGap": 16,
+      "lineGap": 8
+    }
+  },
+  "motion": {
+    "_来源": "开了“减少动态效果”时：不缩放、不拉伸，改为约 0.15 秒的淡入淡出或直接平移",
+    "pressedOpacity": 0.7,
+    "springBouncy": {
+      "_说明": "苹果 SwiftUI .bouncy（0.5 秒、bounce 0.3）。iOS 直接用 .bouncy；Android Compose 用 spring(dampingRatio = 0.7, stiffness ≈ 157.9)",
+      "response": 0.5,
+      "bounce": 0.3,
+      "stiffness": 157.9,
+      "damping": 17.6,
+      "mass": 1,
+      "dampingRatio": 0.7
+    },
+    "navDrop": {
+      "stretchX": 1.35,
+      "stretchY": 0.88,
+      "stretchInMs": 110,
+      "iconPressScale": 0.86,
+      "reduceMotionMs": 150
+    },
+    "fadeMs": 150,
+    "_fadeMs": "小标题淡入、弹出菜单出现（含“减少动态效果”时的淡入淡出）",
+    "pressMs": 120,
+    "_pressMs": "进度条按下变粗",
+    "settleMs": 300,
+    "_settleMs": "滑动行、播放页下拉不够时弹回（iOS .spring(duration:)；Android tween）",
+    "menuScaleFrom": 0.9,
+    "sharedAxis": {
+      "_说明": "Android 页面进出（Material 动效规范“横向共享轴 shared axis X”）：新页从右移 30 并淡入，旧页向左移 30 并淡出，共 300ms；淡出占前 90ms、淡入占后 210ms。返回时方向相反。iOS 用系统自带的推入 / 推出",
+      "distance": 30,
+      "durationMs": 300,
+      "fadeOutMs": 90
+    }
+  }
+}

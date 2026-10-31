@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SplashScreen 的图标区是 240dp，原版安卓只显示中间 160dp 的圆。有的厂商（如小米）把这个圆裁得更小，
+     所以 Logo 用 96dp 宽居中，留足边距。图片 384px = 96dp × 4 倍屏 -->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:width="240dp" android:height="240dp">
+        <shape android:shape="rectangle"><solid android:color="@android:color/transparent" /></shape>
+    </item>
+    <item android:width="96dp" android:height="96dp" android:gravity="center" android:drawable="@drawable/splash_logo" />
+</layer-list>

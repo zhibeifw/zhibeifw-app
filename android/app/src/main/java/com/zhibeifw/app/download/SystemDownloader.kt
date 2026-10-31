@@ -1,0 +1,173 @@
+package com.zhibeifw.app.download
+
+import android.app.DownloadManager as AndroidDownloads
+import android.content.Context
+import android.database.ContentObserver
+import android.net.Uri
+import android.os.Handler
+import android.os.Looper
+import com.zhibeifw.app.core.fileKey
+import java.io.File
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.Executors
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+
+/**
+ * Android 的下载：系统的 DownloadManager 服务。
+ *  · 排队、同时下几个、断网后等网络回来接着下、通知栏显示进度、App 被杀后照样继续，全由系统做；
+ *  · 有网就下（系统默认允许流量和漫游），参数用系统默认值；
+ *  · 系统没有公开的“暂停”：暂停 = 从系统里删掉，继续时从头下。
+ * 系统把文件下到 App 专属的外部目录（不需要存储权限），文件名是集 ID 的文件键；下完由 DownloadManager 复制进资料库再交还系统删掉。
+ * 进度：系统下载表有变化就通知（ContentObserver），收到后查一次表。
+ */
+class SystemDownloader(private val ctx: Context) : SystemDownloads {
+    private val dm = ctx.getSystemService(AndroidDownloads::class.java)
+    private val main = Handler(Looper.getMainLooper())
+    private val io = Executors.newSingleThreadExecutor()
+    private var handler: ((DownloadEvent) -> Unit)? = null
+
+    /** 文件键 → 集 ID（系统表里只有文件名） */
+    private val byKey = ConcurrentHashMap<String, String>()
+
+    /** 集 ID → 系统的下载编号 */
+    private val sysIds = ConcurrentHashMap<String, Long>()
+
+    /** 已经交出“下完 / 失败”的系统编号：等收尾时别重复交 */
+    private val reported = ConcurrentHashMap.newKeySet<Long>()
+    private val throttles = ConcurrentHashMap<Long, ProgressThrottle>()
+
+    init {
+        ctx.contentResolver.registerContentObserver(
+            Uri.parse("content://downloads/my_downloads"), true,
+            object : ContentObserver(main) {
+                override fun onChange(selfChange: Boolean) = scan()
+            })
+    }
+
+    private fun dir() = ctx.getExternalFilesDir(DIR)
+
+    override fun setHandler(h: (DownloadEvent) -> Unit) {
+        handler = h; scan()
+    }
+
+    override fun start(id: String, url: String, title: String, description: String) {
+        val name = fileKey(id) + ".part"
+        byKey[fileKey(id)] = id
+        File(dir(), name).delete() // 同名旧文件在的话系统会另起名字
+        val req = AndroidDownloads.Request(Uri.parse(url))
+            .setTitle(title)
+            .setDescription(description)
+            .setDestinationInExternalFilesDir(ctx, DIR, name)
+        sysIds[id] = dm.enqueue(req)
+    }
+
+    override fun stop(id: String) {
+        sysIds.remove(id)?.let { dm.remove(it) }
+    }
+
+    override fun release(id: String) = stop(id)
+
+    override suspend fun activeIds(candidates: Collection<String>): Set<String> =
+        withContext(Dispatchers.IO) {
+            for (c in candidates) byKey[fileKey(c)] = c
+            val active =
+                rows().filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
+            main.post { scan() } // App 没开着时下完、失败的，现在认得出是哪一集了，交出去收尾
+            active
+        }
+
+    private class Row(
+        val sysId: Long,
+        val id: String,
+        val status: Int,
+        val reason: Int,
+        val soFar: Long,
+        val total: Long,
+        val file: File?
+    )
+
+    /** 查系统下载表里我们的下载（文件名认得出、却没有对应下载记录的直接删掉：记录已经没了） */
+    private fun rows(): List<Row> {
+        val out = ArrayList<Row>()
+        val orphans = ArrayList<Long>()
+        runCatching {
+            dm.query(AndroidDownloads.Query())?.use { c ->
+                val iId = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_ID)
+                val iStatus = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_STATUS)
+                val iReason = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_REASON)
+                val iSoFar =
+                    c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_BYTES_DOWNLOADED_SO_FAR)
+                val iTotal = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_TOTAL_SIZE_BYTES)
+                val iUri = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_LOCAL_URI)
+                while (c.moveToNext()) {
+                    val sysId = c.getLong(iId)
+                    val file = c.getString(iUri)?.let { Uri.parse(it).path }?.let(::File)
+                    // 先按本次交给系统时记下的编号认；App 重启后按文件名认（刚交给系统时文件名可能还是空的，不能当成认不出）
+                    val id = sysIds.entries.firstOrNull { it.value == sysId }?.key
+                        ?: file?.name?.removeSuffix(".part")?.let { byKey[it] }
+                    if (id == null) {
+                        if (file != null) orphans.add(sysId); continue
+                    }
+                    sysIds[id] = sysId
+                    out.add(
+                        Row(
+                            sysId,
+                            id,
+                            c.getInt(iStatus),
+                            c.getInt(iReason),
+                            c.getLong(iSoFar),
+                            maxOf(0, c.getLong(iTotal)),
+                            file
+                        )
+                    )
+                }
+            }
+        }
+        if (orphans.isNotEmpty() && byKey.isNotEmpty()) runCatching { dm.remove(*orphans.toLongArray()) }
+        return out
+    }
+
+    private fun emit(e: DownloadEvent) = main.post { handler?.invoke(e) }
+
+    private fun scan() {
+        if (handler == null) return
+        io.execute {
+            for (r in rows()) when (r.status) {
+                AndroidDownloads.STATUS_SUCCESSFUL ->
+                    if (reported.add(r.sysId)) emit(
+                        if (r.file != null) DownloadEvent.Finished(
+                            r.id,
+                            r.file
+                        ) else DownloadEvent.Failed(r.id, false)
+                    )
+
+                AndroidDownloads.STATUS_FAILED -> if (reported.add(r.sysId)) {
+                    emit(
+                        DownloadEvent.Failed(
+                            r.id,
+                            r.reason == AndroidDownloads.ERROR_INSUFFICIENT_SPACE
+                        )
+                    )
+                    sysIds.remove(r.id); dm.remove(r.sysId)
+                }
+
+                else -> {
+                    // 排队、下载中、等网络：系统都会自己接着下，界面上都算“下载中”
+                    val th = throttles.getOrPut(r.sysId) { ProgressThrottle() }
+                    if (th.pass(r.soFar, r.total)) emit(
+                        DownloadEvent.Progress(
+                            r.id,
+                            r.soFar,
+                            r.total
+                        )
+                    )
+                }
+            }
+        }
+    }
+
+    companion object {
+        const val DIR = "downloads"
+    }
+}
