@@ -65,7 +65,7 @@ private func isTitle(_ v: Any?) -> String? {
     return s
 }
 
-nonisolated(unsafe) private let originRegex = try! NSRegularExpression(
+private let originRegex = try! NSRegularExpression(
     pattern:
         "^https://(\\[[0-9A-Fa-f:.]{2,45}\\]|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)(?::[0-9]{1,5})?$"
 )

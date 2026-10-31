@@ -144,9 +144,9 @@ final class AppModel {
 
     func runInitialization() async {
         phase = .initializing(attempt: 1, failed: false)
-        let ok = await CatalogSync.initializeWithRetry(store: store, net: Network.shared) { [weak self] n in
-            self?.phase = .initializing(attempt: n, failed: false)
-        }
+        let ok = await CatalogSync.initializeWithRetry(
+            store: store, net: Network.shared,
+            onAttempt: { [weak self] n in self?.phase = .initializing(attempt: n, failed: false) })
         if ok {
             loadHome()
             phase = .ready

@@ -4,4 +4,4 @@
 // CURRENT_PROJECT_VERSION：日期去掉点 + 两位当天序号，从 01 开始（iOS CFBundleVersion、Android versionCode）
 // 两端一起打包、用同一个号；只改了一端也照样两端都打，关于页看到的号永远对得上同一份代码。
 MARKETING_VERSION = 2026.11.01
-CURRENT_PROJECT_VERSION = 2026110101
+CURRENT_PROJECT_VERSION = 2026110102
