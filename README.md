@@ -18,7 +18,7 @@
 ios/            iOS 版（Swift、SwiftUI），Xcode 工程 ios/ZhibeiFW.xcodeproj
 android/        Android 版（Kotlin、Jetpack Compose），Gradle 工程
 doc/            设计令牌（design-tokens.json）和图标数据
-tools/          gen_design.py：由设计令牌生成两端的常量文件；pre-commit：提交前用 gitleaks 检查
+tools/          gen_design.py：由设计令牌生成两端的常量文件；pre-commit：提交前用 gitleaks 检查；format/：Swift 格式化配置
 Version.xcconfig  两端共用的版本号
 ```
 
