@@ -73,12 +73,20 @@ struct PlayerView: View {
     private func landscapeLayout(_ c: NowPlaying, tablet: Bool) -> some View {
         let L =
             tablet
-            ? (cover: CP.Player.LandscapeTablet.cover, right: CP.Player.LandscapeTablet.right, gap: CP.Player.LandscapeTablet.gap)
-            : (cover: CP.Player.LandscapePhone.cover, right: CP.Player.LandscapePhone.right, gap: CP.Player.LandscapePhone.gap)
+            ? (
+                cover: CP.Player.LandscapeTablet.cover, right: CP.Player.LandscapeTablet.right, gap: CP.Player.LandscapeTablet.gap,
+                side: CP.Player.LandscapeTablet.side
+            )
+            : (
+                cover: CP.Player.LandscapePhone.cover, right: CP.Player.LandscapePhone.right, gap: CP.Player.LandscapePhone.gap,
+                side: CP.Player.LandscapePhone.side
+            )
         let maxCoverByHeight = (size.height - CP.Player.LandscapePhone.coverHeightInset) * 16 / 9
-        return HStack(spacing: L.gap) {
-            cover(c, width: min(L.cover, maxCoverByHeight))
-            controls(c, width: L.right, tight: !tablet)
+        // 弹窗比设计宽度窄时（iPad、iPhone Duo 展开横屏的居中弹窗）三段一起等比缩小，不超出弹窗
+        let k = min(1, (size.width - 2 * L.side) / (L.cover + L.gap + L.right))
+        return HStack(spacing: L.gap * k) {
+            cover(c, width: min(L.cover * k, maxCoverByHeight))
+            controls(c, width: L.right * k, tight: !tablet)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
