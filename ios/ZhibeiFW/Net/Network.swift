@@ -13,6 +13,7 @@ enum NetConfig {
     static let idleTimeout: TimeInterval = 15
     static let headTimeout: TimeInterval = 5
     static let privacyURL = URL(string: "https://zhibeifw.com/privacy")!
+    static let sourceURL = URL(string: "https://github.com/zhibeifw/zhibeifw-app")!
     /// App Store 链接（上架后由团队填；留空时“此版本过旧”提示条不显示“更新”按钮）。
     static let iosStoreURL = ""
 }

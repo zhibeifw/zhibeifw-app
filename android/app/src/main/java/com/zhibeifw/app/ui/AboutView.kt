@@ -72,6 +72,8 @@ fun AboutView(model: AppModel) {
                         Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
                         Row("隐私政策", arrow = true) { model.openExternal(NetConfig.PRIVACY_URL) }
                         Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
+                        Row("源代码", arrow = true) { model.openExternal(NetConfig.SOURCE_URL) }
+                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
                         Row(
                             "清除缓存",
                             value = if (clearing) "正在清除…" else clearResult,

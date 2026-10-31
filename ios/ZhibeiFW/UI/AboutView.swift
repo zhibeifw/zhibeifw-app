@@ -23,7 +23,9 @@ struct AboutView: View {
                 VStack(spacing: 0) {
                     row(title: "联系", value: "hello@zhibeifw.com", selectable: true)
                     Separator().padding(.horizontal, Tok.Space.pageMargin)
-                    row(title: "隐私政策", arrow: true) { openPrivacy() }
+                    row(title: "隐私政策", arrow: true) { openWeb(NetConfig.privacyURL) }
+                    Separator().padding(.horizontal, Tok.Space.pageMargin)
+                    row(title: "源代码", arrow: true) { openWeb(NetConfig.sourceURL) }
                     Separator().padding(.horizontal, Tok.Space.pageMargin)
                     row(title: "清除缓存", value: clearing ? "正在清除…" : clearResult) { clearCache() }
                     Separator().padding(.horizontal, Tok.Space.pageMargin)
@@ -67,10 +69,9 @@ struct AboutView: View {
         if let action { Button(action: action) { content }.buttonStyle(PressableStyle()) } else { content }
     }
 
-    /// 打开官网网页的统一方式：① App 内浏览器；② 系统打开链接；③ 弹“无法打开网页”。没网先提示。
-    private func openPrivacy() {
+    /// 打开网页的统一方式：① App 内浏览器；② 系统打开链接；③ 弹“无法打开网页”。没网先提示。
+    private func openWeb(_ url: URL) {
         guard Connectivity.shared.connected else { model.alert = AlertSpec(title: "需要联网才能查看"); return }
-        let url = NetConfig.privacyURL
         if url.scheme == "https" { safari = url; return }
         UIApplication.shared.open(url) { ok in if !ok { model.alert = AlertSpec(title: "无法打开网页") } }
     }

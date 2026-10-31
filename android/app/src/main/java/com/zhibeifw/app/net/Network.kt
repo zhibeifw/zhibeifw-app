@@ -51,6 +51,7 @@ object NetConfig {
     const val IDLE_TIMEOUT_MS = 15000
     const val HEAD_TIMEOUT_MS = 5000
     const val PRIVACY_URL = "https://zhibeifw.com/privacy"
+    const val SOURCE_URL = "https://github.com/zhibeifw/zhibeifw-app"
 }
 
 sealed class NetResult {
