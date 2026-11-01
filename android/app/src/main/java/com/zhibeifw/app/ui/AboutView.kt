@@ -31,7 +31,6 @@ import androidx.compose.ui.text.style.TextAlign
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.R
 import com.zhibeifw.app.core.UpdateChannel
-import com.zhibeifw.app.core.versionLabel
 import com.zhibeifw.app.design.C
 import com.zhibeifw.app.design.Separator
 import com.zhibeifw.app.design.ZIcon
@@ -131,7 +130,7 @@ fun AboutView(model: AppModel) {
                     ) {
                         Txt("智悲佛网 版权所有", S.caption, C.labelSecondary())
                         Txt(
-                            "版本 " + versionLabel(model.versionName, model.versionCode),
+                            "版本 " + model.versionName,
                             S.caption,
                             C.labelTertiary()
                         )

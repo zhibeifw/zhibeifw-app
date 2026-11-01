@@ -130,7 +130,6 @@ class AppModel(private val ctx: Context) {
     val pushGuard = PushGuard()
 
     val versionName: String = BuildConfig.VERSION_NAME
-    val versionCode: String = BuildConfig.VERSION_CODE.toString()
     val channel = if (BuildConfig.CHANNEL == "store") UpdateChannel.STORE else UpdateChannel.SITE
 
     // ---------- 启动 ----------

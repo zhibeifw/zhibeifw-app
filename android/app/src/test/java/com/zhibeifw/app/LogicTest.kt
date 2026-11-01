@@ -37,15 +37,6 @@ class VersionTest {
         assertEquals(0, compareVersions("2026.01.05", "2026.1.5"))
         assertEquals(1, compareVersions("2026.10.21", "1.0.0"))
     }
-
-    @Test
-    fun label() {
-        assertEquals("2026.10.21(01)", versionLabel("2026.10.21", "2026102101"))
-        assertEquals("2026.10.21(2026102204)", versionLabel("2026.10.21", "2026102204"))
-        assertEquals("2026.10.21(7)", versionLabel("2026.10.21", "7"))
-        assertEquals("2026.10.21", versionLabel("2026.10.21", null))
-        assertEquals("2026.10.21", versionLabel("2026.10.21", "abc"))
-    }
 }
 
 class FormatTest {

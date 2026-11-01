@@ -43,7 +43,7 @@ struct AboutView: View {
     private var footer: some View {
         VStack(spacing: CP.About.footerGap) {
             Text("智悲佛网 版权所有").zFont(S.caption).foregroundStyle(C.labelSecondary)
-            Text("版本 " + versionLabel(AppInfo.version, build: AppInfo.build)).zFont(S.caption).foregroundStyle(C.labelTertiary)
+            Text("版本 " + AppInfo.version).zFont(S.caption).foregroundStyle(C.labelTertiary)
         }
     }
 

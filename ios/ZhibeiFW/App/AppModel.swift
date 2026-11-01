@@ -434,7 +434,6 @@ final class AppModel {
 
 enum AppInfo {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
-    static var build: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "" }
 }
 
 /// iOS 不需要申请下载相关的权限（占位，与 Android 的通知权限申请对称）。

@@ -29,13 +29,6 @@ final class VersionTests: XCTestCase {
         XCTAssertEqual(compareVersions("2026.01.05", "2026.1.5"), 0)
         XCTAssertEqual(compareVersions("2026.10.21", "1.0.0"), 1)
     }
-    func testVersionLabel() {
-        XCTAssertEqual(versionLabel("2026.10.21", build: "2026102101"), "2026.10.21(01)")
-        XCTAssertEqual(versionLabel("2026.10.21", build: "2026102204"), "2026.10.21(2026102204)")
-        XCTAssertEqual(versionLabel("2026.10.21", build: "7"), "2026.10.21(7)")
-        XCTAssertEqual(versionLabel("2026.10.21", build: nil), "2026.10.21")
-        XCTAssertEqual(versionLabel("2026.10.21", build: "abc"), "2026.10.21")
-    }
 }
 
 final class FormatTests: XCTestCase {

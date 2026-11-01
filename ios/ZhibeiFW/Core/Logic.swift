@@ -26,15 +26,6 @@ func compareVersions(_ a: Any?, _ b: Any?) -> Int? {
     return 0
 }
 
-/// 关于页的版本文字：“2026.10.21(01)”。
-func versionLabel(_ version: String, build: String?) -> String {
-    let b = (build ?? "").trimmingCharacters(in: .whitespaces)
-    guard !b.isEmpty, b.allSatisfy({ $0.isASCII && $0.isNumber }) else { return version }
-    let day = version.split(separator: ".").joined()
-    if b.count == 10, b.prefix(8) == day { return "\(version)(\(b.suffix(2)))" }
-    return "\(version)(\(b))"
-}
-
 // MARK: - 时间与文字格式
 
 let MINUS = "\u{2212}"

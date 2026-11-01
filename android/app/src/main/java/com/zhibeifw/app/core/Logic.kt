@@ -37,15 +37,6 @@ fun compareVersions(a: Any?, b: Any?): Int? {
     return 0
 }
 
-/** 关于页的版本文字：“2026.10.21(01)”。 */
-fun versionLabel(version: String, build: String?): String {
-    val b = (build ?: "").trim()
-    if (b.isEmpty() || !b.all { it in '0'..'9' }) return version
-    val day = version.split(".").joinToString("")
-    if (b.length == 10 && b.take(8) == day) return "$version(${b.takeLast(2)})"
-    return "$version($b)"
-}
-
 // ---------- 时间与文字格式 ----------
 const val MINUS = "−"
 
