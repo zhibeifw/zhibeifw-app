@@ -1,6 +1,7 @@
 import SwiftUI
 
-/// 全屏播放页（横屏）：系统的全高底部弹窗，下拉收起由系统处理。
+/// 全屏播放页：系统的全高底部弹窗，下拉收起由系统处理。
+/// iPad 等大屏上系统默认是屏幕正中的卡片，这里让它铺满整个屏幕（和 iPhone 一样），仍是系统弹窗、仍可下拉收起。
 struct PlayerSheet: View {
     @Environment(AppModel.self) private var model
 
@@ -12,9 +13,15 @@ struct PlayerSheet: View {
         }
         .background(C.background.ignoresSafeArea())
         .presentationDetents([.large])
+        .presentationSizing(FillScreenSizing())
         .presentationDragIndicator(.visible)
         .appAlert(model, whenPlayerOpen: true)
     }
+}
+
+/// 弹窗的尺寸提议成无限大，系统会把它限制在屏幕范围内，也就是铺满。
+private struct FillScreenSizing: PresentationSizing {
+    func proposedSize(for root: PresentationSizingRoot, context: PresentationSizingContext) -> ProposedViewSize { .infinity }
 }
 
 struct PlayerView: View {
