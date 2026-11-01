@@ -121,6 +121,10 @@ object Tok {
         const val smallWidthPhone: String = "floor((W - 32) / 1.5)"
         const val largeWidthTablet: Float = 360f
         const val smallWidthTablet: Float = 200f
+        const val largePerScreenTabletPortrait: Float = 2.2f
+        const val largePerScreenTabletLandscape: Float = 3.2f
+        const val smallPerScreenTabletPortrait: Float = 3.5f
+        const val smallPerScreenTabletLandscape: Float = 4.5f
         const val aspect: String = "16:9"
         const val seriesRowCoverWidth: String = "round(W * 0.44)"
         object TileColumns {

@@ -71,10 +71,15 @@ final class FormatTests: XCTestCase {
             liveProgress(currentId: "a", position: 3, duration: 100, active: true, episodeId: "a", fromDb: done)?.completed, false)
     }
     func testCardLayout() {
-        XCTAssertEqual(Layout.cardWidths(390).large, 322)
-        XCTAssertEqual(Layout.cardWidths(390).small, 238)
-        XCTAssertEqual(Layout.cardWidths(393).large, 325)
-        XCTAssertEqual(Layout.cardWidths(700).large, 360)
+        XCTAssertEqual(Layout.cardWidths(390, 844).large, 322)
+        XCTAssertEqual(Layout.cardWidths(390, 844).small, 238)
+        XCTAssertEqual(Layout.cardWidths(393, 852).large, 325)
+        // 平板一屏固定张数：竖屏大 2.2、小 3.5；横屏大 3.2、小 4.5
+        XCTAssertEqual(Layout.cardWidths(1032, 1376).large, 442)
+        XCTAssertEqual(Layout.cardWidths(1032, 1376).small, 273)
+        XCTAssertEqual(Layout.cardWidths(1376, 1032).large, 408)
+        XCTAssertEqual(Layout.cardWidths(1376, 1032).small, 286)
+        XCTAssertEqual(Layout.cardWidths(744, 1133).small, 191)
         XCTAssertEqual(Layout.tileColumns(700), 4)
         XCTAssertEqual(Layout.seriesRowCoverWidth(390), 172)
     }

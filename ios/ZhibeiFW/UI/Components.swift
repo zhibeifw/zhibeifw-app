@@ -157,10 +157,11 @@ struct CardRow: View {
     var subtitleOf: (SeriesCard) -> String? = { _ in nil }
     var onTap: (SeriesCard) -> Void
     @Environment(\.windowWidth) private var W
+    @Environment(\.windowHeight) private var H
     @Environment(\.dynamicTypeSize) private var dts
 
     var body: some View {
-        let widths = Layout.cardWidths(W)
+        let widths = Layout.cardWidths(W, H)
         let largeText = Layout.isLargeText(fontScale(dts))
         let w = large || largeText ? widths.large : widths.small
         ScrollView(.horizontal) {

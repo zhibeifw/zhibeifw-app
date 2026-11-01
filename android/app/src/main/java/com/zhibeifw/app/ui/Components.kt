@@ -116,10 +116,16 @@ val Float.d: Dp get() = this.dp
 object Layout {
     fun isTablet(w: Float) = w >= Tok.Space.tabletBreakpoint
     fun pageMargin(w: Float) = if (isTablet(w)) Tok.Space.pageMarginTablet else Tok.Space.pageMargin
-    fun cardWidths(w: Float): Pair<Float, Float> =
-        if (isTablet(w)) Tok.Card.largeWidthTablet to Tok.Card.smallWidthTablet else (w - 68f) to floor(
-            (w - 32f) / 1.5f
-        ) // 小卡一屏 1.5 张（原来一屏 2 张太小）
+    /** 手机：大卡（新课程）1 张完整 + 右侧 36 露边，小卡一屏 1.5 张。
+     *  平板：一屏固定张数（竖屏、横屏各一套），卡宽随屏幕变，大屏上是大图少张，不是满屏小图。 */
+    fun cardWidths(w: Float, h: Float): Pair<Float, Float> {
+        if (!isTablet(w)) return (w - 68f) to floor((w - 32f) / 1.5f)
+        val portrait = h >= w
+        val nl = if (portrait) Tok.Card.largePerScreenTabletPortrait else Tok.Card.largePerScreenTabletLandscape
+        val ns = if (portrait) Tok.Card.smallPerScreenTabletPortrait else Tok.Card.smallPerScreenTabletLandscape
+        val avail = w - pageMargin(w)
+        return floor(avail / nl - Tok.Space.cardGap) to floor(avail / ns - Tok.Space.cardGap)
+    }
 
     fun coverHeight(width: Float) = (width * 9f / 16f).roundToInt().toFloat()
     fun seriesRowCoverWidth(w: Float) = (w * CP.SeriesRow.coverRatio).roundToInt().toFloat()
@@ -135,6 +141,10 @@ object Layout {
 
 @Composable
 fun windowWidth(): Float = LocalConfiguration.current.screenWidthDp.toFloat()
+
+/** 窗口高度，只用来分平板的竖屏、横屏。 */
+@Composable
+fun windowHeight(): Float = LocalConfiguration.current.screenHeightDp.toFloat()
 @Composable
 fun fontScale(): Float = LocalDensity.current.fontScale
 
@@ -398,7 +408,7 @@ fun CardRow(
     onTap: (SeriesCard) -> Unit
 ) {
     val W = windowWidth()
-    val (lw, sw) = Layout.cardWidths(W)
+    val (lw, sw) = Layout.cardWidths(W, windowHeight())
     val w = if (large || Layout.isLargeText(fontScale())) lw else sw
     val st = rememberLazyListState()
     LazyRow(

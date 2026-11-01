@@ -119,6 +119,10 @@ enum Tok {
         static let smallWidthPhone = "floor((W - 32) / 1.5)"
         static let largeWidthTablet: CGFloat = 360
         static let smallWidthTablet: CGFloat = 200
+        static let largePerScreenTabletPortrait: CGFloat = 2.2
+        static let largePerScreenTabletLandscape: CGFloat = 3.2
+        static let smallPerScreenTabletPortrait: CGFloat = 3.5
+        static let smallPerScreenTabletLandscape: CGFloat = 4.5
         static let aspect = "16:9"
         static let seriesRowCoverWidth = "round(W * 0.44)"
         enum TileColumns {

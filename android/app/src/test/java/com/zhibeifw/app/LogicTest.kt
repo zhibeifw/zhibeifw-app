@@ -85,10 +85,15 @@ class FormatTest {
 
     @Test
     fun cards() {
-        assertEquals(322f, Layout.cardWidths(390f).first)
-        assertEquals(238f, Layout.cardWidths(390f).second)
-        assertEquals(325f, Layout.cardWidths(393f).first)
-        assertEquals(360f, Layout.cardWidths(700f).first)
+        assertEquals(322f, Layout.cardWidths(390f, 844f).first)
+        assertEquals(238f, Layout.cardWidths(390f, 844f).second)
+        assertEquals(325f, Layout.cardWidths(393f, 852f).first)
+        // 平板一屏固定张数：竖屏大 2.2、小 3.5；横屏大 3.2、小 4.5
+        assertEquals(442f, Layout.cardWidths(1032f, 1376f).first)
+        assertEquals(273f, Layout.cardWidths(1032f, 1376f).second)
+        assertEquals(408f, Layout.cardWidths(1376f, 1032f).first)
+        assertEquals(286f, Layout.cardWidths(1376f, 1032f).second)
+        assertEquals(191f, Layout.cardWidths(744f, 1133f).second)
         assertEquals(4, Layout.tileColumns(700f))
         assertEquals(172f, Layout.seriesRowCoverWidth(390f))
     }

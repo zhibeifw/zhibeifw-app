@@ -15,6 +15,7 @@ struct RootView: View {
                 }
             }
             .environment(\.windowWidth, geo.size.width)
+            .environment(\.windowHeight, geo.size.height)
         }
         .appAlert(model, whenPlayerOpen: false)
     }

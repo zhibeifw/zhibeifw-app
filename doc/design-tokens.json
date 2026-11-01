@@ -300,6 +300,11 @@
     "_smallWidthPhone": "小卡（编辑精选、各分类行）：一屏 1.5 张（首卡左边距 20 + 卡间距 12，W = 390 时 238）。2026-10-31 用户看了 1.7 张和 1.5 张两台模拟器对比后定 1.5 张，原来是 floor((W - 64) / 2) 一屏 2 张（163），封面上的字太小",
     "largeWidthTablet": 360,
     "smallWidthTablet": 200,
+    "_perScreenTablet": "平板上一屏放几张（按窗口宽度算卡宽，屏幕越大卡越大、张数不变）。卡宽 = floor((W - 页边距) / 张数 - 卡间距)。竖屏 / 横屏按窗口高宽判断",
+    "largePerScreenTabletPortrait": 2.2,
+    "largePerScreenTabletLandscape": 3.2,
+    "smallPerScreenTabletPortrait": 3.5,
+    "smallPerScreenTabletLandscape": 4.5,
     "aspect": "16:9",
     "seriesRowCoverWidth": "round(W * 0.44)",
     "tileColumns": {
