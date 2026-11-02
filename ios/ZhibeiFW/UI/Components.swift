@@ -29,9 +29,8 @@ struct PageScaffold<Content: View, Trailing: View>: View {
         let m = Layout.pageMargin(W)
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // 副标题（如资料库“2 门课 · 12 节”）放在系统大标题下面
-                // 卡片副标题（新课程的“更新至 第 N 课”）：所有系统版本都显示
-                if let subtitle {
+                // 副标题（如资料库“2 门课 · 12 节”）：iOS 26 起由系统导航栏显示（systemSubtitle），这里只给更早的系统画
+                if let subtitle, !hasSystemSubtitle {
                     Text(subtitle).zFont(S.caption).foregroundStyle(C.labelSecondary)
                         .padding(.horizontal, m).padding(.bottom, CP.PageTitle.bottomGap)
                 }
