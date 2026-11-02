@@ -6,7 +6,6 @@ import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
-import android.content.res.Configuration
 import android.graphics.Color
 import android.net.Uri
 import android.os.Build
@@ -24,10 +23,8 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.DefaultLifecycleObserver
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.ProcessLifecycleOwner
-import androidx.lifecycle.lifecycleScope
 import com.zhibeifw.app.design.ZTheme
 import com.zhibeifw.app.ui.RootView
-import kotlinx.coroutines.launch
 
 class ZhibeiApp : Application() {
     lateinit var model: AppModel; private set
@@ -56,7 +53,7 @@ class MainActivity : ComponentActivity() {
         )
         lockOrientation(false)
         model.openUrl = openUrlRef
-        if (model.phase is Phase.Launching && savedInstanceState == null) lifecycleScope.launch { model.boot() }
+        model.bootOnce()
         setContent {
             val dark = isSystemInDarkTheme()
             ZTheme(dark) {
@@ -74,10 +71,6 @@ class MainActivity : ComponentActivity() {
             playerOpen -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         }
-    }
-
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
     }
 
     // 全局的 model 活得比页面长：页面销毁时解绑，免得 model 一直抓着已销毁的页面（内存泄漏）

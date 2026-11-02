@@ -62,10 +62,15 @@ struct SQLError: Error, CustomStringConvertible {
 
 private let SQLITE_TRANSIENT = unsafeBitCast(-1, to: sqlite3_destructor_type.self)
 
-/// 系统自带 SQLite3 的一层薄包装。一个连接，一把递归锁：同一时间只有一个线程在用；事务期间别的线程排队（每个事务保持很短）。
+/// 系统自带 SQLite3 的一层薄包装。写连接一个，一把递归锁：同一时间只有一个线程在用。
+/// 另有一个只读连接（WAL 模式下读写互不阻塞）：写连接被别的线程占着（比如后台写目录的事务）时，读查询走它，
+/// 不用排队等事务做完；读到的是最近一次提交的内容。
 final class SQLiteDB: @unchecked Sendable {
     private var db: OpaquePointer?
     private let lock = NSRecursiveLock()
+    private var reader: OpaquePointer?
+    private var readerTried = false
+    private let readLock = NSLock()
     let path: String
 
     init(path: String) throws {
@@ -83,9 +88,33 @@ final class SQLiteDB: @unchecked Sendable {
         try exec("PRAGMA journal_mode = WAL;")
     }
 
-    deinit { sqlite3_close_v2(db) }
+    deinit {
+        sqlite3_close_v2(reader)
+        sqlite3_close_v2(db)
+    }
 
-    private func err(_ rc: Int32) -> SQLError { SQLError(code: rc, message: String(cString: sqlite3_errmsg(db))) }
+    private func err(_ rc: Int32, _ h: OpaquePointer? = nil) -> SQLError {
+        SQLError(code: rc, message: String(cString: sqlite3_errmsg(h ?? db)))
+    }
+
+    /// 只读连接，第一次用时打开；打不开（比如内存库）就不用，读查询照旧排队用写连接。调用方持有 readLock。
+    private func readerHandle() -> OpaquePointer? {
+        if readerTried { return reader }
+        readerTried = true
+        guard !path.isEmpty, path != ":memory:" else { return nil }
+        var h: OpaquePointer?
+        guard sqlite3_open_v2(path, &h, SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX, nil) == SQLITE_OK, let h else {
+            sqlite3_close(h)
+            return nil
+        }
+        sqlite3_busy_timeout(h, 5000)
+        guard sqlite3_exec(h, "PRAGMA query_only = 1", nil, nil, nil) == SQLITE_OK else {
+            sqlite3_close(h)
+            return nil
+        }
+        reader = h
+        return h
+    }
 
     /// 只用于固定语句（建表、迁移），绝不拼接外部输入。
     func exec(_ sql: String) throws {
@@ -99,10 +128,10 @@ final class SQLiteDB: @unchecked Sendable {
         }
     }
 
-    private func prepare(_ sql: String, _ args: [SQLConvertible]) throws -> OpaquePointer {
+    private func prepare(_ sql: String, _ args: [SQLConvertible], on h: OpaquePointer? = nil) throws -> OpaquePointer {
         var st: OpaquePointer?
-        let rc = sqlite3_prepare_v2(db, sql, -1, &st, nil)
-        guard rc == SQLITE_OK, let st else { throw err(rc) }
+        let rc = sqlite3_prepare_v2(h ?? db, sql, -1, &st, nil)
+        guard rc == SQLITE_OK, let st else { throw err(rc, h) }
         for (i, a) in args.enumerated() {
             let idx = Int32(i + 1)
             switch a.sql {
@@ -128,8 +157,23 @@ final class SQLiteDB: @unchecked Sendable {
     }
 
     func all(_ sql: String, _ args: [SQLConvertible] = []) throws -> [Row] {
+        // 写连接空着（或者就是本线程在事务里，要读到自己还没提交的写入）：用写连接
+        if lock.try() {
+            defer { lock.unlock() }
+            return try query(sql, args, on: db)
+        }
+        readLock.lock()
+        if let r = readerHandle() {
+            defer { readLock.unlock() }
+            return try query(sql, args, on: r)
+        }
+        readLock.unlock()
         lock.lock(); defer { lock.unlock() }
-        let st = try prepare(sql, args)
+        return try query(sql, args, on: db)
+    }
+
+    private func query(_ sql: String, _ args: [SQLConvertible], on h: OpaquePointer?) throws -> [Row] {
+        let st = try prepare(sql, args, on: h)
         defer { sqlite3_finalize(st) }
         var rows: [Row] = []
         let n = sqlite3_column_count(st)
@@ -138,7 +182,7 @@ final class SQLiteDB: @unchecked Sendable {
         while true {
             let rc = sqlite3_step(st)
             if rc == SQLITE_DONE { break }
-            guard rc == SQLITE_ROW else { throw err(rc) }
+            guard rc == SQLITE_ROW else { throw err(rc, h) }
             var v: [String: SQLValue] = [:]
             for i in 0..<n {
                 switch sqlite3_column_type(st, i) {
@@ -162,13 +206,12 @@ final class SQLiteDB: @unchecked Sendable {
         if depth > 0 { return try body() }
         try exec("BEGIN IMMEDIATE")
         depth += 1
+        defer { depth -= 1 }  // 只减一次：提交失败走到下面的回滚也一样
         do {
             let r = try body()
-            depth -= 1
             try exec("COMMIT")
             return r
         } catch {
-            depth -= 1
             try? exec("ROLLBACK")
             throw error
         }

@@ -72,33 +72,33 @@ struct MainView: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
-        @Bindable var m = model
+        @Bindable var n = model.nav
         ZStack(alignment: .bottom) {
             // 主页 / 分类 / 资料库 / 搜索：系统的标签栏。iOS 26 起是系统的液态玻璃；更早的系统是系统的模糊底
-            TabView(selection: $m.tab) {
+            TabView(selection: $n.tab) {
                 SwiftUI.Tab("主页", systemImage: "house", value: .home) {
-                    NavigationStack(path: $m.homePath) {
+                    NavigationStack(path: $n.homePath) {
                         HomeView().navigationDestination(for: Route.self) { RouteView(route: $0) }
                     }
                     .nowPlayingBarBelowiOS26()
                 }
                 // 分类：一级页
                 SwiftUI.Tab("分类", systemImage: "square.grid.2x2", value: .categories) {
-                    NavigationStack(path: $m.categoriesPath) {
+                    NavigationStack(path: $n.categoriesPath) {
                         CategoriesView().navigationDestination(for: Route.self) { RouteView(route: $0) }
                     }
                     .nowPlayingBarBelowiOS26()
                 }
                 // 资料库：最近播放、收藏、已下载（名字照 Apple 播客、音乐）
                 SwiftUI.Tab("资料库", systemImage: "square.stack", value: .library) {
-                    NavigationStack(path: $m.libraryPath) {
+                    NavigationStack(path: $n.libraryPath) {
                         LibraryHubView().navigationDestination(for: Route.self) { RouteView(route: $0) }
                     }
                     .nowPlayingBarBelowiOS26()
                 }
                 // 标成系统的“搜索”标签：iOS 26 单独放在右边，往下滑收起时也一直留着（和“音乐”“播客”一样）
                 SwiftUI.Tab("搜索", systemImage: "magnifyingglass", value: .search, role: .search) {
-                    NavigationStack(path: $m.searchPath) {
+                    NavigationStack(path: $n.searchPath) {
                         SearchView().navigationDestination(for: Route.self) { RouteView(route: $0) }
                     }
                     .searchOnTabiOS26(model)

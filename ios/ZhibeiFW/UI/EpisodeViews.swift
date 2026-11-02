@@ -15,14 +15,15 @@ struct EpisodeItem: Identifiable, Equatable {
 extension AppModel {
     /// 正在播放的这一集用播放器的实时位置（liveProgress）。
     func liveProg(_ e: EpisodeItem) -> Prog? {
-        guard let p = player else { return e.progress }
+        // 先看是不是正在播的这一集：不是的话不读位置，列表里其它行不会跟着播放进度每半秒重画
+        guard let p = player, p.current?.episodeId == e.episodeId else { return e.progress }
         return liveProgress(
             currentId: p.current?.episodeId, position: p.position, duration: p.duration,
             active: p.looksPlaying, episodeId: e.episodeId, fromDb: e.progress)
     }
 
     func dlStatus(_ e: EpisodeItem) -> (DlStatus?, Double) {
-        if let d = downloads?.items[e.episodeId] { return (d.status, d.ratio) }
+        if let d = downloads?.items[e.episodeId] { return (d.status, downloads.ratio(e.episodeId)) }
         return (e.dlState, e.dlState == .done ? 1 : 0)
     }
 
@@ -30,7 +31,7 @@ extension AppModel {
     func tapDownloadIndicator(_ e: EpisodeItem) {
         switch dlStatus(e).0 {
         case .queued, .downloading: downloads.pause(e.episodeId)
-        case .paused: resumeDownloads(seriesId: e.seriesId, single: true, episodeId: e.episodeId)
+        case .paused: resumeDownloads(seriesId: e.seriesId, episodeId: e.episodeId)
         default: break
         }
     }
@@ -44,9 +45,9 @@ extension AppModel {
     func runDownloadAction(_ a: DlMenuAction, _ e: EpisodeItem) {
         switch a {
         // 资料库里的集可能已不在目录里：用下载记录里存的信息重新下（v1.0 这里误落到“标记已听完”的分支过）
-        case .download: if let it = dlItem(episodeId: e.episodeId) ?? store.getDownload(e.episodeId)?.item { download([it], single: true) }
+        case .download: if let it = dlItem(episodeId: e.episodeId) ?? store.getDownload(e.episodeId)?.item { download([it]) }
         case .pause: downloads.pause(e.episodeId)
-        case .resume: resumeDownloads(seriesId: e.seriesId, single: true, episodeId: e.episodeId)
+        case .resume: resumeDownloads(seriesId: e.seriesId, episodeId: e.episodeId)
         case .cancel: downloads.cancel(e.episodeId)
         case .delete: deleteDownload(e.episodeId)
         }
@@ -62,7 +63,7 @@ extension AppModel {
     }
 
     func goCourseItem(_ seriesId: String) -> MenuItem {
-        MenuItem(title: "前往课程", icon: "arrow-forward-circle-outline") { [weak self] in self?.push(.series(seriesId)) }
+        MenuItem(title: "前往课程", icon: "arrow-forward-circle-outline") { [weak self] in self?.nav.push(.series(seriesId)) }
     }
 
 }
@@ -161,12 +162,5 @@ struct RecentRowView: View {
         }
         .buttonStyle(PressableStyle())
         .overlay(alignment: .bottom) { Separator() }
-    }
-}
-
-extension AppModel {
-    func hideRecent(_ episodeId: String) {
-        try? store.hideFromRecent(episodeId)
-        dataVersion += 1
     }
 }

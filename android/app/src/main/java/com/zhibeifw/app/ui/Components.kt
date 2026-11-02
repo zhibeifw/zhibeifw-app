@@ -223,7 +223,7 @@ fun PageScaffold(
     )
     val nav: @Composable () -> Unit = {
         if (showBack) IconButton(
-            onClick = { model.navController?.popBackStack() },
+            onClick = { model.nav.navController?.popBackStack() },
             modifier = Modifier.semantics { contentDescription = "返回" }) {
             ZIcon("chevron-back", Tok.PageHeader.iconSize.d, C.labelPrimary())
         }

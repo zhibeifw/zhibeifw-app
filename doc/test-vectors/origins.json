@@ -1,0 +1,15 @@
+{
+  "_说明": "线路域名：只认 https 的源（没有路径、没有用户名）。",
+  "valid": [
+    "https://zbfw.org",
+    "https://a.b.c:8443",
+    "https://[2001:db8::1]"
+  ],
+  "invalid": [
+    "http://zbfw.org",
+    "https://zbfw.org/",
+    "https://zbfw.org/x",
+    "https://u:p@zbfw.org",
+    "ftp://x"
+  ]
+}

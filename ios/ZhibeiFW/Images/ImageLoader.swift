@@ -93,6 +93,13 @@ final class ImageLoader: @unchecked Sendable {
         return FileManager.default.fileExists(atPath: diskFile(path).path) ? true : await fetch(path) == .ok
     }
 
+    /// 原图在磁盘缓存里的文件（没有就先下载）；取不到返回 nil。
+    func originalFile(_ path: String) async -> URL? {
+        guard await ensureOnDisk(path, Int.max) else { return nil }
+        let f = diskFile(path)
+        return FileManager.default.fileExists(atPath: f.path) ? f : nil
+    }
+
     /// 下载一个文件到磁盘缓存；同一个文件并发只下一次。下载本身不随某个视图取消（别的视图可能也在等它）。
     private func fetch(_ src: String) async -> Fetch {
         let file = diskFile(src)
@@ -101,6 +108,8 @@ final class ImageLoader: @unchecked Sendable {
             let t = Task { [session] () -> Fetch in
                 guard let url = await Network.shared.ensureRoutes().flatMap({ buildUrl($0, src) }) else { return .failed }
                 guard let (tmp, resp) = try? await session.download(from: url) else { return .failed }
+                // 异步下载交回的临时文件系统不会自己删：没挪走的都删掉
+                defer { try? FileManager.default.removeItem(at: tmp) }
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 if code == 404 || code == 403 { return .notFound }  // R2 公开桶不存在的文件回 404（个别配置回 403）
                 guard code == 200 else { return .failed }
@@ -213,7 +222,8 @@ struct CoverImage: View {
         let p = key, lf = localFile
         task = Task {
             let img = await ImageLoader.shared.load(p, maxPixel: px, localFile: lf)
-            guard !Task.isCancelled, p == key else { return }
+            // 换了课时 onChange(of: path) 会取消这个任务
+            guard !Task.isCancelled else { return }
             if let img {
                 failed = false
                 withAnimation(.easeOut(duration: Double(Tok.Motion.fadeMs) / 1000)) { image = img }

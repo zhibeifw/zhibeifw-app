@@ -22,7 +22,8 @@ struct PageScaffold<Content: View, Trailing: View>: View {
     @Environment(AppModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @Environment(\.windowWidth) private var W
-    @State private var offset: CGFloat = 0
+    /// 系列页：封面和课程名是否已经滚出去（只记这一个开关，不记每一帧的滚动位置，免得整页每帧重建）
+    @State private var revealed = false
 
     var body: some View {
         let m = Layout.pageMargin(W)
@@ -43,8 +44,7 @@ struct PageScaffold<Content: View, Trailing: View>: View {
         .onScrollGeometryChange(for: CGFloat.self) {
             $0.contentOffset.y + $0.contentInsets.top
         } action: { _, y in
-            offset = y
-            model.feedScroll(Double(y))
+            if let r = revealAt, (y > r) != revealed { revealed = y > r }
         }
         .refreshable(enabled: onRefresh != nil) { await onRefresh?() }
         .background(C.background)
@@ -58,7 +58,7 @@ struct PageScaffold<Content: View, Trailing: View>: View {
 
     /// 系列页没有大标题：封面和课程名滚出去之后，系统小标题才显示课程名。
     private var navTitle: String {
-        if let r = revealAt { return offset > r ? title : "" }
+        if revealAt != nil { return revealed ? title : "" }
         return title
     }
 }
@@ -302,7 +302,7 @@ struct PlayPill: View {
             .accessibilityLabel(playing ? "暂停" : state.kind == .done ? "已听完，点按重新播放" : "播放，\(state.text)")
             Button(action: onBody) {
                 HStack(spacing: CP.EpisodeRow.pillGap) {
-                    if state.kind == .half && !playing || state.kind == .half {
+                    if state.kind == .half {
                         ZStack(alignment: .leading) {
                             Capsule().fill(C.separator)
                             Capsule().fill(C.labelPrimary).frame(width: CP.EpisodeRow.miniBarWidth * ratio)

@@ -1,0 +1,19 @@
+{
+  "_说明": "课程 ID、集 ID：文字（含中文）、数字、下划线、连字符，NFC，1 到 100 个字符。",
+  "valid": [
+    "ep_ruzhonglun-37",
+    "入中论讲解_01",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+  ],
+  "invalid": [
+    "a b",
+    "a/b",
+    "a.b",
+    "《入行论》",
+    "😀",
+    "",
+    "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "é",
+    5
+  ]
+}

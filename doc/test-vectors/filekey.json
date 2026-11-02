@@ -1,0 +1,51 @@
+{
+  "_说明": "本机文件名 fileKey(id) 和占位色序号 placeholderIndex(id)：对照表由 v1.0 的 TypeScript 算法生成，两端必须逐位一致。",
+  "fileKey": [
+    [
+      "ep_ruzhonglun_37",
+      "ep_ruzhonglun_37"
+    ],
+    [
+      "入中论讲解_01",
+      "h_3edc09c6510d1ce2"
+    ],
+    [
+      "入中论讲解",
+      "h_5fa2f0b40e4fddf4"
+    ],
+    [
+      "《入行论》",
+      "h_69959f4b3b57018d"
+    ],
+    [
+      "😀课",
+      "h_249fcb3253cc4f16"
+    ],
+    [
+      "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "h_2dd603ecedce70a5"
+    ],
+    [
+      "中观",
+      "h_8ae5568ec9863ea3"
+    ],
+    [
+      "意识真是从大脑中产生的吗_41",
+      "h_a3082dfe647f2354"
+    ]
+  ],
+  "placeholderIndex": [
+    [
+      "ep_ruzhonglun_37",
+      6
+    ],
+    [
+      "入中论讲解",
+      4
+    ],
+    [
+      "《入行论》",
+      3
+    ]
+  ]
+}

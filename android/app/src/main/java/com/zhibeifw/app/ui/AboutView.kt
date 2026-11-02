@@ -114,7 +114,7 @@ fun AboutView(model: AppModel) {
                                 updateResult = null
                                 model.launch {
                                     try {
-                                        updateResult = model.checkUpgrade(manual = true)
+                                        updateResult = model.upgrade.check(manual = true)
                                     } finally {
                                         checkingUpdate = false
                                     }

@@ -28,7 +28,7 @@ python3 tools/gen_design.py
 
 **iOS**：Xcode 26 或以上，系统要求 iOS 18 及以上。打开 `ios/ZhibeiFW.xcodeproj`，在 Signing 里换成你自己的开发者团队即可运行。
 
-**Android**：Android Studio 或命令行，系统要求 Android 7.0 及以上。
+**Android**：Android Studio 或命令行，系统要求 Android 10 及以上。
 
 ```sh
 cd android
@@ -38,7 +38,7 @@ cd android
 
 正式包需要签名密钥，从 `~/.gradle/gradle.properties` 读取 `ZBFW_UPLOAD_STORE_FILE`、`ZBFW_UPLOAD_STORE_PASSWORD`、`ZBFW_UPLOAD_KEY_ALIAS`、`ZBFW_UPLOAD_KEY_PASSWORD`，仓库里没有密钥。
 
-**版本号**：两端都读根目录的 `Version.xcconfig`。`MARKETING_VERSION` 是发布日期（如 `2026.10.31`），`CURRENT_PROJECT_VERSION` 是日期加两位当天序号（如 `2026103107`）。
+**版本号**：两端都读根目录的 `Version.xcconfig`。`MARKETING_VERSION` 是版本号（日期，如 `2026.11.03`），一个版本号只正式发布一次；`CURRENT_PROJECT_VERSION` 是版本号去点加两位序号（如 `2026110302`），同一版本里每构建一次加一。
 
 ## 依赖
 

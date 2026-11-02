@@ -45,6 +45,8 @@ data class EpisodeItem(
 /** 正在播放的这一集用播放器的实时位置。 */
 fun AppModel.liveProg(e: EpisodeItem): Prog? {
     val p = player ?: return e.progress
+    // 先看是不是正在播的这一集：不是的话不读位置，列表里其它行不会跟着播放进度每半秒重画
+    if (p.current?.episodeId != e.episodeId) return e.progress
     return liveProgress(
         p.current?.episodeId,
         p.position,
@@ -56,7 +58,7 @@ fun AppModel.liveProg(e: EpisodeItem): Prog? {
 }
 
 fun AppModel.dlStatus(e: EpisodeItem): Pair<DlStatus?, Double> {
-    downloads?.items?.get(e.episodeId)?.let { return it.status to it.ratio }
+    downloads?.let { dm -> dm.items[e.episodeId]?.let { return it.status to dm.ratio(e.episodeId) } }
     return e.dlState to (if (e.dlState == DlStatus.DONE) 1.0 else 0.0)
 }
 
@@ -64,7 +66,7 @@ fun AppModel.dlStatus(e: EpisodeItem): Pair<DlStatus?, Double> {
 fun AppModel.tapDownloadIndicator(e: EpisodeItem) {
     when (dlStatus(e).first) {
         DlStatus.QUEUED, DlStatus.DOWNLOADING -> downloads?.pause(e.episodeId)
-        DlStatus.PAUSED -> resumeDownloads(e.seriesId, single = true, episodeId = e.episodeId)
+        DlStatus.PAUSED -> resumeDownloads(e.seriesId, episodeId = e.episodeId)
         else -> {}
     }
 }
@@ -82,10 +84,10 @@ fun AppModel.runDownloadAction(a: DlMenuAction, e: EpisodeItem) {
     when (a) {
         // 资料库里的集可能已不在目录里：用下载记录里存的信息重新下（v1.0 这里误落到“标记已听完”的分支过）
         DlMenuAction.DOWNLOAD -> (dlItem(e.episodeId)
-            ?: store.getDownload(e.episodeId)?.item)?.let { download(listOf(it), single = true) }
+            ?: store.getDownload(e.episodeId)?.item)?.let { download(listOf(it)) }
 
         DlMenuAction.PAUSE -> downloads?.pause(e.episodeId)
-        DlMenuAction.RESUME -> resumeDownloads(e.seriesId, single = true, episodeId = e.episodeId)
+        DlMenuAction.RESUME -> resumeDownloads(e.seriesId, episodeId = e.episodeId)
         DlMenuAction.CANCEL -> downloads?.cancel(e.episodeId)
         DlMenuAction.DELETE -> deleteDownload(e.episodeId)
     }
@@ -102,9 +104,7 @@ fun AppModel.markItem(e: EpisodeItem): MenuItem {
 }
 
 fun AppModel.goCourseItem(seriesId: String) = MenuItem("前往课程", "arrow-forward-circle-outline") {
-    push(
-        com.zhibeifw.app.Routes.series(seriesId)
-    )
+    nav.push(com.zhibeifw.app.Routes.series(seriesId))
 }
 
 

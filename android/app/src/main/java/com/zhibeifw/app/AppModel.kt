@@ -2,33 +2,20 @@ package com.zhibeifw.app
 
 import android.content.Context
 import android.database.sqlite.SQLiteDatabase
-import android.net.Uri
-import android.os.Build
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.datastore.preferences.core.edit
-import androidx.navigation.NavBackStackEntry
-import androidx.navigation.NavHostController
 import com.zhibeifw.app.core.COVER_THUMB_WIDTHS
 import com.zhibeifw.app.core.DlStatus
-import com.zhibeifw.app.core.FileKind
-import com.zhibeifw.app.core.NavCollapse
 import com.zhibeifw.app.core.PlayContext
-import com.zhibeifw.app.core.PushGuard
-import com.zhibeifw.app.core.RemindLater
 import com.zhibeifw.app.core.UpdateChannel
-import com.zhibeifw.app.core.UpdateDecision
-import com.zhibeifw.app.core.decideUpdate
 import com.zhibeifw.app.core.isHttpsOrigin
 import com.zhibeifw.app.core.launchFreshWaitMs
 import com.zhibeifw.app.core.parseDomains
-import com.zhibeifw.app.core.parseUpgrade
-import com.zhibeifw.app.core.shouldAutoCheck
 import com.zhibeifw.app.core.shouldSyncOnForeground
-import com.zhibeifw.app.core.suppressedByRemindLater
 import com.zhibeifw.app.data.AppFiles
 import com.zhibeifw.app.data.CatalogSync
 import com.zhibeifw.app.data.Db
@@ -38,24 +25,21 @@ import com.zhibeifw.app.data.Migrator
 import com.zhibeifw.app.data.RecentRow
 import com.zhibeifw.app.data.Store
 import com.zhibeifw.app.data.SyncSummary
-import com.zhibeifw.app.data.UPGRADE_PATH
 import com.zhibeifw.app.download.DownloadManager
 import com.zhibeifw.app.download.SystemDownloader
+import com.zhibeifw.app.images.CoverArchive
 import com.zhibeifw.app.images.ImageLoader
 import com.zhibeifw.app.net.Connectivity
-import com.zhibeifw.app.net.NetResult
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
-import com.zhibeifw.app.net.buildUrl
 import com.zhibeifw.app.net.prefs
 import com.zhibeifw.app.player.PlayerController
 import com.zhibeifw.app.ui.SheetSpec
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -69,8 +53,6 @@ sealed class Phase {
     object Ready : Phase()
     object DbError : Phase()
 }
-
-enum class Tab { HOME, CATEGORIES, LIBRARY, SEARCH }
 
 data class AlertButton(
     val title: String,
@@ -100,9 +82,6 @@ class AppModel(private val ctx: Context) {
     var home by mutableStateOf(HomeData())
     var syncFailed by mutableStateOf(false)
 
-    /** “此版本过旧”提示条。 */
-    var outdated by mutableStateOf<UpdateDecision.Outdated?>(null)
-    var outdatedDismissed by mutableStateOf(false)
 
     /** 后台自动检查更新进行中（启动、切回前台时）：主页顶部显示“正在更新…”。下拉刷新有系统转圈，不算 */
     var autoUpdating by mutableStateOf(false); private set
@@ -110,32 +89,36 @@ class AppModel(private val ctx: Context) {
     private var syncing = false
     private var inflightSync: Deferred<SyncSummary>? = null
 
-    /** 用户数据变了：各页面据此重新读取。 */
-    var dataVersion by mutableIntStateOf(0)
+    /** 用户数据变了，按种类分开：各页面只跟自己用到的那几种，别的变了不用重读。 */
+    /** 收听进度、已听完、最近列表 */
+    var progressVersion by mutableIntStateOf(0)
+    var favoritesVersion by mutableIntStateOf(0)
+
+    /** 下载状态（排队、下载中、暂停、已下载、删除） */
+    var downloadsVersion by mutableIntStateOf(0)
     var catalogVersion by mutableIntStateOf(0)
 
-    var tab by mutableStateOf(Tab.HOME)
-    var homeNav: NavHostController? = null
-    var categoriesNav: NavHostController? = null
-    var libraryNav: NavHostController? = null
-    var searchNav: NavHostController? = null
+    val nav = Navigator()
     var playerOpen by mutableStateOf(false)
-    var navCollapsed by mutableStateOf(false)
-
-    /** 底部导航栏是否显示（关于页不显示）；Snackbar 据此决定要不要给导航栏让位 */
-    var bottomNavShown by mutableStateOf(true)
-    private val nav = NavCollapse()
     var alert by mutableStateOf<AlertSpec?>(null)
     var sheet by mutableStateOf<SheetSpec?>(null)
-    val pushGuard = PushGuard()
 
     val versionName: String = BuildConfig.VERSION_NAME
     val channel = if (BuildConfig.CHANNEL == "store") UpdateChannel.STORE else UpdateChannel.SITE
+    val upgrade = UpgradeChecker(ctx, net, scope, versionName, channel) { openExternal(it) }
+    private val covers = CoverArchive(files, images, scope)
 
     // ---------- 启动 ----------
 
+    private var bootJob: Job? = null
+
+    /** 启动只做一次，放在 App 自己的 scope 里：页面销毁、重建（包括进程被回收后从最近任务恢复）都不会打断或重复。 */
+    fun bootOnce() {
+        if (bootJob == null) bootJob = scope.launch { boot() }
+    }
+
     /** 启动页期间：打开数据库、迁移、读本机数据。返回后启动页才关（setKeepOnScreenCondition）。 */
-    suspend fun boot() {
+    private suspend fun boot() {
         val t0 = System.currentTimeMillis()
         val ok = withContext(Dispatchers.IO) {
             files.prepare()
@@ -168,11 +151,11 @@ class AppModel(private val ctx: Context) {
         player = p
         val dm = DownloadManager(SystemDownloader(ctx), store, files)
         dm.origin = { net.ensureRoutes() }
-        dm.onChange = { dataVersion++ }
+        dm.onChange = { downloadsVersion++ }
         dm.onBatchFailed = { alert = AlertSpec("部分下载失败，请稍后重试") }
         dm.onDiskFull = { alert = AlertSpec("手机存储空间不足，下载失败") }
         downloads = dm
-        p.onProgressSaved = { dataVersion++ }
+        p.onProgressSaved = { progressVersion++ }
         p.onDamaged =
             { id -> dm.removeDownload(id); alert = AlertSpec("这一集的下载文件已损坏，请重新下载") }
         runCatching { dm.reconcile() }
@@ -189,7 +172,7 @@ class AppModel(private val ctx: Context) {
                 withTimeoutOrNull(wait) { job.await() }
             } else scope.launch { syncCatalog(false) }
             phase = Phase.Ready
-            scope.launch { checkUpgrade(manual = false) }
+            scope.launch { upgrade.check(manual = false) }
         } else {
             phase = Phase.Initializing(1, false)
             scope.launch { runInitialization() }
@@ -206,7 +189,7 @@ class AppModel(private val ctx: Context) {
             loadHome()
             phase = Phase.Ready
             lastSyncAt = System.currentTimeMillis()
-            scope.launch { checkUpgrade(manual = false) }
+            scope.launch { upgrade.check(manual = false) }
         } else phase = Phase.Initializing(CatalogSync.INIT_ATTEMPTS, true)
     }
 
@@ -298,121 +281,15 @@ class AppModel(private val ctx: Context) {
             )
         ) scope.launch { syncCatalog(false) }
         downloads?.let { scope.launch { it.reconcile() } }
-        dataVersion++
+        // 在别处（锁屏、系统下载）可能变了：全部重读一次
+        progressVersion++; favoritesVersion++; downloadsVersion++
     }
 
     fun onBackground() {
         player?.saveNow()
     }
 
-    // ---------- 更新检查 ----------
-
-    var updateDialog by mutableStateOf<UpdateDecision.Optional?>(null)
-
-    /** 检查更新。手动检查时返回要显示在“检查更新”那一行右边的结果（有新版本时同时弹更新对话框）；自动检查返回 null。 */
-    suspend fun checkUpgrade(manual: Boolean): String? {
-        val now = System.currentTimeMillis()
-        val p = ctx.prefs.data.first()
-        val last = p[PrefKeys.updateCheckedAt]
-        if (!manual && !shouldAutoCheck(last, now)) {
-            p[PrefKeys.updateBody]?.let { parseUpgrade(it) }?.let { apply(it, manual = false) }
-            return null
-        }
-        val result = when (val r =
-            net.request(UPGRADE_PATH, p[PrefKeys.updateEtag], FileKind.UPGRADE.limit)) {
-            is NetResult.Ok -> {
-                val text = String(r.body, Charsets.UTF_8)
-                val u = parseUpgrade(text) ?: return if (manual) "检查失败" else null
-                ctx.prefs.edit {
-                    it[PrefKeys.updateBody] = text; r.etag?.let { e ->
-                    it[PrefKeys.updateEtag] = e
-                }; it[PrefKeys.updateCheckedAt] = now
-                }
-                apply(u, manual)
-            }
-
-            NetResult.NotModified -> {
-                ctx.prefs.edit { it[PrefKeys.updateCheckedAt] = now }
-                p[PrefKeys.updateBody]?.let { parseUpgrade(it) }?.let { apply(it, manual) }
-                    ?: "已是最新版本"
-            }
-
-            else -> "检查失败" // 自动检查失败不提示
-        }
-        return if (manual) result else null
-    }
-
-    /** 返回手动检查时显示在行上的结果文字；有可选更新时同时弹对话框（要用户决定）。 */
-    private suspend fun apply(u: com.zhibeifw.app.core.UpgradeFile, manual: Boolean): String? {
-        return when (val d = decideUpdate(versionName, u, channel)) {
-            is UpdateDecision.Outdated -> {
-                outdated = d
-                "版本过旧，请到官网更新"
-            }
-
-            is UpdateDecision.Optional -> {
-                outdated = null
-                val p = ctx.prefs.data.first()
-                val remind =
-                    p[PrefKeys.remindVersion]?.let { RemindLater(it, p[PrefKeys.remindAt] ?: 0) }
-                if (manual || !suppressedByRemindLater(
-                        remind,
-                        d.version,
-                        System.currentTimeMillis()
-                    )
-                ) updateDialog = d
-                "有新版本 ${d.version}"
-            }
-
-            UpdateDecision.None -> {
-                outdated = null; "已是最新版本"
-            }
-        }
-    }
-
-    fun remindLater(version: String) {
-        updateDialog = null
-        scope.launch {
-            ctx.prefs.edit {
-                it[PrefKeys.remindVersion] = version; it[PrefKeys.remindAt] =
-                System.currentTimeMillis()
-            }
-        }
-    }
-
-    /** 立刻更新：打开官网 APK 直链，交给浏览器 / 下载管理器。 */
-    fun openApk(apkPath: String) {
-        updateDialog = null
-        val origin = net.currentOrigin ?: return
-        openExternal(buildUrl(origin, apkPath))
-    }
-
-    // ---------- 导航 ----------
-
-    val navController
-        get() = when (tab) {
-            Tab.HOME -> homeNav; Tab.CATEGORIES -> categoriesNav; Tab.LIBRARY -> libraryNav; Tab.SEARCH -> searchNav
-        }
-
-    fun push(route: String) {
-        if (!pushGuard.allow("$tab-$route")) return
-        navController?.navigate(route)
-        resetNav()
-    }
-
-    fun selectTab(t: Tab) {
-        if (tab == t) navController?.let { nc -> while (nc.previousBackStackEntry != null) nc.popBackStack() } else tab =
-            t
-        resetNav()
-    }
-
-    fun resetNav() {
-        nav.expand(); nav.reset(0.0); navCollapsed = false
-    }
-
-    fun feedScroll(y: Double) {
-        if (nav.feed(y)) navCollapsed = nav.collapsed
-    }
+    // ---------- 播放页 ----------
 
     fun openPlayer() {
         if (player?.current == null) return
@@ -426,9 +303,8 @@ class AppModel(private val ctx: Context) {
     /** 播放页“前往课程”：下面已经是这门课就只收起播放页。 */
     fun goToSeries(seriesId: String) {
         closePlayer()
-        val r = Routes.series(seriesId)
-        if (navController?.currentBackStackEntry?.let { Routes.seriesIdOf(it) } == seriesId) return
-        push(r)
+        if (nav.isShowingSeries(seriesId)) return
+        nav.push(Routes.series(seriesId))
     }
 
     // ---------- 播放入口 ----------
@@ -457,18 +333,25 @@ class AppModel(private val ctx: Context) {
                 PlayContext.Single
             ) else togglePlay(row.episodeId, PlayContext.Single)
         }
-        if (!row.gone || store.getDownload(row.episodeId)?.state == com.zhibeifw.app.core.DlStatus.DONE) {
+        if (!row.gone || safe("读下载记录") { store.getDownload(row.episodeId) }?.state == DlStatus.DONE) {
             go(); return
         }
-        alert = AlertSpec(if (store.seriesExists(row.seriesId)) "这一集已下架" else "这门课已下架")
+        alert = AlertSpec(if (safe("读课程") { store.seriesExists(row.seriesId) } == true) "这一集已下架" else "这门课已下架")
     }
 
     // ---------- 进度、收藏 ----------
 
+    /** 页面触发的写库：出错只记日志，不让 App 崩（和 iOS 的 try? 一样）。 */
+    private fun <T> safe(what: String, block: () -> T): T? = try {
+        block()
+    } catch (e: Exception) {
+        Log.w("AppModel", "$what 出错", e); null
+    }
+
     fun markCompleted(episodeId: String, seriesId: String, completed: Boolean) {
         if (completed) player?.stopAsCompleted(episodeId)
-        val info = store.getEpisodeInfo(episodeId)
-        runCatching {
+        safe("标记已听完") {
+            val info = store.getEpisodeInfo(episodeId)
             store.markCompleted(
                 episodeId,
                 seriesId,
@@ -478,20 +361,29 @@ class AppModel(private val ctx: Context) {
                 info?.coverPath ?: ""
             )
         }
-        dataVersion++
+        progressVersion++
     }
 
     fun toggleFavorite(seriesId: String, title: String, coverPath: String) {
-        if (store.isFavorite(seriesId)) store.removeFavorite(seriesId) else store.addFavorite(
-            seriesId,
-            title,
-            coverPath
-        )
-        dataVersion++
+        safe("收藏") {
+            if (store.isFavorite(seriesId)) store.removeFavorite(seriesId) else store.addFavorite(seriesId, title, coverPath)
+        }
+        favoritesVersion++
+    }
+
+    fun removeFavorite(seriesId: String) {
+        safe("取消收藏") { store.removeFavorite(seriesId) }
+        favoritesVersion++
     }
 
     fun hideRecent(episodeId: String) {
-        store.hideFromRecent(episodeId); dataVersion++
+        safe("移除最近") { store.hideFromRecent(episodeId) }
+        progressVersion++
+    }
+
+    fun clearRecent() {
+        safe("清空最近") { store.clearRecent() }
+        progressVersion++
     }
 
     // ---------- 下载 ----------
@@ -503,20 +395,20 @@ class AppModel(private val ctx: Context) {
         return false
     }
 
-    fun download(items: List<DlItem>, single: Boolean) {
+    fun download(items: List<DlItem>) {
         if (items.isEmpty() || !requireNetwork()) return
-        saveCoverLocally(items[0].seriesId)
+        covers.save(items[0].seriesId, safe("读封面路径") { store.seriesCoverPath(items[0].seriesId) })
         downloads?.enqueue(items)
     }
 
-    fun resumeDownloads(seriesId: String?, single: Boolean = false, episodeId: String? = null) {
+    fun resumeDownloads(seriesId: String?, episodeId: String? = null) {
         if (!requireNetwork()) return
         val dm = downloads ?: return
-        if (episodeId != null) store.getDownload(episodeId)
-            ?.let { dm.enqueue(listOf(it.item)) } else dm.resumePaused(seriesId)
+        if (episodeId != null) safe("读下载记录") { store.getDownload(episodeId) }
+            ?.let { dm.enqueue(listOf(it.item)) } else safe("继续下载") { dm.resumePaused(seriesId) }
     }
 
-    fun dlItem(episodeId: String): DlItem? = store.getEpisodeInfo(episodeId)?.let {
+    fun dlItem(episodeId: String): DlItem? = safe("读单集") { store.getEpisodeInfo(episodeId) }?.let {
         DlItem(
             it.episodeId,
             it.seriesId,
@@ -530,32 +422,6 @@ class AppModel(private val ctx: Context) {
     fun deleteDownload(episodeId: String) {
         player?.stopIfCurrent(episodeId)
         downloads?.removeDownload(episodeId)
-    }
-
-    private fun saveCoverLocally(seriesId: String) {
-        val dest = files.coverFile(seriesId)
-        val cover = store.seriesCoverPath(seriesId)
-        if (dest.exists() || cover.isNullOrEmpty()) return
-        scope.launch(Dispatchers.IO) {
-            val origin = net.ensureRoutes() ?: return@launch
-            runCatching {
-                val c = URL(buildUrl(origin, cover)).openConnection() as HttpURLConnection
-                try {
-                    if (c.responseCode == 200) {
-                        val tmp = File(dest.path + ".tmp")
-                        // 下到一半断了：删掉半截的临时文件（对账只清 .jpg，不会管它）
-                        try {
-                            c.inputStream.use { i -> tmp.outputStream().use { i.copyTo(it) } }
-                        } catch (e: Exception) {
-                            tmp.delete(); throw e
-                        }
-                        if (dest.exists() || !tmp.renameTo(dest)) tmp.delete()
-                    }
-                } finally {
-                    c.disconnect()
-                }
-            }
-        }
     }
 
     // ---------- 关于页 ----------
@@ -574,22 +440,3 @@ class AppModel(private val ctx: Context) {
 
     fun launch(block: suspend CoroutineScope.() -> Unit) = scope.launch(block = block)
 }
-
-/** 页面地址（Navigation Compose 的路由）。课程 ID 可以是中文，拼进路径前先编码。 */
-object Routes {
-    const val HOME = "home"
-    const val CATEGORIES = "categories"
-    const val LIBRARY_HUB = "libraryHub"
-    const val SEARCH = "search"
-    const val RECENT = "recent"
-    const val FAVORITES = "favorites"
-    const val LIBRARY = "library"
-    const val ABOUT = "about"
-    fun category(id: String) = "category/${Uri.encode(id)}"
-    fun series(id: String) = "series/${Uri.encode(id)}"
-    fun libraryCourse(id: String) = "libraryCourse/${Uri.encode(id)}"
-    fun seriesIdOf(e: NavBackStackEntry): String? =
-        if (e.destination.route == "series/{id}") e.arguments?.getString("id")
-            ?.let { Uri.decode(it) } else null
-}
-

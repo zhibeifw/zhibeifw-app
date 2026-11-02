@@ -30,7 +30,8 @@ struct PlayerView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.colorScheme) private var scheme
     @State private var scrub: Double?
-    @State private var tick = Date()
+    /// “•••”菜单要用的库里的数据：换集或进度、收藏、下载变了才重读（菜单内容在每次重画时都会算，不能在那里查库）
+    @State private var menuFacts: MenuFacts?
     /// 最后一次在播的课：正在播的这一集被删掉下载、播放器清空时，播放页收起的那一下还用它画，不会因为“没有当前课”而闪退
     @State private var last: NowPlaying?
 
@@ -56,7 +57,28 @@ struct PlayerView: View {
         }
         .onAppear { last = p.current }
         .onChange(of: p.current) { _, now in if let now { last = now } }
-        .onReceive(Timer.publish(every: 1, on: .main, in: .common).autoconnect()) { _ in p.refreshSleepDisplay() }
+        // 睡眠定时的倒计时每秒刷新一次（播放时页面每半秒重画，定时器不能写在 body 里，否则每次重画都被重建、永远走不到点）
+        .task {
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                p.refreshSleepDisplay()
+            }
+        }
+        .task(
+            id: MenuKey(
+                episodeId: p.current?.episodeId,
+                versions: [model.progressVersion, model.favoritesVersion, model.downloadsVersion])
+        ) { loadMenuFacts() }
+    }
+
+    private struct MenuKey: Equatable { var episodeId: String?; var versions: [Int] }
+    private struct MenuFacts { var episodeId: String; var progress: Prog?; var dlState: DlStatus?; var favorite: Bool }
+
+    private func loadMenuFacts() {
+        guard let c = p.current else { menuFacts = nil; return }
+        menuFacts = MenuFacts(
+            episodeId: c.episodeId, progress: model.store.loadProgress(c.episodeId), dlState: model.store.getDownload(c.episodeId)?.state,
+            favorite: model.store.isFavorite(c.seriesId))
     }
 
     // MARK: 竖屏：顶部拖动条；中部封面区（占满剩余，封面居中）；底部信息与控制区整体贴底
@@ -221,20 +243,18 @@ struct PlayerView: View {
                 } else if ch.id == "end" {
                     p.setSleep(.end)
                 } else if let m = ch.minutes {
-                    p.setSleep(.timer(deadline: Date().addingTimeInterval(Double(m) * 60), minutes: m))
+                    p.setSleep(.timer(deadline: sleepClock() + Double(m) * 60, minutes: m))
                 }
             }
         }
     }
 
     private func moreGroups() -> [[MenuItem]] {
-        // 读一下 dataVersion：收藏、标记已听完、下载变了，系统菜单的内容跟着重建
-        _ = model.dataVersion
         guard let c = p.current else { return [] }
+        let f = menuFacts?.episodeId == c.episodeId ? menuFacts : nil
         let e = EpisodeItem(
-            episodeId: c.episodeId, seriesId: c.seriesId, title: c.info.episodeTitle, progress: model.store.loadProgress(c.episodeId),
-            dlState: model.store.getDownload(c.episodeId)?.state)
-        let fav = model.store.isFavorite(c.seriesId)
+            episodeId: c.episodeId, seriesId: c.seriesId, title: c.info.episodeTitle, progress: f?.progress, dlState: f?.dlState)
+        let fav = f?.favorite ?? false
         return [
             model.downloadItems(for: e) + [model.markItem(e)],
             [

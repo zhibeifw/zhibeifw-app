@@ -30,7 +30,6 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -164,7 +163,7 @@ class Network(private val ctx: Context) {
             saved?.domains ?: emptyList(),
             NetConfig.builtinDomains
         )
-        val won = pickFirstReachable(origins) { origin ->
+        val won = pickFirstReachable(origins, probeScope = scope) { origin ->
             val r = get(
                 buildUrl(origin, DOMAINS_PATH),
                 null,
@@ -268,53 +267,52 @@ class Network(private val ctx: Context) {
 /**
  * 不等超时再换：从第一个开始试；前一个 1.5 秒还没回应就同时试下一个（前一个不取消）；
  * 前一个明确失败就立刻试下一个。谁先成功用谁，其余取消。全部失败返回 null。
+ * 探测跑在 probeScope 里，不是调用方的子协程：HttpURLConnection 的阻塞读写取消不掉，
+ * 放在 coroutineScope 里的话要等落选的探测各自超时才能返回，“谁先到用谁”就成了等最慢的那个。
  */
 suspend fun <T : Any> pickFirstReachable(
     origins: List<String>,
     staggerMs: Long = NetConfig.RACE_STAGGER_MS,
+    probeScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     probe: suspend (String) -> T?
 ): Pair<String, T>? {
     if (origins.isEmpty()) return null
-    return coroutineScope {
-        val events =
-            Channel<Pair<Int, T?>>(Channel.UNLIMITED) // i ≥ 0：第 i 个的结果；i < 0：第 (-1-i) 个的计时到了
-        val jobs = ArrayList<Job>()
-        var next = 0
-        var pending = 0
-        val startedAfter = HashSet<Int>()
-        fun start() {
-            if (next >= origins.size) return
-            val i = next++
-            pending++
-            jobs += launch {
-                events.send(
-                    i to try {
-                        probe(origins[i])
-                    } catch (e: Exception) {
-                        null
-                    }
-                )
-            }
-            if (next < origins.size) jobs += launch { delay(staggerMs); events.send((-1 - i) to null) }
+    val events =
+        Channel<Pair<Int, T?>>(Channel.UNLIMITED) // i ≥ 0：第 i 个的结果；i < 0：第 (-1-i) 个的计时到了
+    val jobs = ArrayList<Job>()
+    var next = 0
+    var pending = 0
+    val startedAfter = HashSet<Int>()
+    fun start() {
+        if (next >= origins.size) return
+        val i = next++
+        pending++
+        jobs += probeScope.launch {
+            events.send(
+                i to try {
+                    probe(origins[i])
+                } catch (e: Exception) {
+                    null
+                }
+            )
         }
+        if (next < origins.size) jobs += probeScope.launch { delay(staggerMs); events.send((-1 - i) to null) }
+    }
+    try {
         start()
-        var result: Pair<String, T>? = null
         while (true) {
             val (i, v) = events.receive()
             if (i >= 0) {
                 pending--
-                if (v != null) {
-                    result = origins[i] to v; break
-                }
+                if (v != null) return origins[i] to v
                 if (startedAfter.add(i)) start()
-                if (pending == 0 && next >= origins.size) break
+                if (pending == 0 && next >= origins.size) return null
             } else {
                 val after = -1 - i
                 if (startedAfter.add(after)) start()
             }
         }
+    } finally {
         jobs.forEach { it.cancel() }
-        result
     }
 }
-

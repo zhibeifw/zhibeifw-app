@@ -72,18 +72,20 @@ fun SeriesView(model: AppModel, seriesId: String) {
 
     fun refreshRows() {
         episodes = runCatching { model.store.loadEpisodes(seriesId) }.getOrDefault(emptyList())
-        header = header?.copy(favorited = model.store.isFavorite(seriesId))
+        header = header?.let { h -> h.copy(favorited = runCatching { model.store.isFavorite(seriesId) }.getOrDefault(h.favorited)) }
     }
 
     // 只看本机目录，不联网（只有启动和下拉刷新取 index.json）。本机目录没有这门课 = 已下架
     fun load() {
-        val h = model.store.loadSeriesHeader(seriesId)
+        val h = runCatching { model.store.loadSeriesHeader(seriesId) }.getOrNull()
         if (h != null) {
             header = h; refreshRows(); state = LoadState.READY
         } else state = LoadState.GONE
     }
     LaunchedEffect(model.catalogVersion) { load() }
-    LaunchedEffect(model.dataVersion) { if (state == LoadState.READY) refreshRows() }
+    LaunchedEffect(model.progressVersion, model.favoritesVersion, model.downloadsVersion) {
+        if (state == LoadState.READY) refreshRows()
+    }
 
     val coverW = minOf(W, 640f) - 2 * CP.SeriesHeader.coverMargin
     PageScaffold(
@@ -243,7 +245,7 @@ private fun Header(model: AppModel, h: SeriesHeader, episodes: List<EpisodeRow>)
                 if (h.categoryName != null) {
                     // 不用 heightIn(min = 48) 撑高这一行（看着像空了一行）；Compose 会把小于 48dp 的可点元素的触控区自动扩到 48dp
                     Row(
-                        Modifier.pressable { model.push(Routes.category(h.categoryId)) }.semantics {
+                        Modifier.pressable { model.nav.push(Routes.category(h.categoryId)) }.semantics {
                         contentDescription = "${h.categoryName}，点按查看全部课程"
                     },
                         verticalAlignment = Alignment.CenterVertically,
@@ -304,7 +306,7 @@ private fun tapDownloadAll(model: AppModel, h: SeriesHeader, episodes: List<Epis
         0 -> model.download(episodes.filter {
             (model.downloads?.items?.get(it.id)?.status ?: it.dlState) == null
         }
-            .map { DlItem(it.id, h.id, h.title, it.title, it.pos, it.audioPath) }, single = false)
+            .map { DlItem(it.id, h.id, h.title, it.title, it.pos, it.audioPath) })
 
         1 -> model.downloads?.pauseAll(h.id)
         2 -> model.resumeDownloads(h.id)

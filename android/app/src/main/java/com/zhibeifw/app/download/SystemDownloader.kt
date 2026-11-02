@@ -10,6 +10,7 @@ import com.zhibeifw.app.core.fileKey
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
+import java.util.concurrent.atomic.AtomicBoolean
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -30,8 +31,19 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     /** 文件键 → 集 ID（系统表里只有文件名） */
     private val byKey = ConcurrentHashMap<String, String>()
 
-    /** 集 ID → 系统的下载编号 */
+    /** 集 ID → 系统的下载编号，和反过来的表（查系统下载表时按编号认集） */
     private val sysIds = ConcurrentHashMap<String, Long>()
+    private val idsBySys = ConcurrentHashMap<Long, String>()
+
+    /** 已经排着一次查表：系统下载表连续变化时只查一次 */
+    private val scanQueued = AtomicBoolean(false)
+
+    private fun remember(id: String, sysId: Long) {
+        sysIds.put(id, sysId)?.let { if (it != sysId) idsBySys.remove(it) }
+        idsBySys[sysId] = id
+    }
+
+    private fun forget(id: String): Long? = sysIds.remove(id)?.also { idsBySys.remove(it) }
 
     /** 已经交出“下完 / 失败”的系统编号：等收尾时别重复交 */
     private val reported = ConcurrentHashMap.newKeySet<Long>()
@@ -59,11 +71,11 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
             .setTitle(title)
             .setDescription(description)
             .setDestinationInExternalFilesDir(ctx, DIR, name)
-        sysIds[id] = dm.enqueue(req)
+        remember(id, dm.enqueue(req))
     }
 
     override fun stop(id: String) {
-        sysIds.remove(id)?.let { dm.remove(it) }
+        forget(id)?.let { dm.remove(it) }
     }
 
     override fun release(id: String) = stop(id)
@@ -104,12 +116,11 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     val sysId = c.getLong(iId)
                     val file = c.getString(iUri)?.let { Uri.parse(it).path }?.let(::File)
                     // 先按本次交给系统时记下的编号认；App 重启后按文件名认（刚交给系统时文件名可能还是空的，不能当成认不出）
-                    val id = sysIds.entries.firstOrNull { it.value == sysId }?.key
-                        ?: file?.name?.removeSuffix(".part")?.let { byKey[it] }
+                    val id = idsBySys[sysId] ?: file?.name?.removeSuffix(".part")?.let { byKey[it] }
                     if (id == null) {
                         if (file != null) orphans.add(sysId); continue
                     }
-                    sysIds[id] = sysId
+                    remember(id, sysId)
                     out.add(
                         Row(
                             sysId,
@@ -131,8 +142,10 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private fun emit(e: DownloadEvent) = main.post { handler?.invoke(e) }
 
     private fun scan() {
-        if (handler == null) return
+        if (handler == null || !scanQueued.compareAndSet(false, true)) return
         io.execute {
+            // 先放开再查：查的过程中又有变化，会再排一次，不会漏
+            scanQueued.set(false)
             for (r in rows()) when (r.status) {
                 AndroidDownloads.STATUS_SUCCESSFUL ->
                     if (reported.add(r.sysId)) emit(
@@ -149,7 +162,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                             r.reason == AndroidDownloads.ERROR_INSUFFICIENT_SPACE
                         )
                     )
-                    sysIds.remove(r.id); dm.remove(r.sysId)
+                    forget(r.id); dm.remove(r.sysId)
                 }
 
                 else -> {

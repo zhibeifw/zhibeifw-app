@@ -90,10 +90,10 @@ fun BottomNav(model: AppModel) {
         }
         NavigationBar(containerColor = C.background()) {
             for (t in listOf(Tab.HOME, Tab.CATEGORIES, Tab.LIBRARY, Tab.SEARCH)) {
-                val on = model.tab == t
+                val on = model.nav.tab == t
                 NavigationBarItem(
                     selected = on,
-                    onClick = { model.selectTab(t) },
+                    onClick = { model.nav.selectTab(t) },
                     icon = { ZIcon(icon(t, on), Tok.Nav.iconGlyph.d, C.labelPrimary()) },
                     label = {
                         Text(

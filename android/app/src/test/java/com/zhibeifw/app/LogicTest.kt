@@ -5,8 +5,10 @@ import com.zhibeifw.app.design.generated.IconData
 import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.net.pickFirstReachable
 import com.zhibeifw.app.ui.Layout
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
@@ -16,38 +18,10 @@ import org.junit.Test
 
 // 与 iOS 的 LogicTests.swift 同一批用例。
 
-class VersionTest {
-    @Test
-    fun compare() {
-        assertEquals(1, compareVersions("1.10.0", "1.9.0"))
-        assertEquals(0, compareVersions("1.2", "1.2.0"))
-        assertEquals(1, compareVersions("2.0.0", "1.99.99"))
-        assertEquals(1, compareVersions("10.0.0", "9.9.9"))
-        assertEquals(-1, compareVersions("1.0.1", "1.0.2"))
-        assertEquals(1, compareVersions("99999999999999999999.0.0", "99999999999999999998.9.9"))
-        assertNull(compareVersions("v1.0.0", "1.0.0"))
-        assertNull(compareVersions("1.2.0-beta", "1.0.0"))
-        assertNull(compareVersions(null, "1.0.0"))
-    }
-
-    @Test
-    fun dateVersions() {
-        assertEquals(1, compareVersions("2026.10.19", "2026.9.30"))
-        assertEquals(1, compareVersions("2027.1.1", "2026.12.31"))
-        assertEquals(0, compareVersions("2026.01.05", "2026.1.5"))
-        assertEquals(1, compareVersions("2026.10.21", "1.0.0"))
-    }
-}
-
 class FormatTest {
     @Test
     fun clocks() {
-        assertEquals("00:00", clock(0.0))
-        assertEquals("12:03", clock(723.0))
-        assertEquals("113:32", clock(113 * 60 + 32.0))
         assertEquals("00:00", clock(Double.NaN))
-        assertEquals("00:00", clock(-5.0))
-        assertEquals("−38:12", remainingClock(100.0, 2392.0))
         assertEquals("zZ 29:51", sleepLabel(1791.0))
         assertEquals("zZ 本集结束", sleepLabel(null))
     }
@@ -91,54 +65,13 @@ class FormatTest {
 }
 
 class ValidateTest {
-    @Test
-    fun ids() {
-        assertTrue(isValidId("ep_ruzhonglun-37"))
-        assertTrue(isValidId("入中论讲解_01"))
-        for (bad in listOf(
-            "a b",
-            "a/b",
-            "a.b",
-            "《入行论》",
-            "😀",
-            "",
-            "a".repeat(101),
-            "é"
-        )) assertFalse(bad, isValidId(bad))
-        assertFalse(isValidId(5))
-    }
 
     @Test
-    fun paths() {
-        assertTrue(isValidRelativePath("中观/入中论讲解/第1课.mp3"))
-        assertTrue(isValidRelativePath("releases/zhibeifw-1.2.0.apk"))
-        for (bad in listOf(
-            "/a.mp3",
-            "../a",
-            "a/../b",
-            "https://x/a",
-            "javascript:x",
-            "//x/a",
-            "a\\b",
-            "a b",
-            "a?x=1",
-            "a#b",
-            ""
-        )) assertFalse(bad, isValidRelativePath(bad))
-    }
-
-    @Test
-    fun origins() {
-        assertTrue(isHttpsOrigin("https://zbfw.org"))
-        assertTrue(isHttpsOrigin("https://a.b.c:8443"))
-        assertTrue(isHttpsOrigin("https://[2001:db8::1]"))
-        for (bad in listOf(
-            "http://zbfw.org",
-            "https://zbfw.org/",
-            "https://zbfw.org/x",
-            "https://u:p@zbfw.org",
-            "ftp://x"
-        )) assertFalse(bad, isHttpsOrigin(bad))
+    fun jsonUnicodeEscapeOnlyHex() {
+        assertEquals("A", Json.parse("\"\\u0041\""))
+        for (bad in listOf("\"\\u+041\"", "\"\\u-041\"", "\"\\u 041\"", "\"\\u00g1\"")) {
+            assertTrue(bad, runCatching { Json.parse(bad) }.exceptionOrNull() is JsonError)
+        }
     }
 
     @Test
@@ -250,25 +183,6 @@ class ValidateTest {
 }
 
 class FileKeyTest {
-    /** 对照表由 v1.0 的 TypeScript 算法生成，两端必须逐位一致。 */
-    @Test
-    fun matchesV1() {
-        assertEquals("ep_ruzhonglun_37", fileKey("ep_ruzhonglun_37"))
-        assertEquals("h_3edc09c6510d1ce2", fileKey("入中论讲解_01"))
-        assertEquals("h_5fa2f0b40e4fddf4", fileKey("入中论讲解"))
-        assertEquals("h_69959f4b3b57018d", fileKey("《入行论》"))
-        assertEquals("h_249fcb3253cc4f16", fileKey("😀课"))
-        assertEquals("h_2dd603ecedce70a5", fileKey("a".repeat(65)))
-        assertEquals("h_8ae5568ec9863ea3", fileKey("中观"))
-        assertEquals("h_a3082dfe647f2354", fileKey("意识真是从大脑中产生的吗_41"))
-    }
-
-    @Test
-    fun placeholderMatchesV1() {
-        assertEquals(6, placeholderIndex("ep_ruzhonglun_37"))
-        assertEquals(4, placeholderIndex("入中论讲解"))
-        assertEquals(3, placeholderIndex("《入行论》"))
-    }
 
     @Test
     fun orphans() {
@@ -277,6 +191,10 @@ class FileKeyTest {
             orphanPartKeys(listOf(fileKey("入中论讲解_01"), "x"), listOf("入中论讲解_01"))
         )
         assertEquals(listOf("y"), orphanCoverKeys(listOf(fileKey("中观"), "y"), listOf("中观")))
+        assertEquals(listOf("x.mp3"), orphanAudioNames(listOf("a.mp3", "x.mp3"), listOf("a.mp3", "b.m4a")))
+        assertTrue(isNoSpaceError(java.io.IOException("write failed: ENOSPC (No space left on device)")))
+        assertTrue(isNoSpaceError(RuntimeException("x", java.io.IOException("No space left on device"))))
+        assertFalse(isNoSpaceError(java.io.FileNotFoundException("missing")))
     }
 }
 
@@ -292,19 +210,6 @@ class DownloadFileTest {
 }
 
 class InteractionTest {
-    @Test
-    fun navCollapse() {
-        val n = NavCollapse()
-        n.feed(5.0); n.feed(8.0); assertFalse(n.collapsed)
-        n.feed(30.0); n.feed(50.0); assertFalse(n.collapsed)
-        n.feed(90.0); assertTrue(n.collapsed)
-        n.feed(40.0); n.feed(20.0); assertTrue(n.collapsed)
-        n.feed(8.0); assertFalse(n.collapsed)
-        val m = NavCollapse()
-        m.reset(100.0); m.feed(110.0); m.feed(105.0); m.feed(115.0); m.feed(110.0); m.feed(120.0)
-        assertFalse(m.collapsed)
-    }
-
     @Test
     fun pushGuard() {
         var now = 0L
@@ -361,6 +266,9 @@ class InteractionTest {
                 "关闭"
             ), SLEEP_CHOICES.map { it.title })
         assertEquals("m30", SleepSetting.Timer(0, 30).choiceId)
+        assertEquals(60.0, SleepSetting.Timer(100_000, 1).secondsLeft(40_200))
+        assertEquals(0.0, SleepSetting.Timer(100_000, 1).secondsLeft(130_000))
+        assertNull(SleepSetting.End.secondsLeft(0))
         assertEquals("c", pickNext(listOf("a", "b", "c"), "b"))
         assertNull(pickNext(listOf("a", "b"), "b"))
         assertNull(pickNext(listOf("a"), "x"))
@@ -381,7 +289,6 @@ class InteractionTest {
 
     @Test
     fun normalize() {
-        assertEquals("abc 入 行论", normalizeText("  ＡＢＣ​ 入  行论 "))
         assertEquals(listOf("b", "a", "c"), orderOrigins("b", listOf("a", "b"), listOf("c", "a")))
     }
 }
@@ -399,8 +306,9 @@ class RaceTest {
     fun staggerThenSecondWins() = runBlocking {
         val t0 = System.currentTimeMillis()
         val r = pickFirstReachable(listOf("slow", "fast"), 100) {
+            // 落选的探测是取消不掉的阻塞调用（和 HttpURLConnection 一样）：不能等它
             if (it == "slow") {
-                delay(2000); 1
+                withContext(Dispatchers.IO) { Thread.sleep(2000) }; 1
             } else 2
         }
         assertEquals("fast", r?.first)

@@ -31,7 +31,7 @@ struct RecentView: View {
                         buttons: [
                             AlertButton(title: "取消", role: .cancel),
                             AlertButton(title: "清空", role: .destructive) {
-                                try? model.store.clearRecent(); model.dataVersion += 1
+                                model.clearRecent()
                             },
                         ])
                 }
@@ -48,7 +48,7 @@ struct RecentView: View {
                 }
             }
         }
-        .task(id: model.dataVersion) { rows = (try? model.store.loadRecent()) ?? [] }
+        .task(id: [model.progressVersion, model.downloadsVersion]) { rows = (try? model.store.loadRecent()) ?? [] }
     }
 }
 
@@ -70,17 +70,17 @@ struct FavoritesView: View {
                                 [
                                     [
                                         MenuItem(title: "取消收藏", icon: "bookmark-outline", destructive: true) {
-                                            try? model.store.removeFavorite(f.id); model.dataVersion += 1
+                                            model.removeFavorite(f.id)
                                         }
                                     ]
                                 ]
                             }
-                        ) { model.push(.series(f.id)) }
+                        ) { model.nav.push(.series(f.id)) }
                     }
                 }
             }
         }
-        .task(id: model.dataVersion) { rows = (try? model.store.loadFavorites()) ?? [] }
+        .task(id: model.favoritesVersion) { rows = (try? model.store.loadFavorites()) ?? [] }
     }
 }
 
@@ -112,15 +112,15 @@ struct LibraryView: View {
                         ForEach(rows) { s in
                             SeriesRowView(
                                 id: s.seriesId, title: s.seriesTitle, meta: meta(s),
-                                coverPath: model.store.seriesCoverPath(s.seriesId) ?? "",
+                                coverPath: s.coverPath,
                                 localCover: model.files.coverFile(seriesId: s.seriesId), menu: { menuItems(s) }
-                            ) { model.push(.libraryCourse(s.seriesId)) }
+                            ) { model.nav.push(.libraryCourse(s.seriesId)) }
                         }
                     }
                 }
             }
         }
-        .task(id: model.dataVersion) { rows = (try? model.store.loadLibrary()) ?? [] }
+        .task(id: model.downloadsVersion) { rows = (try? model.store.loadLibrary()) ?? [] }
     }
 
     private func status(_ s: LibrarySeries) -> (active: Bool, paused: Bool) {
@@ -205,6 +205,8 @@ struct LibraryCourseView: View {
                 }
             }
         }
-        .task(id: model.dataVersion) { rows = (try? model.store.loadLibraryEpisodes(seriesId)) ?? [] }
+        .task(id: [model.progressVersion, model.downloadsVersion]) {
+            rows = (try? model.store.loadLibraryEpisodes(seriesId)) ?? []
+        }
     }
 }

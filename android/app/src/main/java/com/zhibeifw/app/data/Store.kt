@@ -118,7 +118,8 @@ data class LibrarySeries(
     val n: Int,
     val done: Int,
     val paused: Int,
-    val firstRequested: Long
+    val firstRequested: Long,
+    val coverPath: String = ""
 )
 
 data class LibraryEpisode(val row: DlRow, val progress: Prog?)
@@ -149,7 +150,6 @@ class Store(val db: Db) {
             coverPath: String,
             status: String,
             description: String?,
-            pos: Int,
             updatedAt: Long?
         ): String =
             Json.stringify(
@@ -159,7 +159,6 @@ class Store(val db: Db) {
                     coverPath,
                     status,
                     description ?: JsonNull,
-                    pos,
                     updatedAt ?: JsonNull
                 )
             )
@@ -196,11 +195,14 @@ class Store(val db: Db) {
                 s.coverPath,
                 s.status,
                 s.description,
-                i,
                 s.updatedAt
             )
             val prev = oldRow[s.id]
-            if (prev != null && prev.first == rowSig && prev.second == epSig) return@forEachIndexed
+            // 先后（pos）不进签名：前面插进一门新课时，后面的课只改先后，不整行重写
+            if (prev != null && prev.first == rowSig && prev.second == epSig) {
+                db.run("UPDATE catalog_series SET pos = ? WHERE id = ? AND pos <> ?", i, s.id, i)
+                return@forEachIndexed
+            }
             if (prev != null) {
                 db.run(
                     "UPDATE catalog_series SET title = ?, title_norm = ?, category_id = ?, cover_path = ?, status = ?, pos = ?, description = ?, updated_at = ?, series_sig = ?, episodes_sig = ? WHERE id = ?",
@@ -529,28 +531,29 @@ class Store(val db: Db) {
         val t = at ?: now()
         val completed = isNearEnd(position, duration)
         val pos = if (completed) 0.0 else max(0.0, position)
-        db.run(
-            """
-            INSERT INTO user_progress (episode_id, series_id, position, duration, completed, hidden, last_played, updated, series_title, episode_title, cover_path)
-            VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)
-            ON CONFLICT(episode_id) DO UPDATE SET
-              series_id = excluded.series_id, position = excluded.position,
-              duration = CASE WHEN excluded.duration > 0 THEN excluded.duration ELSE user_progress.duration END,
-              completed = excluded.completed, hidden = 0, last_played = excluded.last_played, updated = excluded.updated,
-              series_title = CASE WHEN excluded.series_title <> '' THEN excluded.series_title ELSE user_progress.series_title END,
-              episode_title = CASE WHEN excluded.episode_title <> '' THEN excluded.episode_title ELSE user_progress.episode_title END,
-              cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_progress.cover_path END""",
-            episodeId,
-            seriesId,
-            pos,
-            max(0.0, duration),
-            completed,
-            t,
-            t,
-            seriesTitle,
-            episodeTitle,
-            coverPath
-        )
+        // 不用 UPSERT（INSERT … DO UPDATE）：要 SQLite 3.24，Android 10 自带的是 3.22。
+        // 同一个事务里先插入（已有就跳过），再按同样的规则更新
+        db.transaction {
+            db.run(
+                """
+                INSERT OR IGNORE INTO user_progress (episode_id, series_id, position, duration, completed, hidden, last_played, updated, series_title, episode_title, cover_path)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)""",
+                episodeId, seriesId, pos, max(0.0, duration), completed, t, t, seriesTitle, episodeTitle, coverPath
+            )
+            db.run(
+                """
+                UPDATE user_progress SET
+                  series_id = ?, position = ?,
+                  duration = CASE WHEN ? > 0 THEN ? ELSE duration END,
+                  completed = ?, hidden = 0, last_played = ?, updated = ?,
+                  series_title = CASE WHEN ? <> '' THEN ? ELSE series_title END,
+                  episode_title = CASE WHEN ? <> '' THEN ? ELSE episode_title END,
+                  cover_path = CASE WHEN ? <> '' THEN ? ELSE cover_path END
+                WHERE episode_id = ?""",
+                seriesId, pos, duration, duration, completed, t, t,
+                seriesTitle, seriesTitle, episodeTitle, episodeTitle, coverPath, coverPath, episodeId
+            )
+        }
         return completed
     }
 
@@ -570,16 +573,24 @@ class Store(val db: Db) {
         episodeTitle: String = "",
         coverPath: String = ""
     ) {
-        db.run(
-            """
-            INSERT INTO user_progress (episode_id, series_id, position, duration, completed, hidden, last_played, updated, series_title, episode_title, cover_path)
-            VALUES (?, ?, 0, 0, ?, 1, 0, ?, ?, ?, ?)
-            ON CONFLICT(episode_id) DO UPDATE SET position = 0, completed = excluded.completed, updated = excluded.updated,
-              series_title = CASE WHEN excluded.series_title <> '' THEN excluded.series_title ELSE user_progress.series_title END,
-              episode_title = CASE WHEN excluded.episode_title <> '' THEN excluded.episode_title ELSE user_progress.episode_title END,
-              cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_progress.cover_path END""",
-            episodeId, seriesId, completed, now(), seriesTitle, episodeTitle, coverPath
-        )
+        val t = now()
+        db.transaction {
+            db.run(
+                """
+                INSERT OR IGNORE INTO user_progress (episode_id, series_id, position, duration, completed, hidden, last_played, updated, series_title, episode_title, cover_path)
+                VALUES (?, ?, 0, 0, ?, 1, 0, ?, ?, ?, ?)""",
+                episodeId, seriesId, completed, t, seriesTitle, episodeTitle, coverPath
+            )
+            db.run(
+                """
+                UPDATE user_progress SET position = 0, completed = ?, updated = ?,
+                  series_title = CASE WHEN ? <> '' THEN ? ELSE series_title END,
+                  episode_title = CASE WHEN ? <> '' THEN ? ELSE episode_title END,
+                  cover_path = CASE WHEN ? <> '' THEN ? ELSE cover_path END
+                WHERE episode_id = ?""",
+                completed, t, seriesTitle, seriesTitle, episodeTitle, episodeTitle, coverPath, coverPath, episodeId
+            )
+        }
     }
 
     fun hideFromRecent(episodeId: String) {
@@ -596,14 +607,20 @@ class Store(val db: Db) {
         coverPath: String = "",
         at: Long? = null
     ) {
-        db.run(
-            """
-            INSERT INTO user_favorite (series_id, added, series_title, cover_path) VALUES (?, ?, ?, ?)
-            ON CONFLICT(series_id) DO UPDATE SET
-              series_title = CASE WHEN excluded.series_title <> '' THEN excluded.series_title ELSE user_favorite.series_title END,
-              cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_favorite.cover_path END""",
-            seriesId, at ?: now(), title, coverPath
-        )
+        db.transaction {
+            db.run(
+                "INSERT OR IGNORE INTO user_favorite (series_id, added, series_title, cover_path) VALUES (?, ?, ?, ?)",
+                seriesId, at ?: now(), title, coverPath
+            )
+            db.run(
+                """
+                UPDATE user_favorite SET
+                  series_title = CASE WHEN ? <> '' THEN ? ELSE series_title END,
+                  cover_path = CASE WHEN ? <> '' THEN ? ELSE cover_path END
+                WHERE series_id = ?""",
+                title, title, coverPath, coverPath, seriesId
+            )
+        }
     }
 
     fun removeFavorite(seriesId: String) {
@@ -646,6 +663,14 @@ class Store(val db: Db) {
                 i.audioPath,
                 t
             )
+        }
+    }
+
+    /** 一批集开始下载：新的先建记录，然后全部记为“下载中”。整批一个事务。 */
+    fun startDownloads(fresh: List<DlItem>, ids: List<String>) {
+        db.transaction {
+            if (fresh.isNotEmpty()) queuedMany(fresh)
+            for (id in ids) setDlState(id, DlStatus.DOWNLOADING)
         }
     }
 
@@ -701,7 +726,7 @@ class Store(val db: Db) {
 
     fun loadLibrary() = db.all(
         """
-        SELECT d.series_id AS series_id, COALESCE(s.title, max(d.series_title)) AS series_title,
+        SELECT d.series_id AS series_id, COALESCE(s.title, max(d.series_title)) AS series_title, s.cover_path AS cover_path,
                count(*) AS n, sum(d.state = 'done') AS done, sum(d.state = 'paused') AS paused, min(d.requested_at) AS first_requested
         FROM user_download d LEFT JOIN catalog_series s ON s.id = d.series_id
         GROUP BY d.series_id ORDER BY first_requested DESC"""
@@ -712,7 +737,8 @@ class Store(val db: Db) {
             it.int("n").toInt(),
             it.int("done").toInt(),
             it.int("paused").toInt(),
-            it.int("first_requested")
+            it.int("first_requested"),
+            it.str("cover_path")
         )
     }
 

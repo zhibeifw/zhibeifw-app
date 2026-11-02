@@ -210,6 +210,23 @@ fun orphanPartKeys(onDisk: List<String>, keepEpisodeIds: List<String>): List<Str
     return onDisk.filter { it !in keep }
 }
 
+/** 资料库音频目录里没有下载记录对应的文件名（keep：各条记录的本地文件名）。 */
+fun orphanAudioNames(onDisk: List<String>, keep: List<String>): List<String> {
+    val k = keep.toSet()
+    return onDisk.filter { it !in k }
+}
+
+/** 写文件出错是不是因为存储空间不足（ENOSPC）；其它错误按普通失败处理。 */
+fun isNoSpaceError(e: Throwable): Boolean {
+    var c: Throwable? = e
+    while (c != null) {
+        val m = c.message ?: ""
+        if ("ENOSPC" in m || "No space left" in m) return true
+        c = c.cause.takeIf { it !== c }
+    }
+    return false
+}
+
 
 // ---------- 播放 ----------
 // 令牌是 Float，直接 toDouble() 会变成 1.2999999523…（存进设置、显示在档位上都会错）；按十进制文字转
@@ -219,6 +236,7 @@ val SLEEP_MINUTES = listOf(60, 45, 30, 15, 10, 5)
 sealed class SleepSetting {
     object Off : SleepSetting()
     object End : SleepSetting()
+    /** deadline：到点的时刻，开机以来的毫秒数（SystemClock.elapsedRealtime，含休眠，不受改系统时间影响）。 */
     data class Timer(val deadline: Long, val minutes: Int) : SleepSetting()
 
     val choiceId: String
@@ -311,43 +329,6 @@ fun downloadMenuItems(status: DlStatus?, canDownload: Boolean = true): List<DlMe
             )
         ) else emptyList()
     }
-
-// ---------- 导航收缩 ----------
-class NavCollapse {
-    companion object {
-        val TOP_ZONE = Tok.Nav.CollapseRule.backToTopWithin.toDouble()
-        val COLLAPSE_MIN_Y = Tok.Nav.CollapseRule.leaveTopAfter.toDouble()
-        val DOWN_DISTANCE = Tok.Nav.CollapseRule.downAccumulate.toDouble()
-    }
-
-    var collapsed = false; private set
-    private var last = 0.0
-    private var acc = 0.0
-
-    /** 喂一个滚动位置；返回状态有没有变。 */
-    fun feed(y: Double): Boolean {
-        val before = collapsed
-        if (y <= TOP_ZONE) {
-            last = max(y, 0.0); acc = 0.0; collapsed = false; return before != collapsed
-        }
-        val dy = y - last
-        last = y
-        if (dy == 0.0) return false
-        if (dy > 0) {
-            acc = if (acc > 0) acc + dy else dy
-            if (acc > DOWN_DISTANCE && y > COLLAPSE_MIN_Y) collapsed = true
-        } else acc = 0.0
-        return before != collapsed
-    }
-
-    fun expand() {
-        acc = 0.0; collapsed = false
-    }
-
-    fun reset(y: Double = 0.0) {
-        last = y; acc = 0.0
-    }
-}
 
 // ---------- 防双击压两层页面 ----------
 class PushGuard(

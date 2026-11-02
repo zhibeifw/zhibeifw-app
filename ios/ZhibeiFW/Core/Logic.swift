@@ -153,6 +153,23 @@ func orphanPartKeys(_ onDisk: [String], keepEpisodeIds: [String]) -> [String] {
     return onDisk.filter { !keep.contains($0) }
 }
 
+/// 资料库音频目录里没有下载记录对应的文件名（keep：各条记录的本地文件名）。
+func orphanAudioNames(_ onDisk: [String], keep: [String]) -> [String] {
+    let k = Set(keep)
+    return onDisk.filter { !k.contains($0) }
+}
+
+/// 写文件出错是不是因为存储空间不足；其它错误按普通失败处理。
+func isOutOfSpace(_ error: Error) -> Bool {
+    var e: NSError? = error as NSError
+    while let n = e {
+        if n.domain == NSCocoaErrorDomain && n.code == NSFileWriteOutOfSpaceError { return true }
+        if n.domain == NSPOSIXErrorDomain && n.code == Int(ENOSPC) { return true }
+        e = n.userInfo[NSUnderlyingErrorKey] as? NSError
+    }
+    return false
+}
+
 // MARK: - 下载
 
 /// 整份下载收到的回复算不算整份文件：200；或者 206 且 Content-Range 从 0 开始（真机上系统后台下载服务会自己分段取）。
@@ -168,9 +185,13 @@ func isWholeFileResponse(status: Int, contentRange: String?) -> Bool {
 let PLAYBACK_RATES: [Double] = Tok.RatePicker.rates.map(Double.init)
 let SLEEP_MINUTES = [60, 45, 30, 15, 10, 5]
 
+/// 睡眠定时用的时钟：开机以来的秒数（CLOCK_MONOTONIC，含休眠，不受改系统时间影响）。
+func sleepClock() -> Double { Double(clock_gettime_nsec_np(CLOCK_MONOTONIC)) / 1e9 }
+
 enum SleepSetting: Equatable {
     case off, end
-    case timer(deadline: Date, minutes: Int)
+    /// deadline：到点的时刻（sleepClock 的秒数）
+    case timer(deadline: Double, minutes: Int)
     var choiceId: String {
         switch self {
         case .off: return "off"
@@ -178,8 +199,8 @@ enum SleepSetting: Equatable {
         case .timer(_, let m): return "m\(m)"
         }
     }
-    func secondsLeft(now: Date) -> Double? {
-        if case .timer(let d, _) = self { return max(0, (d.timeIntervalSince(now)).rounded(.up)) }
+    func secondsLeft(now: Double) -> Double? {
+        if case .timer(let d, _) = self { return max(0, (d - now).rounded(.up)) }
         return nil
     }
 }
@@ -233,37 +254,6 @@ func downloadMenuItems(_ status: DlStatus?, canDownload: Bool = true) -> [DlMenu
     case nil:
         return canDownload ? [DlMenuItem(action: .download, title: "下载", icon: "arrow-down-circle-outline", destructive: false)] : []
     }
-}
-
-// MARK: - 导航收缩
-
-struct NavCollapse {
-    static let topZone: Double = Double(Tok.Nav.CollapseRule.backToTopWithin)
-    static let collapseMinY: Double = Double(Tok.Nav.CollapseRule.leaveTopAfter)
-    static let downDistance: Double = Double(Tok.Nav.CollapseRule.downAccumulate)
-
-    private(set) var collapsed = false
-    private var last: Double = 0
-    private var acc: Double = 0
-
-    /// 喂一个滚动位置；返回状态有没有变。
-    @discardableResult
-    mutating func feed(_ y: Double) -> Bool {
-        let before = collapsed
-        if y <= Self.topZone { last = max(y, 0); acc = 0; collapsed = false; return before != collapsed }
-        let dy = y - last
-        last = y
-        if dy == 0 { return false }
-        if dy > 0 {
-            acc = acc > 0 ? acc + dy : dy
-            if acc > Self.downDistance && y > Self.collapseMinY { collapsed = true }
-        } else {
-            acc = 0
-        }
-        return before != collapsed
-    }
-    mutating func expand() { acc = 0; collapsed = false }
-    mutating func reset(_ y: Double = 0) { last = y; acc = 0 }
 }
 
 // MARK: - 防双击压两层页面

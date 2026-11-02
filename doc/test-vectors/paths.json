@@ -1,0 +1,20 @@
+{
+  "_说明": "JSON 里的相对路径。",
+  "valid": [
+    "中观/入中论讲解/第1课.mp3",
+    "releases/zhibeifw-1.2.0.apk"
+  ],
+  "invalid": [
+    "/a.mp3",
+    "../a",
+    "a/../b",
+    "https://x/a",
+    "javascript:x",
+    "//x/a",
+    "a\\b",
+    "a b",
+    "a?x=1",
+    "a#b",
+    ""
+  ]
+}

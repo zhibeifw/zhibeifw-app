@@ -5,6 +5,7 @@ import android.content.Context
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
@@ -186,12 +187,13 @@ class PlayerController(
         if (sleep is SleepSetting.Timer && tickSleep()) return
         if (!positionKnown || player.mediaItemCount == 0) return
         readPosition()
-        if (isPlaying && abs(position - lastSavedAt) >= SAVE_INTERVAL_SEC) save(position, duration)
+        // 定时保存不通知各页面重读：正在播的这一集页面上用的是播放器的实时位置
+        if (isPlaying && abs(position - lastSavedAt) >= SAVE_INTERVAL_SEC) save(position, duration, notify = false)
     }
 
     // ---------- 进度保存 ----------
 
-    private fun save(pos: Double, dur: Double, np: NowPlaying? = current) {
+    private fun save(pos: Double, dur: Double, np: NowPlaying? = current, notify: Boolean = true) {
         val c = np ?: return
         try {
             store.recordPlayback(
@@ -204,7 +206,7 @@ class PlayerController(
                 c.info.coverPath
             )
             lastSavedAt = pos
-            onProgressSaved?.invoke()
+            if (notify) onProgressSaved?.invoke()
         } catch (e: Exception) {
             Log.w("Player", "保存播放进度出错", e)
         } // 写库失败不影响播放
@@ -259,6 +261,7 @@ class PlayerController(
     }
 
     fun play(info: EpisodeInfo, ctx: PlayContext) {
+        dropExpiredSleep()
         generation++
         val gen = generation
         current?.let { prev ->
@@ -345,6 +348,7 @@ class PlayerController(
 
     fun resume() {
         val c = current ?: return
+        dropExpiredSleep()
         if (needsReload || player.mediaItemCount == 0) {
             play(c.info, c.ctx); return
         }
@@ -387,14 +391,14 @@ class PlayerController(
 
     fun changeSleep(s: SleepSetting) {
         sleep = s
-        sleepLeft = s.secondsLeft(System.currentTimeMillis())
+        sleepLeft = s.secondsLeft(SystemClock.elapsedRealtime())
         tick() // 定时开始走（暂停中设的定时也要按时清掉）
     }
 
     /** 返回 true 表示到点暂停了。 */
     private fun tickSleep(): Boolean {
         if (sleep !is SleepSetting.Timer) return false
-        val left = sleep.secondsLeft(System.currentTimeMillis()) ?: 0.0
+        val left = sleep.secondsLeft(SystemClock.elapsedRealtime()) ?: 0.0
         if (left <= 0) {
             pause()
             sleep = SleepSetting.Off
@@ -403,6 +407,14 @@ class PlayerController(
         }
         if (left != sleepLeft) sleepLeft = left
         return false
+    }
+
+    /** 已经过了点的睡眠定时（比如停着的时候到点）：清掉，免得一开始播放就被它停下。 */
+    private fun dropExpiredSleep() {
+        val s = sleep
+        if (s is SleepSetting.Timer && (s.secondsLeft(SystemClock.elapsedRealtime()) ?: 0.0) <= 0) {
+            sleep = SleepSetting.Off; sleepLeft = null
+        }
     }
 
     /** 用户把正在播放的这一集标为已听完：停止，之后不把旧位置写回；再点播放从头重新加载。 */

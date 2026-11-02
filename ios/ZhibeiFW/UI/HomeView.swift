@@ -12,7 +12,7 @@ struct HomeView: View {
             title: "主页", showBack: false, onRefresh: { await model.syncCatalog(userInitiated: true) },
             trailing: {
                 Button {
-                    model.push(.about)
+                    model.nav.push(.about)
                 } label: {
                     Image(systemName: "info.circle")
                 }
@@ -24,10 +24,10 @@ struct HomeView: View {
                     BannerView(text: "无法更新，显示的是上一次更新的内容", actions: [("重试", { Task { await model.syncCatalog(userInitiated: true) } })])
                         .padding(.bottom, CP.Banner.bottomGap)
                 }
-                if model.outdated && !model.outdatedDismissed {
+                if model.upgrade.outdated && !model.upgrade.outdatedDismissed {
                     BannerView(
                         text: "此版本过旧，已无法获得最新的内容更新，请到 App Store 更新",
-                        actions: [("关闭", { model.outdatedDismissed = true })]
+                        actions: [("关闭", { model.upgrade.outdatedDismissed = true })]
                             + (NetConfig.iosStoreURL.isEmpty
                                 ? [] : [("更新", { if let u = URL(string: NetConfig.iosStoreURL) { UIApplication.shared.open(u) } })])
                     )
@@ -37,20 +37,20 @@ struct HomeView: View {
                     if !h.ongoing.isEmpty {
                         section("新课程", nil) {
                             CardRow(cards: h.ongoing, large: true, subtitleOf: { c in c.lastTitle.map { "更新至 \($0)" } }) {
-                                model.push(.series($0.id))
+                                model.nav.push(.series($0.id))
                             }
                         }
                     }
                     if !h.featured.isEmpty {
                         section("编辑精选", nil) {
                             CardRow(cards: h.featured, large: false, titleOf: { $0.featureTitle ?? $0.title }) {
-                                model.push(.series($0.id))
+                                model.nav.push(.series($0.id))
                             }
                         }
                     }
                     ForEach(h.categories) { c in
-                        section(c.name, { model.push(.category(c.id)) }) {
-                            CardRow(cards: c.series, large: false) { model.push(.series($0.id)) }
+                        section(c.name, { model.nav.push(.category(c.id)) }) {
+                            CardRow(cards: c.series, large: false) { model.nav.push(.series($0.id)) }
                         }
                     }
                 }

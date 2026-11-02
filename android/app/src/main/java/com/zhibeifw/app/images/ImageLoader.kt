@@ -131,6 +131,12 @@ class ImageLoader(private val net: Network, val diskDir: File) {
         }
     }
 
+    /** 原图在磁盘缓存里的文件（没有就先下载）；取不到返回 null。 */
+    suspend fun originalFile(path: String): File? {
+        if (!ensureOnDisk(path, Int.MAX_VALUE)) return null
+        return diskFile(path).takeIf { it.exists() }
+    }
+
     /** 保证这个尺寸要用的文件在磁盘上（小图没有就下原图）。预先下载也用它。 */
     suspend fun ensureOnDisk(path: String, requested: Int): Boolean {
         val src = source(path, requested)

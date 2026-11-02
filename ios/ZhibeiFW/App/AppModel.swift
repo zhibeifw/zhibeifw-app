@@ -1,16 +1,5 @@
 import SwiftUI
 import Observation
-import SQLite3
-
-enum Route: Hashable {
-    case category(String)
-    case series(String)
-    case recent, favorites, library
-    case libraryCourse(String)
-    case about
-}
-
-enum Tab: Hashable { case home, categories, library, search }
 
 enum Phase: Equatable {
     case launching
@@ -45,38 +34,39 @@ final class AppModel {
     var home = HomeData()
     /// 主页顶部“无法更新，显示的是上一次更新的内容”。
     var syncFailed = false
-    /// “此版本过旧”提示条（本次运行内关闭后不再显示）。
-    var outdated = false
-    var outdatedDismissed = false
     /// 后台自动检查更新进行中（启动、切回前台时）：主页顶部显示“正在更新…”。下拉刷新有系统转圈，不算
     private(set) var autoUpdating = false
     @ObservationIgnored var lastSyncAt: Double = 0
     @ObservationIgnored var syncing = false
     @ObservationIgnored private var inflightSync: Task<SyncSummary, Never>?
-    /// 用户数据变了（进度、收藏、下载……）：各页面据此重新读取。
-    var dataVersion = 0
+    /// 用户数据变了，按种类分开：各页面只跟自己用到的那几种，别的变了不用重读。
+    /// 收听进度、已听完、最近列表
+    var progressVersion = 0
+    var favoritesVersion = 0
+    /// 下载状态（排队、下载中、暂停、已下载、删除）
+    var downloadsVersion = 0
     var catalogVersion = 0
 
-    var tab: Tab = .home
-    var homePath: [Route] = []
-    var categoriesPath: [Route] = []
-    var libraryPath: [Route] = []
-    var searchPath: [Route] = []
+    @ObservationIgnored let nav = Navigator()
+    @ObservationIgnored let upgrade = UpgradeChecker()
+    private var covers: CoverArchive { CoverArchive(files: files) }
     var playerOpen = false
-    var navCollapsed = false
-    @ObservationIgnored var nav = NavCollapse()
     var alert: AlertSpec?
     var sheet: SheetSpec?
     /// 搜索框的文字（iOS 26 搜索框在底部“搜索”标签上，由根视图持有；按键盘“搜索”时 searchSubmitted 加一）
     var searchQuery = ""
     var searchSubmitted = 0
-    @ObservationIgnored let pushGuard = PushGuard()
 
     init() {}
 
     // MARK: 启动
 
+    @ObservationIgnored private var booted = false
+
+    /// 启动只做一次（根视图的 .task 可能不止跑一次，比如多个窗口）。
     func boot() async {
+        guard !booted else { return }
+        booted = true
         let t0 = Date()
         files.prepare()
         do {
@@ -101,10 +91,10 @@ final class AppModel {
         importV1Prefs()
         player = PlayerController(store: store, files: files)
         downloads = DownloadManager(system: BackgroundDownloader.shared, store: store, files: files)
-        downloads.onChange = { [weak self] in self?.dataVersion += 1 }
+        downloads.onChange = { [weak self] in self?.downloadsVersion += 1 }
         downloads.onBatchFailed = { [weak self] in self?.alert = AlertSpec(title: "部分下载失败，请稍后重试") }
         downloads.onDiskFull = { [weak self] in self?.alert = AlertSpec(title: "手机存储空间不足，下载失败") }
-        player.onProgressSaved = { [weak self] in self?.dataVersion += 1 }
+        player.onProgressSaved = { [weak self] in self?.progressVersion += 1 }
         player.onDamaged = { [weak self] id in
             guard let self else { return }
             self.downloads.removeDownload(id)
@@ -119,20 +109,23 @@ final class AppModel {
             let online = Connectivity.shared.connected
             let wait = launchFreshWaitMs(online: online, elapsedMs: Date().timeIntervalSince(t0) * 1000)
             if wait > 0 {
-                let syncTask = Task { await self.syncCatalog(userInitiated: false) }
-                let timeout = Task { try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000)) }
-                await withTaskGroup(of: Void.self) { g in
-                    g.addTask { _ = await syncTask.value }
-                    g.addTask { await timeout.value }
-                    await g.next()
-                    g.cancelAll()
+                // 同步做完或时间到，谁先到算谁；时间到了同步照样在后台做完，只是启动页不再等它
+                let (done, cont) = AsyncStream<Void>.makeStream()
+                Task {
+                    await self.syncCatalog(userInitiated: false)
+                    cont.finish()
                 }
-                timeout.cancel()
+                let timer = Task {
+                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000))
+                    cont.finish()
+                }
+                for await _ in done {}
+                timer.cancel()
             } else {
                 Task { await self.syncCatalog(userInitiated: false) }
             }
             phase = .ready
-            Task { await self.checkUpgrade(manual: false) }
+            Task { await self.upgrade.check(manual: false) }
         } else {
             await runInitialization()
         }
@@ -151,7 +144,7 @@ final class AppModel {
             loadHome()
             phase = .ready
             lastSyncAt = Date().timeIntervalSince1970 * 1000
-            Task { await self.checkUpgrade(manual: false) }
+            Task { await self.upgrade.check(manual: false) }
         } else {
             phase = .initializing(attempt: CatalogSync.initAttempts, failed: true)
         }
@@ -219,7 +212,8 @@ final class AppModel {
         }
         Task { await reconcileDownloads() }
         player.refreshSleepDisplay()
-        dataVersion += 1
+        // 在别处（锁屏、系统下载）可能变了：全部重读一次
+        progressVersion += 1; favoritesVersion += 1; downloadsVersion += 1
     }
 
     func onBackground() {
@@ -232,72 +226,7 @@ final class AppModel {
         downloads.reconcile(active: active)
     }
 
-    // MARK: 更新检查（iOS 只看 minVersion）
-
-    func checkUpgrade(manual: Bool) async {
-        let now = Date().timeIntervalSince1970 * 1000
-        let last = Prefs.d.object(forKey: Prefs.kUpdateChecked) as? Double
-        guard manual || shouldAutoCheck(lastCheckedAt: last, now: now) else {
-            if let body = Prefs.d.string(forKey: Prefs.kUpdateBody), let u = parseUpgrade(body) { applyUpgrade(u) }
-            return
-        }
-        let r = await Network.shared.request(
-            UPGRADE_PATH, etag: Prefs.d.string(forKey: Prefs.kUpdateEtag), maxBytes: FileKind.upgrade.limit)
-        switch r {
-        case .ok(let data, let etag):
-            guard let u = parseUpgrade(data) else { return }
-            Prefs.d.set(String(data: data, encoding: .utf8), forKey: Prefs.kUpdateBody)
-            Prefs.d.set(etag, forKey: Prefs.kUpdateEtag)
-            Prefs.d.set(now, forKey: Prefs.kUpdateChecked)
-            applyUpgrade(u)
-        case .notModified:
-            Prefs.d.set(now, forKey: Prefs.kUpdateChecked)
-            if let body = Prefs.d.string(forKey: Prefs.kUpdateBody), let u = parseUpgrade(body) { applyUpgrade(u) }
-        default: break
-        }
-    }
-
-    private func applyUpgrade(_ u: UpgradeFile) {
-        if case .outdated = decideUpdate(current: AppInfo.version, u, channel: .store) { outdated = true } else { outdated = false }
-    }
-
-    // MARK: 导航
-
-    var path: [Route] {
-        get {
-            switch tab {
-            case .home: homePath
-            case .categories: categoriesPath
-            case .library: libraryPath
-            case .search: searchPath
-            }
-        }
-        set {
-            switch tab {
-            case .home: homePath = newValue
-            case .categories: categoriesPath = newValue
-            case .library: libraryPath = newValue
-            case .search: searchPath = newValue
-            }
-        }
-    }
-
-    func push(_ r: Route) {
-        guard pushGuard.allow("\(tab)-\(r)") else { return }
-        path.append(r)
-        resetNav()
-    }
-
-    func selectTab(_ t: Tab) {
-        if tab == t { path = [] } else { tab = t }
-        resetNav()
-    }
-
-    func resetNav() { nav.expand(); nav.reset(0); if navCollapsed { navCollapsed = false } }
-
-    func feedScroll(_ y: Double) {
-        if nav.feed(y) { withAnimation(.easeOut(duration: Double(Tok.Nav.collapseMs) / 1000)) { navCollapsed = nav.collapsed } }
-    }
+    // MARK: 播放页
 
     func openPlayer() {
         guard player.current != nil else { return }
@@ -313,8 +242,8 @@ final class AppModel {
     /// 播放页“前往课程”：下面已经是这门课就只收起播放页。
     func goToSeries(_ seriesId: String) {
         closePlayer()
-        if case .series(let s)? = path.last, s == seriesId { return }
-        push(.series(seriesId))
+        if nav.isShowingSeries(seriesId) { return }
+        nav.push(.series(seriesId))
     }
 
     // MARK: 播放入口
@@ -354,7 +283,17 @@ final class AppModel {
         try? store.markCompleted(
             episodeId, seriesId: seriesId, completed: completed, seriesTitle: info?.seriesTitle ?? "",
             episodeTitle: info?.episodeTitle ?? "", coverPath: info?.coverPath ?? "")
-        dataVersion += 1
+        progressVersion += 1
+    }
+
+    func hideRecent(_ episodeId: String) {
+        try? store.hideFromRecent(episodeId)
+        progressVersion += 1
+    }
+
+    func clearRecent() {
+        try? store.clearRecent()
+        progressVersion += 1
     }
 
     func toggleFavorite(_ seriesId: String, title: String, coverPath: String) {
@@ -363,7 +302,12 @@ final class AppModel {
         } else {
             try? store.addFavorite(seriesId, title: title, coverPath: coverPath)
         }
-        dataVersion += 1
+        favoritesVersion += 1
+    }
+
+    func removeFavorite(_ seriesId: String) {
+        try? store.removeFavorite(seriesId)
+        favoritesVersion += 1
     }
 
     // MARK: 下载
@@ -375,14 +319,14 @@ final class AppModel {
         return false
     }
 
-    func download(_ items: [DlItem], single: Bool) {
+    func download(_ items: [DlItem]) {
         guard !items.isEmpty, requireNetwork() else { return }
-        saveCoverLocally(seriesId: items[0].seriesId)
+        covers.save(seriesId: items[0].seriesId, coverPath: store.seriesCoverPath(items[0].seriesId))
         downloads.enqueue(items)
     }
 
     /// 继续已暂停的（从头下）。
-    func resumeDownloads(seriesId: String?, single: Bool = false, episodeId: String? = nil) {
+    func resumeDownloads(seriesId: String?, episodeId: String? = nil) {
         guard requireNetwork() else { return }
         if let e = episodeId, let r = store.getDownload(e) {
             downloads.enqueue([r.item])
@@ -403,24 +347,6 @@ final class AppModel {
         downloads.removeDownload(episodeId)
     }
 
-    /// 下载时把这门课的封面存一份到本地（资料库与离线锁屏用）。
-    private func saveCoverLocally(seriesId: String) {
-        let dest = files.coverFile(seriesId: seriesId)
-        guard !FileManager.default.fileExists(atPath: dest.path), let cover = store.seriesCoverPath(seriesId), !cover.isEmpty else {
-            return
-        }
-        Task.detached {
-            guard let origin = await Network.shared.ensureRoutes(), let url = buildUrl(origin, cover),
-                let (tmp, resp) = try? await URLSession.shared.download(from: url), (resp as? HTTPURLResponse)?.statusCode == 200
-            else { return }
-            if !FileManager.default.fileExists(atPath: dest.path) {
-                try? FileManager.default.moveItem(at: tmp, to: dest)
-            } else {
-                try? FileManager.default.removeItem(at: tmp)
-            }
-        }
-    }
-
     // MARK: 关于页
 
     func refreshRoutes() async -> String {
@@ -435,5 +361,3 @@ final class AppModel {
 enum AppInfo {
     static var version: String { Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "0" }
 }
-
-/// iOS 不需要申请下载相关的权限（占位，与 Android 的通知权限申请对称）。

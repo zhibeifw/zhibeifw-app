@@ -19,6 +19,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -129,7 +130,7 @@ fun AlertLayer(model: AppModel) {
     LaunchedEffect(pending) { pending?.let { snack.showSnackbar(it); pending = null } }
     Box(
         Modifier.fillMaxSize().navigationBarsPadding()
-            .padding(bottom = (if (model.bottomNavShown) Layout.navReserve else 0f).d),
+            .padding(bottom = (if (model.nav.bottomNavShown) Layout.navReserve else 0f).d),
         contentAlignment = Alignment.BottomCenter
     ) {
         SnackbarHost(snack)
@@ -157,13 +158,13 @@ fun AlertLayer(model: AppModel) {
                 ?.let { b -> { TextButton({ close(); b.action() }) { Text(b.title) } } },
         )
     }
-    val u = model.updateDialog
+    val u = model.upgrade.updateDialog
     if (u != null) {
         AlertDialog(
-            onDismissRequest = { model.remindLater(u.version) },
+            onDismissRequest = { model.upgrade.remindLater(u.version) },
             title = { Text("发现新版本 ${u.version}") },
-            confirmButton = { TextButton({ model.openApk(u.apkPath) }) { Text("立刻更新") } },
-            dismissButton = { TextButton({ model.remindLater(u.version) }) { Text("稍后提醒") } },
+            confirmButton = { TextButton({ model.upgrade.openApk(u.apkPath) }) { Text("立刻更新") } },
+            dismissButton = { TextButton({ model.upgrade.remindLater(u.version) }) { Text("稍后提醒") } },
         )
     }
 }
@@ -174,30 +175,32 @@ fun MainView(model: AppModel) {
     val categoriesNav = rememberNavController()
     val libraryNav = rememberNavController()
     val searchNav = rememberNavController()
-    model.homeNav = homeNav
-    model.categoriesNav = categoriesNav
-    model.libraryNav = libraryNav
-    model.searchNav = searchNav
+    // model 活得比页面长：页面在时交给它，页面销毁时收回，免得它一直抓着已销毁页面的导航
+    DisposableEffect(homeNav, categoriesNav, libraryNav, searchNav) {
+        model.nav.homeNav = homeNav
+        model.nav.categoriesNav = categoriesNav
+        model.nav.libraryNav = libraryNav
+        model.nav.searchNav = searchNav
+        onDispose {
+            if (model.nav.homeNav === homeNav) model.nav.homeNav = null
+            if (model.nav.categoriesNav === categoriesNav) model.nav.categoriesNav = null
+            if (model.nav.libraryNav === libraryNav) model.nav.libraryNav = null
+            if (model.nav.searchNav === searchNav) model.nav.searchNav = null
+        }
+    }
     val homeEntry by homeNav.currentBackStackEntryAsState()
     val categoriesEntry by categoriesNav.currentBackStackEntryAsState()
     val libraryEntry by libraryNav.currentBackStackEntryAsState()
     val searchEntry by searchNav.currentBackStackEntryAsState()
-    LaunchedEffect(
-        homeEntry?.id,
-        categoriesEntry?.id,
-        libraryEntry?.id,
-        searchEntry?.id,
-        model.tab
-    ) { model.resetNav() }
-    val current = when (model.tab) {
+    val current = when (model.nav.tab) {
         Tab.HOME -> homeEntry; Tab.CATEGORIES -> categoriesEntry; Tab.LIBRARY -> libraryEntry; Tab.SEARCH -> searchEntry
     }
     val onAbout = current?.destination?.route == Routes.ABOUT
-    LaunchedEffect(onAbout) { model.bottomNavShown = !onAbout }
+    LaunchedEffect(onAbout) { model.nav.bottomNavShown = !onAbout }
 
     // 分类、资料库、搜索标签在根页面时，系统返回键回到主页标签
-    BackHandler(model.tab != Tab.HOME && model.navController?.previousBackStackEntry == null && !model.playerOpen) {
-        model.selectTab(
+    BackHandler(model.nav.tab != Tab.HOME && model.nav.navController?.previousBackStackEntry == null && !model.playerOpen) {
+        model.nav.selectTab(
             Tab.HOME
         )
     }
@@ -209,7 +212,7 @@ fun MainView(model: AppModel) {
             Triple(Tab.LIBRARY, libraryNav, Routes.LIBRARY_HUB),
             Triple(Tab.SEARCH, searchNav, Routes.SEARCH)
         )) {
-            val on = model.tab == t
+            val on = model.nav.tab == t
             Box(
                 Modifier.fillMaxSize().zIndex(if (on) 1f else 0f).alpha(if (on) 1f else 0f)
             ) { Stack(model, nav, start, on) }

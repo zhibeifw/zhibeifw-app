@@ -167,19 +167,20 @@ final class PlayerController {
             if duration == 0 || abs(duration - d) > 0.5 { duration = d }
             if !durationRecorded, let c = current { durationRecorded = true; try? store.recordDuration(c.episodeId, d) }
         }
-        if isPlaying && abs(pos - lastSavedAt) >= SAVE_INTERVAL_SEC { save(pos, duration) }
+        // 定时保存不通知各页面重读：正在播的这一集页面上用的是播放器的实时位置
+        if isPlaying && abs(pos - lastSavedAt) >= SAVE_INTERVAL_SEC { save(pos, duration, notify: false) }
     }
 
     // MARK: 进度保存
 
-    private func save(_ pos: Double, _ dur: Double, for np: NowPlaying? = nil) {
+    private func save(_ pos: Double, _ dur: Double, for np: NowPlaying? = nil, notify: Bool = true) {
         guard let c = np ?? current else { return }
         do {
             try store.recordPlayback(
                 episodeId: c.episodeId, seriesId: c.seriesId, position: pos, duration: dur,
                 seriesTitle: c.info.seriesTitle, episodeTitle: c.info.episodeTitle, coverPath: c.info.coverPath)
             lastSavedAt = pos
-            onProgressSaved?()
+            if notify { onProgressSaved?() }
         } catch { NSLog("保存播放进度出错：\(error)") }  // 写库失败不影响播放，下一次再存
     }
 
@@ -233,6 +234,7 @@ final class PlayerController {
     }
 
     func play(_ info: EpisodeInfo, ctx: PlayContext) {
+        dropExpiredSleep()
         generation += 1
         let gen = generation
         if let prev = current, positionKnown, !markedDone { save(position, duration, for: prev) }
@@ -303,6 +305,7 @@ final class PlayerController {
 
     func resume() {
         guard let c = current else { return }
+        dropExpiredSleep()
         if needsReload || player.currentItem == nil { play(c.info, ctx: c.ctx); return }
         if positionKnown { player.playImmediately(atRate: Float(rate)) } else { pendingStart = true }
     }
@@ -344,14 +347,22 @@ final class PlayerController {
 
     func setSleep(_ s: SleepSetting) {
         sleep = s
-        sleepLeft = s.secondsLeft(now: Date())
+        sleepLeft = s.secondsLeft(now: sleepClock())
+    }
+
+    /// 已经过了点的睡眠定时（暂停着的时候到点：时间回调只在播放中走）：清掉，免得一开始播放就被它停下。
+    private func dropExpiredSleep() {
+        if case .timer = sleep, (sleep.secondsLeft(now: sleepClock()) ?? 0) <= 0 {
+            sleep = .off
+            sleepLeft = nil
+        }
     }
 
     /// 返回 true 表示到点暂停了。
     @discardableResult
     private func tickSleep() -> Bool {
         guard case .timer = sleep else { return false }
-        let left = sleep.secondsLeft(now: Date()) ?? 0
+        let left = sleep.secondsLeft(now: sleepClock()) ?? 0
         if left <= 0 {
             pause()
             sleep = .off

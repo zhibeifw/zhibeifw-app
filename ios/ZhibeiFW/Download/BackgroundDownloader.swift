@@ -41,10 +41,12 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         Task { @MainActor in h(e) }
     }
 
-    func start(id: String, url: URL, resumeData: Data?) {
+    @discardableResult
+    func start(id: String, url: URL, resumeData: Data?) -> Int? {
         let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
         task.taskDescription = id
         task.resume()
+        return task.taskIdentifier
     }
 
     func pause(id: String) async -> Data? {
@@ -78,22 +80,27 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
             if let t = throttles[downloadTask.taskIdentifier] { return t }
             let t = ProgressThrottle(); throttles[downloadTask.taskIdentifier] = t; return t
         }
-        if th.pass(written: totalBytesWritten, total: total) { emit(.progress(id, totalBytesWritten, total)) }
+        if th.pass(written: totalBytesWritten, total: total) {
+            emit(.progress(id, totalBytesWritten, total, task: downloadTask.taskIdentifier))
+        }
     }
 
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let id = downloadTask.taskDescription else { return }
+        let tid = downloadTask.taskIdentifier
         // 真机上系统的后台下载服务会自己分段取文件，下完报 206 而不是 200；从文件开头起的 206 也是整份文件
         guard let r = downloadTask.response as? HTTPURLResponse,
             isWholeFileResponse(status: r.statusCode, contentRange: r.value(forHTTPHeaderField: "Content-Range"))
         else {
-            emit(.failed(id, URLError(.badServerResponse), nil)); return
+            emit(.failed(id, URLError(.badServerResponse), nil, task: tid)); return
         }
         // location 在这个方法返回后就被删，先挪到我们自己的临时文件（按集命名，见 AppFiles.doneFile）
         let keep = files.doneFile(id)
         try? FileManager.default.removeItem(at: keep)
-        do { try FileManager.default.moveItem(at: location, to: keep) } catch { emit(.failed(id, DiskFullError(), nil)); return }
-        emit(.finished(id, keep))
+        do { try FileManager.default.moveItem(at: location, to: keep) } catch {
+            emit(.failed(id, isOutOfSpace(error) ? DiskFullError() : error, nil, task: tid)); return
+        }
+        emit(.finished(id, keep, task: tid))
     }
 
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
@@ -101,9 +108,9 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         guard let id = task.taskDescription, let error else { return }  // 成功的已在 didFinishDownloadingTo 交出
         let ns = error as NSError
         if ns.code == NSURLErrorCannotWriteToFile || (ns.domain == NSPOSIXErrorDomain && ns.code == Int(ENOSPC)) {
-            emit(.failed(id, DiskFullError(), nil))
+            emit(.failed(id, DiskFullError(), nil, task: task.taskIdentifier))
         } else {
-            emit(.failed(id, error, ns.userInfo[NSURLSessionDownloadTaskResumeData] as? Data))
+            emit(.failed(id, error, ns.userInfo[NSURLSessionDownloadTaskResumeData] as? Data, task: task.taskIdentifier))
         }
     }
 

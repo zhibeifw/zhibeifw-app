@@ -190,7 +190,7 @@ fun parseIndex(text: String): IndexFile? {
                 }
             }
             val desc = (s.raw("description") as? String)?.takeIf { it.isNotBlank() }
-                ?.let { if (it.length > Limits.MAX_DESCRIPTION_LENGTH) it.take(Limits.MAX_DESCRIPTION_LENGTH) else it }
+                ?.let { utf16Prefix(it, Limits.MAX_DESCRIPTION_LENGTH) }
             val u = number(s.raw("updatedAt"))
             val updatedAt =
                 if (u != null && u == Math.floor(u) && u > 0 && u < Limits.MAX_UPDATED_AT) u.toLong() else null
@@ -241,4 +241,13 @@ fun parseUpgrade(text: String): UpgradeFile? {
     val apk = o.raw("apkPath")
     if (!isValidRelativePath(apk) || !(apk as String).startsWith("releases/")) return null
     return UpgradeFile(latest as String, min as String, apk)
+}
+
+/** 取前 n 个 UTF-16 码元，往前退到一个完整字符的边界（不切断代理对、组合字符），和 iOS 的 String(utf16Prefix:) 一样。 */
+fun utf16Prefix(s: String, n: Int): String {
+    if (s.length <= n) return s
+    val it = java.text.BreakIterator.getCharacterInstance()
+    it.setText(s)
+    val end = if (it.isBoundary(n)) n else it.preceding(n)
+    return s.substring(0, maxOf(0, end))
 }

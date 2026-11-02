@@ -1,5 +1,6 @@
 package com.zhibeifw.app.ui
 
+import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Animatable
@@ -264,7 +265,7 @@ private fun Controls(
         Row(Modifier.padding(top = CP.Player.timeTop.d)) {
             Txt(clock(pos), S.caption, C.labelSecondary())
             Spacer(Modifier.weight(1f))
-            val now = remember(tick) { System.currentTimeMillis() } // 每秒刷新一次倒计时
+            val now = remember(tick) { SystemClock.elapsedRealtime() } // 每秒刷新一次倒计时
             val right = when (val s = p.sleep) {
                 SleepSetting.End -> sleepLabel(null)
                 is SleepSetting.Timer -> sleepLabel(s.secondsLeft(now))
@@ -352,7 +353,7 @@ private fun sleepA11y(p: PlayerController) = when (val s = p.sleep) {
     SleepSetting.Off -> "睡眠定时，未开启"
     SleepSetting.End -> "睡眠定时，本集结束时"
     is SleepSetting.Timer -> "睡眠定时，剩余 ${
-        Math.ceil((s.secondsLeft(System.currentTimeMillis()) ?: 0.0) / 60).toInt()
+        Math.ceil((s.secondsLeft(SystemClock.elapsedRealtime()) ?: 0.0) / 60).toInt()
     } 分钟"
 }
 
@@ -363,7 +364,7 @@ private fun sleepItems(p: PlayerController) = SLEEP_CHOICES.map { ch ->
             ch.id == "end" -> p.changeSleep(SleepSetting.End)
             ch.minutes != null -> p.changeSleep(
                 SleepSetting.Timer(
-                    System.currentTimeMillis() + ch.minutes * 60_000L,
+                    SystemClock.elapsedRealtime() + ch.minutes * 60_000L,
                     ch.minutes
                 )
             )
@@ -377,11 +378,11 @@ private fun moreGroups(model: AppModel, p: PlayerController): List<List<MenuItem
         c.episodeId,
         c.seriesId,
         c.info.episodeTitle,
-        model.store.loadProgress(c.episodeId),
+        runCatching { model.store.loadProgress(c.episodeId) }.getOrNull(),
         null,
-        model.store.getDownload(c.episodeId)?.state
+        runCatching { model.store.getDownload(c.episodeId)?.state }.getOrNull()
     )
-    val fav = model.store.isFavorite(c.seriesId)
+    val fav = runCatching { model.store.isFavorite(c.seriesId) }.getOrDefault(false)
     return listOf(
         model.downloadItems(e) + model.markItem(e),
         listOf(

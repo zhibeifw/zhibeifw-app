@@ -120,8 +120,10 @@ object Json {
                             'r' -> sb.append('\r'); 't' -> sb.append('\t')
                             'u' -> {
                                 if (i + 4 > s.length) throw JsonError("转义不完整")
-                                val h = s.substring(i, i + 4).toIntOrNull(16)
-                                    ?: throw JsonError("转义不对")
+                                // 只认 4 位十六进制（toIntOrNull 会接受正负号）
+                                val hex = s.substring(i, i + 4)
+                                if (!hex.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) throw JsonError("转义不对")
+                                val h = hex.toInt(16)
                                 sb.append(h.toChar())
                                 i += 4
                             }

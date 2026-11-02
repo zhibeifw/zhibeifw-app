@@ -80,7 +80,7 @@ fun HomeView(model: AppModel) {
         topCenter = { if (model.autoUpdating) UpdatingHint() },
         trailing = {
             IconButton(
-                onClick = { model.push(Routes.ABOUT) },
+                onClick = { model.nav.push(Routes.ABOUT) },
                 modifier = Modifier.semantics { contentDescription = "关于智悲佛网" }) {
                 ZIcon("information-circle-outline", Tok.PageHeader.iconSize.d, C.labelPrimary())
             }
@@ -94,13 +94,13 @@ fun HomeView(model: AppModel) {
                     )
                     Spacer(Modifier.height(CP.Banner.bottomGap.d))
                 }
-                val od = model.outdated
-                if (od != null && !model.outdatedDismissed) {
+                val od = model.upgrade.outdated
+                if (od != null && !model.upgrade.outdatedDismissed) {
                     BannerView(
                         "此版本过旧，已无法获得最新的内容更新，请到官网更新",
                         listOf(
-                            "关闭" to { model.outdatedDismissed = true },
-                            "更新" to { model.openApk(od.apkPath) })
+                            "关闭" to { model.upgrade.outdatedDismissed = true },
+                            "更新" to { model.upgrade.openApk(od.apkPath) })
                     )
                     Spacer(Modifier.height(CP.Banner.bottomGap.d))
                 }
@@ -113,7 +113,7 @@ fun HomeView(model: AppModel) {
                     h.ongoing,
                     true,
                     subtitleOf = { c -> c.lastTitle?.let { "更新至 $it" } }) {
-                    model.push(
+                    model.nav.push(
                         Routes.series(
                             it.id
                         )
@@ -127,16 +127,16 @@ fun HomeView(model: AppModel) {
                     model,
                     h.featured,
                     false,
-                    titleOf = { it.featureTitle ?: it.title }) { model.push(Routes.series(it.id)) }
+                    titleOf = { it.featureTitle ?: it.title }) { model.nav.push(Routes.series(it.id)) }
             }
         }
         items(h.categories, key = { "cat-" + it.id }) { c ->
-            Section(c.name, { model.push(Routes.category(c.id)) }) {
+            Section(c.name, { model.nav.push(Routes.category(c.id)) }) {
                 CardRow(
                     model,
                     c.series,
                     false
-                ) { model.push(Routes.series(it.id)) }
+                ) { model.nav.push(Routes.series(it.id)) }
             }
         }
     }
@@ -282,7 +282,7 @@ fun SearchView(model: AppModel) {
                 }
                 items(r.rows, key = { "r-" + it.id }) { c ->
                     ListRowView(model, c) {
-                        model.push(
+                        model.nav.push(
                             Routes.series(c.id)
                         )
                     }
@@ -331,7 +331,7 @@ private fun Tile(model: AppModel, t: CategoryTile, large: Boolean) {
         Modifier.fillMaxWidth().heightIn(min = CP.Tile.height.d)
             .clip(RoundedCornerShape(Tok.Radius.tile.d))
             .background(Color(resolveCategoryColor(t.color, t.id).light))
-            .pressable { model.push(Routes.category(t.id)) }
+            .pressable { model.nav.push(Routes.category(t.id)) }
             .semantics { contentDescription = "${t.name}，点按查看全部课程" }
             .padding(CP.Tile.padding.d),
     ) {
@@ -361,20 +361,20 @@ fun CategoryView(model: AppModel, categoryId: String) {
     var loaded by remember { mutableStateOf(false) }
     var busy by remember { mutableStateOf(false) }
     LaunchedEffect(model.catalogVersion) {
-        rows = model.store.loadCategorySeries(categoryId, pageSize, 0)
+        rows = runCatching { model.store.loadCategorySeries(categoryId, pageSize, 0) }.getOrDefault(emptyList())
         done = rows.size < pageSize
         loaded = true
     }
     fun more() {
         if (done || busy) return
         busy = true
-        val next = model.store.loadCategorySeries(categoryId, pageSize, rows.size)
+        val next = runCatching { model.store.loadCategorySeries(categoryId, pageSize, rows.size) }.getOrDefault(emptyList())
         val seen = rows.map { it.id }.toHashSet()
         rows = rows + next.filter { seen.add(it.id) }
         if (next.size < pageSize) done = true
         busy = false
     }
-    PageScaffold(model, model.store.categoryName(categoryId) ?: categoryId) {
+    PageScaffold(model, runCatching { model.store.categoryName(categoryId) }.getOrNull() ?: categoryId) {
         if (loaded && rows.isEmpty()) item("empty") {
             EmptyStateView(
                 "暂无课程",
@@ -389,7 +389,7 @@ fun CategoryView(model: AppModel, categoryId: String) {
                     c.title,
                     listOf(seriesStatusText(c.status)),
                     c.coverPath
-                ) { model.push(Routes.series(c.id)) }
+                ) { model.nav.push(Routes.series(c.id)) }
             }
             if (c.id == rows.lastOrNull()?.id) LaunchedEffect(c.id) { more() }
         }

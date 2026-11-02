@@ -168,6 +168,47 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(lib.first?.n, 3); XCTAssertEqual(lib.first?.paused, 1); XCTAssertEqual(lib.first?.done, 1)
     }
 
+    /// 提交失败（这里用延迟检查的外键）之后，事务层数要回到 0，嵌套事务照常能用
+    func testTransactionDepthAfterCommitFailure() throws {
+        try db.exec(
+            "CREATE TABLE p (id INTEGER PRIMARY KEY); CREATE TABLE c (pid INTEGER REFERENCES p(id) DEFERRABLE INITIALLY DEFERRED); PRAGMA foreign_keys = ON;"
+        )
+        XCTAssertThrowsError(try db.transaction { try db.run("INSERT INTO c (pid) VALUES (9)") })
+        try db.transaction { try db.transaction { try db.run("INSERT INTO p (id) VALUES (1)") } }
+        XCTAssertEqual(try db.first("SELECT count(*) AS n FROM p")?.int("n"), 1)
+        XCTAssertEqual(try db.first("SELECT count(*) AS n FROM c")?.int("n"), 0)
+    }
+
+    /// 别的线程在写库的事务里：读查询不用等它做完，读到的是提交前的内容
+    func testReadsDoNotWaitForWriter() throws {
+        try store.addFavorite("a", title: "A", at: 1)
+        let inTx = DispatchSemaphore(value: 0)
+        let done = DispatchSemaphore(value: 0)
+        let db = self.db!
+        DispatchQueue.global().async {
+            try? db.transaction {
+                try db.run("INSERT INTO user_favorite (series_id, added) VALUES ('b', 2)")
+                inTx.signal()
+                Thread.sleep(forTimeInterval: 1)
+            }
+            done.signal()
+        }
+        inTx.wait()
+        let t0 = Date()
+        let n = try db.first("SELECT count(*) AS n FROM user_favorite")?.int("n")
+        XCTAssertLessThan(Date().timeIntervalSince(t0), 0.5)
+        XCTAssertEqual(n, 1)
+        done.wait()
+        XCTAssertEqual(try db.first("SELECT count(*) AS n FROM user_favorite")?.int("n"), 2)
+    }
+
+    /// 目录换了先后：签名没变的课只改先后
+    func testReorderOnlyUpdatesPos() throws {
+        try store.replaceIndex(index([("课A", "中观", "completed", ["一"]), ("课B", "中观", "completed", ["一"])]))
+        try store.replaceIndex(index([("课B", "中观", "completed", ["一"]), ("课A", "中观", "completed", ["一"])]))
+        XCTAssertEqual(try db.all("SELECT id FROM catalog_series ORDER BY pos").map { $0.str("id") }, ["课B", "课A"])
+    }
+
     func testBackup() throws {
         try store.addFavorite("a", title: "A")
         let p = dir.appendingPathComponent("bak.db").path

@@ -11,10 +11,24 @@ final class FakeSystem: SystemDownloads {
     var cancelled: [String] = []
     var pauseData: Data? = Data("resume".utf8)
     var active = Set<String>()
+    /// 给每个任务编号（像真的系统一样）；false 时不给（nil）
+    var numbersTasks = false
+    var lastTask = 0
+    /// 设了就让 pause 等到放行（模拟系统迟迟不交回续传数据）
+    var pauseGate: CheckedContinuation<Void, Never>?
+    var holdPause = false
 
     func setHandler(_ h: @escaping @MainActor (DownloadEvent) -> Void) { handler = h }
-    func start(id: String, url: URL, resumeData: Data?) { started.append((id, resumeData)); active.insert(id) }
-    func pause(id: String) async -> Data? { active.remove(id); return pauseData }
+    func start(id: String, url: URL, resumeData: Data?) -> Int? {
+        started.append((id, resumeData)); active.insert(id)
+        guard numbersTasks else { return nil }
+        lastTask += 1
+        return lastTask
+    }
+    func pause(id: String) async -> Data? {
+        if holdPause { await withCheckedContinuation { pauseGate = $0 } }
+        active.remove(id); return pauseData
+    }
     func cancel(id: String) { cancelled.append(id); active.remove(id) }
     func activeIds() async -> Set<String> { active }
 }
@@ -69,7 +83,7 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(sys.started.map(\.id), ["a"])
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
         send(.progress("a", 500, 1000))
-        XCTAssertEqual(dm.items["a"]?.ratio, 0.5)
+        XCTAssertEqual(dm.ratio("a"), 0.5)
         send(.finished("a", try tmpFile()))
         XCTAssertEqual(dm.items["a"]?.status, .done)
         let r = store.getDownload("a")
@@ -144,8 +158,12 @@ final class DownloadManagerTests: XCTestCase {
         await enqueue([item("a", 0)])
         sys.pauseData = nil
         dm.pause("a")
-        send(.finished("a", try tmpFile()))
-        XCTAssertEqual(dm.items["a"]?.status, .done)
+        // 用户已经点了暂停：下完的文件不要，保持暂停（和 Android 一样）
+        let tmp = try tmpFile()
+        send(.finished("a", tmp))
+        XCTAssertEqual(dm.items["a"]?.status, .paused)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: tmp.path))
+        for _ in 0..<50 where store.getDownload("a")?.state != .paused { await Task.yield() }
         dm.removeDownload("a")
         sys.started = []
         await enqueue([item("a", 0)])
@@ -153,6 +171,86 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertNil(dm.items["a"])
         XCTAssertNil(store.getDownload("a"))
         XCTAssertEqual(batchFailed, 1)
+    }
+
+    /// 暂停后又继续：旧任务迟到的“已取消”和进度不能把新开始的这一集又记成暂停
+    func testStaleEventsFromStoppedTaskIgnored() async throws {
+        sys.numbersTasks = true
+        await enqueue([item("a", 0)])  // 任务 1
+        send(.progress("a", 400, 1000, task: 1))
+        dm.pause("a")
+        for _ in 0..<50 where store.getDownload("a")?.state != .paused { await Task.yield() }
+        sys.started = []
+        dm.resumePaused()
+        for _ in 0..<50 where sys.started.isEmpty { await Task.yield() }  // 任务 2
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        send(.progress("a", 999, 1000, task: 1))
+        send(.failed("a", URLError(.cancelled), Data("old".utf8), task: 1))
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        XCTAssertNotEqual(dm.ratio("a"), 0.999)
+        // 新任务自己的失败照常算
+        send(.failed("a", URLError(.timedOut), nil, task: 2))
+        XCTAssertNil(dm.items["a"])
+        XCTAssertEqual(batchFailed, 1)
+    }
+
+    /// 暂停后系统还没交回续传数据，用户又点了继续：等交回来时不能再把它记成暂停
+    func testResumeBeforePauseReturns() async throws {
+        sys.numbersTasks = true
+        sys.holdPause = true
+        await enqueue([item("a", 0)])
+        dm.pause("a")
+        for _ in 0..<50 where sys.pauseGate == nil { await Task.yield() }
+        sys.started = []
+        dm.enqueue([item("a", 0)])  // 单集“继续”
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        for _ in 0..<50 where sys.started.isEmpty { await Task.yield() }
+        sys.pauseGate?.resume()
+        for _ in 0..<50 { await Task.yield() }
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        XCTAssertEqual(store.getDownload("a")?.state, .downloading)
+        XCTAssertEqual(sys.started.count, 1)
+    }
+
+    /// 等线路期间暂停又继续：只交给系统一次
+    func testPauseResumeWhileWaitingForRouteStartsOnce() async throws {
+        var gate: CheckedContinuation<Void, Never>?
+        dm.origin = {
+            await withCheckedContinuation { gate = $0 }
+            return "https://example.invalid"
+        }
+        dm.enqueue([item("a", 0)])
+        for _ in 0..<50 where gate == nil { await Task.yield() }
+        let first = gate
+        gate = nil
+        dm.pause("a")
+        dm.enqueue([item("a", 0)])  // 单集“继续”
+        for _ in 0..<50 where gate == nil { await Task.yield() }
+        first?.resume()
+        gate?.resume()
+        for _ in 0..<100 { await Task.yield() }
+        XCTAssertEqual(sys.started.map(\.id), ["a"])
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+    }
+
+    /// 移入资料库失败但不是空间不足：按普通失败，不提示“存储空间不足”
+    func testMoveFailureIsNotDiskFull() async throws {
+        await enqueue([item("a", 0)])
+        send(.finished("a", files.partDir.appendingPathComponent("missing.tmp")))
+        XCTAssertNil(dm.items["a"])
+        XCTAssertEqual(diskFullAlerts, 0)
+        XCTAssertEqual(batchFailed, 1)
+    }
+
+    /// 对账清掉资料库里没有下载记录对应的音频
+    func testReconcileRemovesOrphanAudio() throws {
+        try store.queuedMany([item("a", 0)])
+        try store.setDlDone("a", localFile: "audio/a.mp3")
+        try Data(count: 10).write(to: files.absolute("audio/a.mp3"))
+        try Data(count: 10).write(to: files.absolute("audio/x.mp3"))
+        dm.reconcile(active: [])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: files.absolute("audio/a.mp3").path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: files.absolute("audio/x.mp3").path))
     }
 
     /// App 没打开时系统下完、来不及移入资料库就被关掉：下次对账接回来

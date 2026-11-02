@@ -10,17 +10,11 @@ enum Tok {
         static let labelSecondary = ZColor(light: 0xFF6C6C70, dark: 0xFF98989F)
         static let labelTertiary = ZColor(light: 0xFF8E8E93, dark: 0xFF8E8E93)
         static let separator = ZColor(light: 0xFFE8E8E8, dark: 0xFF38383B)
-        static let grabber = ZColor(light: 0xFFC6C6C8, dark: 0xFF48484A)
         static let progressTrack = ZColor(light: 0xFFE5E5EA, dark: 0xFF3A3A3C)
         static let progressFill = ZColor(light: 0xFF3A3A3C, dark: 0xFFE5E5EA)
-        static let menuSurface = ZColor(light: 0xF7FAFAFC, dark: 0xF72C2C2E)
-        static let menuBand = ZColor(light: 0xFFEFEFF4, dark: 0x80000000)
         static let danger = ZColor(light: 0xFFE5342B, dark: 0xFFFF453A)
         static let iconDisabled = ZColor(light: 0xFFC6C6C8, dark: 0xFF48484A)
         static let onColor = ZColor(light: 0xFFFFFFFF, dark: 0xFFFFFFFF)
-        static let glassSurface = ZColor(light: 0xD1FFFFFF, dark: 0xC72C2C2E)
-        static let glassBorder = ZColor(light: 0x14000000, dark: 0x24FFFFFF)
-        static let navDrop = ZColor(light: 0x0F000000, dark: 0x1FFFFFFF)
         enum HighContrast {
             static let labelSecondary = ZColor(light: 0xFF3A3A3C, dark: 0xFFD1D1D6)
             static let labelTertiary = ZColor(light: 0xFF5C5C61, dark: 0xFFAEAEB2)
@@ -36,10 +30,6 @@ enum Tok {
         static let categoryExtraNames: [String] = ["朱红", "琥珀", "品红", "靛蓝", "石板灰", "森林绿", "可可", "湖蓝", "酒红", "炭灰"]
     }
     enum Font {
-        enum Family {
-            static let ios = "系统字体（San Francisco + 苹方），不打包"
-            static let android = "Noto Sans SC Regular / Bold（assets/fonts/，打包）"
-        }
         enum Style {
             static let pageTitle = ZTextStyle(size: 34, weight: 700, lineHeight: 41)
             static let sectionTitle = ZTextStyle(size: 20, weight: 600, lineHeight: 25)
@@ -53,10 +43,8 @@ enum Tok {
             static let menuItem = ZTextStyle(size: 17, weight: 400, lineHeight: 22)
             enum NavLabel {
                 static let size: CGFloat = 12
-                static let weightSelected: CGFloat = 700
                 static let weightNormal: CGFloat = 500
                 static let lineHeight: CGFloat = 14
-                static let maxScale: CGFloat = 1.15
             }
             static let seriesTitle = ZTextStyle(size: 22, weight: 700, lineHeight: 28)
             static let playerTitle = ZTextStyle(size: 22, weight: 700, lineHeight: 28)
@@ -67,20 +55,15 @@ enum Tok {
             static let description = ZTextStyle(size: 15, weight: 400, lineHeight: 20)
             static let moreLink = ZTextStyle(size: 15, weight: 600, lineHeight: 20)
             static let captionStrong = ZTextStyle(size: 13, weight: 600, lineHeight: 18)
-            static let rateChip = ZTextStyle(size: 17, weight: 400, lineHeight: 22)
-            static let rateChipSelected = ZTextStyle(size: 19, weight: 600, lineHeight: 24)
             static let rateLabel = ZTextStyle(size: 17, weight: 600, lineHeight: 22)
             static let sheetSeriesTitle = ZTextStyle(size: 28, weight: 700, lineHeight: 34)
             static let sheetBody = ZTextStyle(size: 17, weight: 400, lineHeight: 26)
-            static let seekNumber = ZTextStyle(size: 11, weight: 700, lineHeight: 13)
         }
         static let largeTextScale: CGFloat = 1.6
         enum MaxScale {
             static let navTitle: CGFloat = 1.3
-            static let button: CGFloat = 1.3
             static let capsule: CGFloat = 1.35
             static let rateLabel: CGFloat = 1.3
-            static let rateChip: CGFloat = 1.2
         }
         enum MinScale {
             static let buttonLarge: CGFloat = 0.8
@@ -107,18 +90,10 @@ enum Tok {
         static let cardSmall: CGFloat = 12
         static let tile: CGFloat = 12
         static let thumbnail: CGFloat = 8
-        static let menu: CGFloat = 14
-        static let ratePanel: CGFloat = 26
-        static let pill = "full"
-    }
-    enum Line {
-        static let separator = "1pt/1dp 取整到整数物理像素（3 倍屏 3 像素），颜色 separator；不要用 0.5 或 hairline"
     }
     enum Card {
         static let largeWidthPhone = "W - 68"
         static let smallWidthPhone = "floor((W - 32) / 1.5)"
-        static let largeWidthTablet: CGFloat = 360
-        static let smallWidthTablet: CGFloat = 200
         static let largePerScreenTabletPortrait: CGFloat = 2.2
         static let largePerScreenTabletLandscape: CGFloat = 3.2
         static let smallPerScreenTabletPortrait: CGFloat = 3.5
@@ -133,67 +108,25 @@ enum Tok {
     }
     enum Nav {
         static let capsuleHeight: CGFloat = 52
-        static let menuHeight: CGFloat = 66
         static let collapsedHeight: CGFloat = 44
-        static let collapsedGap: CGFloat = 8
-        static let stackGap: CGFloat = 14
         static let sideMargin: CGFloat = 16
         static let bottomMargin: CGFloat = 8
-        static let tabletMaxWidth: CGFloat = 560
-        static let iconSize: CGFloat = 26
-        static let dropInset: CGFloat = 6
-        static let collapseMs: CGFloat = 180
-        static let collapseEasing = "easeOut(quad)"
-        enum CollapseRule {
-            static let downAccumulate: CGFloat = 24
-            static let leaveTopAfter: CGFloat = 60
-            static let backToTopWithin: CGFloat = 8
-        }
         static let iconGlyph: CGFloat = 24
         static let androidBarHeight: CGFloat = 80
     }
     enum Menu {
-        static let width: CGFloat = 252
-        static let widthCheckable: CGFloat = 296
-        static let itemHeight: CGFloat = 52
-        static let groupBand: CGFloat = 8
-        static let anchorGap: CGFloat = 6
-        static let itemPaddingH: CGFloat = 16
-        static let iconGap: CGFloat = 12
         static let iconSize: CGFloat = 22
-        static let dim = false
-        enum Shadow {
-            static let opacity: CGFloat = 0.2
-            static let radius: CGFloat = 24
-            static let offsetY: CGFloat = 8
-            static let androidElevation: CGFloat = 12
-        }
-        static let borderWidth: CGFloat = 0.5
-        static let checkIconScale: CGFloat = 0.8
     }
     enum RatePicker {
         static let rates: [CGFloat] = [0.8, 1, 1.3, 1.5, 1.8, 2]
-        static let sideMargin: CGFloat = 12
-        static let paddingH: CGFloat = 22
-        static let paddingV: CGFloat = 14
-        static let anchorGap: CGFloat = 8
-        static let maxWidth: CGFloat = 520
-        static let chip: CGFloat = 44
-        static let chipSelected: CGFloat = 52
-        static let chipMin: CGFloat = 30
-        static let gapRatio: CGFloat = 0.25
     }
     enum ProgressBar {
         static let height: CGFloat = 6
-        static let heightDragging: CGFloat = 10
         static let touchHeight: CGFloat = 44
-        static let accessibilityStepSec: CGFloat = 10
         static let thumb: CGFloat = 16
     }
     enum PageHeader {
         static let rowHeight: CGFloat = 52
-        static let backButtonVisual: CGFloat = 36
-        static let backButtonTouch: CGFloat = 44
         static let iconSize: CGFloat = 26
         static let androidLargeExpanded: CGFloat = 112
     }
@@ -201,27 +134,14 @@ enum Tok {
         static let portraitMaxWidth: CGFloat = 600
         static let seekBackSeconds: CGFloat = 15
         static let seekForwardSeconds: CGFloat = 30
-        static let dragStart: CGFloat = 12
-    }
-    enum Sheet {
-        static let openMs: CGFloat = 280
-        static let closeMs: CGFloat = 220
-        static let dismissDistance: CGFloat = 110
-        static let dismissVelocity: CGFloat = 0.9
-        static let maxWidth: CGFloat = 600
-        static let scrimOpacity: CGFloat = 0.35
     }
     enum GlassShadow {
-        static let opacity: CGFloat = 0.1
-        static let radius: CGFloat = 10
-        static let offsetY: CGFloat = 3
         static let androidElevation: CGFloat = 3
     }
     enum Component {
         enum PageTitle {
             static let topGap: CGFloat = 8
             static let bottomGap: CGFloat = 12
-            static let infoIcon: CGFloat = 28
         }
         enum QuickPill {
             static let height: CGFloat = 40
@@ -254,7 +174,6 @@ enum Tok {
         enum SearchField {
             static let height: CGFloat = 44
             static let iconSize: CGFloat = 18
-            static let iconGap: CGFloat = 8
             static let paddingH: CGFloat = 14
             static let topGap: CGFloat = 12
             static let cancelGap: CGFloat = 12
@@ -344,9 +263,6 @@ enum Tok {
             static let emptyIcon: CGFloat = 20
             static let thumbInset: CGFloat = 4
         }
-        enum NavMenu {
-            static let labelGap: CGFloat = 2
-        }
         enum About {
             static let logoWidth: CGFloat = 150
             static let logoTop: CGFloat = 36
@@ -357,7 +273,6 @@ enum Tok {
             static let footerGap: CGFloat = 4
         }
         enum Player {
-            static let grabberWidth: CGFloat = 36
             static let grabberHeight: CGFloat = 5
             static let grabberTop: CGFloat = 8
             static let coverSideMargin: CGFloat = 20
@@ -390,7 +305,6 @@ enum Tok {
                 static let coverHeightInset: CGFloat = 48
                 static let tightGap: CGFloat = 18
             }
-            static let dismissDistance: CGFloat = 140
             enum CoverShadow {
                 static let opacity: CGFloat = 0.18
                 static let radius: CGFloat = 30
@@ -400,21 +314,16 @@ enum Tok {
             static let courseMinHeight: CGFloat = 26
         }
         enum Sheet {
-            static let topExposed: CGFloat = 48
             static let radius: CGFloat = 14
-            static let closeButton: CGFloat = 30
-            static let headerHeight: CGFloat = 56
             static let contentTop: CGFloat = 8
             static let categoryTop: CGFloat = 4
             static let bodyTop: CGFloat = 16
-            static let closeIconScale: CGFloat = 0.55
         }
         enum EmptyState {
             static let paddingH: CGFloat = 40
         }
         enum Splash {
             static let logoWidth: CGFloat = 120
-            static let androidLogoWidth: CGFloat = 96
         }
         enum Init {
             static let spinnerGap: CGFloat = 16
@@ -423,25 +332,7 @@ enum Tok {
     }
     enum Motion {
         static let pressedOpacity: CGFloat = 0.7
-        enum SpringBouncy {
-            static let response: CGFloat = 0.5
-            static let bounce: CGFloat = 0.3
-            static let stiffness: CGFloat = 157.9
-            static let damping: CGFloat = 17.6
-            static let mass: CGFloat = 1
-            static let dampingRatio: CGFloat = 0.7
-        }
-        enum NavDrop {
-            static let stretchX: CGFloat = 1.35
-            static let stretchY: CGFloat = 0.88
-            static let stretchInMs: CGFloat = 110
-            static let iconPressScale: CGFloat = 0.86
-            static let reduceMotionMs: CGFloat = 150
-        }
         static let fadeMs: CGFloat = 150
-        static let pressMs: CGFloat = 120
-        static let settleMs: CGFloat = 300
-        static let menuScaleFrom: CGFloat = 0.9
         enum SharedAxis {
             static let distance: CGFloat = 30
             static let durationMs: CGFloat = 300

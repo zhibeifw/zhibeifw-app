@@ -71,7 +71,7 @@ fun LibraryHubView(model: AppModel) {
                             )
                         },
                         colors = ListItemDefaults.colors(containerColor = C.background()),
-                        modifier = Modifier.clickable { model.push(route) },
+                        modifier = Modifier.clickable { model.nav.push(route) },
                     )
                 }
             }
@@ -82,7 +82,7 @@ fun LibraryHubView(model: AppModel) {
 fun RecentView(model: AppModel) {
     var rows by remember { mutableStateOf<List<RecentRow>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.dataVersion) {
+    LaunchedEffect(model.progressVersion, model.downloadsVersion) {
         rows = runCatching { model.store.loadRecent() }.getOrDefault(emptyList())
     }
     PageScaffold(
@@ -100,7 +100,7 @@ fun RecentView(model: AppModel) {
                         AlertButton(
                             "清空",
                             destructive = true
-                        ) { model.store.clearRecent(); model.dataVersion++ },
+                        ) { model.clearRecent() },
                     )
                 )
             }) {
@@ -127,7 +127,7 @@ fun RecentView(model: AppModel) {
 fun FavoritesView(model: AppModel) {
     var rows by remember { mutableStateOf<List<FavoriteRow>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.dataVersion) {
+    LaunchedEffect(model.favoritesVersion) {
         rows = runCatching { model.store.loadFavorites() }.getOrDefault(emptyList())
     }
     PageScaffold(
@@ -157,9 +157,9 @@ fun FavoritesView(model: AppModel) {
                                     "取消收藏",
                                     "bookmark-outline",
                                     destructive = true
-                                ) { model.store.removeFavorite(f.id); model.dataVersion++ })
+                                ) { model.removeFavorite(f.id) })
                         )
-                    }) { model.push(Routes.series(f.id)) }
+                    }) { model.nav.push(Routes.series(f.id)) }
             }
         }
     }
@@ -170,7 +170,7 @@ fun FavoritesView(model: AppModel) {
 fun LibraryView(model: AppModel) {
     var rows by remember { mutableStateOf<List<LibrarySeries>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.dataVersion) {
+    LaunchedEffect(model.downloadsVersion) {
         rows = runCatching { model.store.loadLibrary() }.getOrDefault(emptyList())
     }
     val items = model.downloads?.items ?: emptyMap()
@@ -256,10 +256,10 @@ fun LibraryView(model: AppModel) {
                     s.seriesId,
                     s.seriesTitle,
                     libraryCountLines(s.n, s.done) + listOfNotNull(if (active) "下载中…" else null),
-                    model.store.seriesCoverPath(s.seriesId) ?: "",
+                    s.coverPath,
                     model.files.coverFile(s.seriesId),
                     menu = menu
-                ) { model.push(Routes.libraryCourse(s.seriesId)) }
+                ) { model.nav.push(Routes.libraryCourse(s.seriesId)) }
             }
         }
     }
@@ -281,7 +281,7 @@ private fun TopButton(modifier: Modifier, title: String, onClick: () -> Unit) {
 fun LibraryCourseView(model: AppModel, seriesId: String) {
     var rows by remember { mutableStateOf<List<LibraryEpisode>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.dataVersion) {
+    LaunchedEffect(model.progressVersion, model.downloadsVersion) {
         rows = runCatching { model.store.loadLibraryEpisodes(seriesId) }.getOrDefault(emptyList())
     }
     val downloading = rows.any {

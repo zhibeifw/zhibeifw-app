@@ -3,7 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
 }
 
-// 版本号按发布日期：versionName 年.月.日，versionCode = 日期去点 + 两位当天序号（从 01 开始）。
+// versionName 是版本号 年.月.日（一个版本号只正式发布一次）；versionCode = 版本号去点 + 两位序号，这个版本里每构建一次加一。
 // 两端共用仓库根目录的 Version.xcconfig，这里不写数字。
 val versionFile = rootDir.parentFile.resolve("Version.xcconfig")
 val versionProps = versionFile.readLines()
@@ -14,10 +14,10 @@ val appVersionName =
     versionProps["MARKETING_VERSION"] ?: error("Version.xcconfig 缺 MARKETING_VERSION")
 val appVersionCode = versionProps["CURRENT_PROJECT_VERSION"]?.toIntOrNull()
     ?: error("Version.xcconfig 缺 CURRENT_PROJECT_VERSION")
-// 构建号必须是“日期去点 + 两位序号”，对不上就不让打包，免得两个数字改了一个忘了另一个
+// 构建号必须是“版本号去点 + 两位序号（01 起）”，对不上就不让打包，免得两个数字改了一个忘了另一个
 check(
-    Regex("""\d{4}\.\d{2}\.\d{2}""").matches(appVersionName) && appVersionCode.toString().length == 10 &&
-            appVersionCode.toString().startsWith(appVersionName.replace(".", ""))
+    Regex("""\d{4}\.\d{2}\.\d{2}""").matches(appVersionName) &&
+            Regex(appVersionName.replace(".", "") + """(0[1-9]|[1-9]\d)""").matches(appVersionCode.toString())
 ) {
     "Version.xcconfig 里的版本号 $appVersionName 和构建号 $appVersionCode 对不上"
 }
@@ -32,7 +32,8 @@ android {
 
     defaultConfig {
         applicationId = "com.zhibeifw.app"
-        minSdk = 24
+        // Android 10 起系统才支持 TLS 1.3（服务器只接受 TLS 1.3）
+        minSdk = 29
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
@@ -82,6 +83,11 @@ android {
     testOptions { unitTests.isReturnDefaultValues = true }
 }
 
+// 单元测试读仓库根目录 doc/test-vectors 里两端共用的测试数据：数据变了测试要重跑
+tasks.withType<Test>().configureEach {
+    inputs.dir(rootDir.parentFile.resolve("doc/test-vectors")).withPropertyName("testVectors")
+}
+
 dependencies {
     implementation(libs.androidx.core)
     implementation(libs.androidx.activity.compose)
@@ -102,4 +108,6 @@ dependencies {
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)
     testImplementation(libs.coroutines.test)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
 }

@@ -61,12 +61,3 @@ final class OrientationLock {
         return playerOpen ? .allButUpsideDown : .portrait
     }
 }
-
-/// 隐藏系统导航栏后仍保留边缘右滑返回。iOS 26 的整屏右滑返回保持系统默认（集行没有滑动手势，不会和它抢）。
-extension UINavigationController: @retroactive UIGestureRecognizerDelegate {
-    override open func viewDidLoad() {
-        super.viewDidLoad()
-        interactivePopGestureRecognizer?.delegate = self
-    }
-    public func gestureRecognizerShouldBegin(_ g: UIGestureRecognizer) -> Bool { viewControllers.count > 1 }
-}

@@ -11,34 +11,11 @@ final class VersionTests: XCTestCase {
         XCTAssertFalse(isWholeFileResponse(status: 206, contentRange: "bytes 1000-51605985/51605986"))
         XCTAssertFalse(isWholeFileResponse(status: 404, contentRange: nil))
     }
-
-    func testCompare() {
-        XCTAssertEqual(compareVersions("1.10.0", "1.9.0"), 1)
-        XCTAssertEqual(compareVersions("1.2", "1.2.0"), 0)
-        XCTAssertEqual(compareVersions("2.0.0", "1.99.99"), 1)
-        XCTAssertEqual(compareVersions("10.0.0", "9.9.9"), 1)
-        XCTAssertEqual(compareVersions("1.0.1", "1.0.2"), -1)
-        XCTAssertEqual(compareVersions("99999999999999999999.0.0", "99999999999999999998.9.9"), 1)
-        XCTAssertNil(compareVersions("v1.0.0", "1.0.0"))
-        XCTAssertNil(compareVersions("1.2.0-beta", "1.0.0"))
-        XCTAssertNil(compareVersions(nil, "1.0.0"))
-    }
-    func testDateVersions() {
-        XCTAssertEqual(compareVersions("2026.10.19", "2026.9.30"), 1)
-        XCTAssertEqual(compareVersions("2027.1.1", "2026.12.31"), 1)
-        XCTAssertEqual(compareVersions("2026.01.05", "2026.1.5"), 0)
-        XCTAssertEqual(compareVersions("2026.10.21", "1.0.0"), 1)
-    }
 }
 
 final class FormatTests: XCTestCase {
     func testClock() {
-        XCTAssertEqual(clock(0), "00:00")
-        XCTAssertEqual(clock(723), "12:03")
-        XCTAssertEqual(clock(113 * 60 + 32), "113:32")
         XCTAssertEqual(clock(.nan), "00:00")
-        XCTAssertEqual(clock(-5), "00:00")
-        XCTAssertEqual(remainingClock(100, 2392), "\u{2212}38:12")
         XCTAssertEqual(sleepLabel(1791), "zZ 29:51")
         XCTAssertEqual(sleepLabel(nil), "zZ 本集结束")
     }
@@ -79,34 +56,6 @@ final class FormatTests: XCTestCase {
 }
 
 final class ValidateTests: XCTestCase {
-    func testIds() {
-        XCTAssertTrue(isValidId("ep_ruzhonglun-37"))
-        XCTAssertTrue(isValidId("入中论讲解_01"))
-        XCTAssertFalse(isValidId("a b"))
-        XCTAssertFalse(isValidId("a/b"))
-        XCTAssertFalse(isValidId("a.b"))
-        XCTAssertFalse(isValidId("《入行论》"))
-        XCTAssertFalse(isValidId("😀"))
-        XCTAssertFalse(isValidId(""))
-        XCTAssertFalse(isValidId(String(repeating: "a", count: 101)))
-        XCTAssertFalse(isValidId("e\u{0301}"))  // 不是 NFC
-        XCTAssertFalse(isValidId(5))
-    }
-    func testPaths() {
-        XCTAssertTrue(isValidRelativePath("中观/入中论讲解/第1课.mp3"))
-        XCTAssertTrue(isValidRelativePath("releases/zhibeifw-1.2.0.apk"))
-        for bad in ["/a.mp3", "../a", "a/../b", "https://x/a", "javascript:x", "//x/a", "a\\b", "a b", "a?x=1", "a#b", ""] {
-            XCTAssertFalse(isValidRelativePath(bad), bad)
-        }
-    }
-    func testOrigins() {
-        XCTAssertTrue(isHttpsOrigin("https://zbfw.org"))
-        XCTAssertTrue(isHttpsOrigin("https://a.b.c:8443"))
-        XCTAssertTrue(isHttpsOrigin("https://[2001:db8::1]"))
-        for bad in ["http://zbfw.org", "https://zbfw.org/", "https://zbfw.org/x", "https://u:p@zbfw.org", "ftp://x"] {
-            XCTAssertFalse(isHttpsOrigin(bad), bad)
-        }
-    }
     func testDomains() {
         XCTAssertEqual(
             parseDomains(
@@ -183,25 +132,17 @@ final class ValidateTests: XCTestCase {
 }
 
 final class FileKeyTests: XCTestCase {
-    /// 对照表由上一版的 TypeScript 算法生成，两端要逐位一致。
-    func testMatchesV1() {
-        XCTAssertEqual(fileKey("ep_ruzhonglun_37"), "ep_ruzhonglun_37")
-        XCTAssertEqual(fileKey("入中论讲解_01"), "h_3edc09c6510d1ce2")
-        XCTAssertEqual(fileKey("入中论讲解"), "h_5fa2f0b40e4fddf4")
-        XCTAssertEqual(fileKey("《入行论》"), "h_69959f4b3b57018d")
-        XCTAssertEqual(fileKey("😀课"), "h_249fcb3253cc4f16")
-        XCTAssertEqual(fileKey(String(repeating: "a", count: 65)), "h_2dd603ecedce70a5")
-        XCTAssertEqual(fileKey("中观"), "h_8ae5568ec9863ea3")
-        XCTAssertEqual(fileKey("意识真是从大脑中产生的吗_41"), "h_a3082dfe647f2354")
-    }
-    func testPlaceholderMatchesV1() {
-        XCTAssertEqual(placeholderIndex("ep_ruzhonglun_37"), 6)
-        XCTAssertEqual(placeholderIndex("入中论讲解"), 4)
-        XCTAssertEqual(placeholderIndex("《入行论》"), 3)
-    }
     func testOrphans() {
         XCTAssertEqual(orphanPartKeys([fileKey("入中论讲解_01"), "x"], keepEpisodeIds: ["入中论讲解_01"]), ["x"])
         XCTAssertEqual(orphanCoverKeys([fileKey("中观"), "y"], seriesWithDownloads: ["中观"]), ["y"])
+        XCTAssertEqual(orphanAudioNames(["a.mp3", "x.mp3"], keep: ["a.mp3", "b.m4a"]), ["x.mp3"])
+        XCTAssertTrue(isOutOfSpace(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)))
+        XCTAssertTrue(
+            isOutOfSpace(
+                NSError(
+                    domain: NSCocoaErrorDomain, code: NSFileWriteUnknownError,
+                    userInfo: [NSUnderlyingErrorKey: NSError(domain: NSPOSIXErrorDomain, code: Int(ENOSPC))])))
+        XCTAssertFalse(isOutOfSpace(NSError(domain: NSCocoaErrorDomain, code: NSFileNoSuchFileError)))
     }
 }
 
@@ -217,17 +158,6 @@ final class DownloadLogicTests: XCTestCase {
 }
 
 final class InteractionTests: XCTestCase {
-    func testNavCollapse() {
-        var n = NavCollapse()
-        n.feed(5); n.feed(8); XCTAssertFalse(n.collapsed)
-        n.feed(30); n.feed(50); XCTAssertFalse(n.collapsed)  // 还没离开顶部
-        n.feed(90); XCTAssertTrue(n.collapsed)
-        n.feed(40); n.feed(20); XCTAssertTrue(n.collapsed)  // 往上滑不展开
-        n.feed(8); XCTAssertFalse(n.collapsed)  // 回到顶部才展开
-        var m = NavCollapse()
-        m.reset(100); m.feed(110); m.feed(105); m.feed(115); m.feed(110); m.feed(120)
-        XCTAssertFalse(m.collapsed)  // 来回抖动不收缩
-    }
     func testPushGuard() {
         var now = 0.0
         let g = PushGuard(windowMs: 700) { now }
@@ -255,7 +185,10 @@ final class InteractionTests: XCTestCase {
     }
     func testSleepChoices() {
         XCTAssertEqual(SLEEP_CHOICES.map(\.title), ["单集结束时", "1 小时", "45 分钟", "30 分钟", "15 分钟", "10 分钟", "5 分钟", "关闭"])
-        XCTAssertEqual(SleepSetting.timer(deadline: Date(), minutes: 30).choiceId, "m30")
+        XCTAssertEqual(SleepSetting.timer(deadline: 0, minutes: 30).choiceId, "m30")
+        XCTAssertEqual(SleepSetting.timer(deadline: 100, minutes: 1).secondsLeft(now: 40.2), 60)
+        XCTAssertEqual(SleepSetting.timer(deadline: 100, minutes: 1).secondsLeft(now: 130), 0)
+        XCTAssertNil(SleepSetting.end.secondsLeft(now: 0))
         XCTAssertEqual(pickNext(["a", "b", "c"], current: "b"), "c")
         XCTAssertNil(pickNext(["a", "b"], current: "b"))
         XCTAssertNil(pickNext(["a"], current: "x"))
@@ -268,7 +201,6 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(downloadMenuItems(nil, canDownload: false), [])
     }
     func testNormalize() {
-        XCTAssertEqual(normalizeText("  ＡＢＣ\u{200B} 入  行论 "), "abc 入 行论")
         XCTAssertEqual(orderOrigins(remembered: "b", saved: ["a", "b"], builtin: ["c", "a"]), ["b", "a", "c"])
     }
 }

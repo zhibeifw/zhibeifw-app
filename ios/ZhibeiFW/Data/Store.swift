@@ -57,6 +57,7 @@ struct DlRow: Equatable {
 struct LibrarySeries: Identifiable, Equatable {
     var id: String { seriesId }
     var seriesId: String; var seriesTitle: String; var n: Int; var done: Int; var paused: Int; var firstRequested: Int64
+    var coverPath = ""
 }
 
 struct LibraryEpisode: Identifiable, Equatable {
@@ -84,10 +85,10 @@ final class Store: @unchecked Sendable {
         return jsonString(arr)
     }
     static func seriesSig(
-        title: String, categoryId: String, coverPath: String, status: String, description: String?, pos: Int, updatedAt: Int64?
+        title: String, categoryId: String, coverPath: String, status: String, description: String?, updatedAt: Int64?
     ) -> String {
         jsonString([
-            title, categoryId, coverPath, status, description.map { $0 as Any } ?? NSNull(), pos, updatedAt.map { $0 as Any } ?? NSNull(),
+            title, categoryId, coverPath, status, description.map { $0 as Any } ?? NSNull(), updatedAt.map { $0 as Any } ?? NSNull(),
         ])
     }
     private static func jsonString(_ v: Any) -> String {
@@ -112,10 +113,14 @@ final class Store: @unchecked Sendable {
             for (i, s) in index.series.enumerated() {
                 let epSig = Self.episodesSig(s.episodes)
                 let rowSig = Self.seriesSig(
-                    title: s.title, categoryId: s.categoryId, coverPath: s.coverPath, status: s.status, description: s.description, pos: i,
+                    title: s.title, categoryId: s.categoryId, coverPath: s.coverPath, status: s.status, description: s.description,
                     updatedAt: s.updatedAt)
                 let prev = oldRow[s.id]
-                if let p = prev, p.0 == rowSig, p.1 == epSig { continue }
+                // 先后（pos）不进签名：前面插进一门新课时，后面的课只改先后，不整行重写
+                if let p = prev, p.0 == rowSig, p.1 == epSig {
+                    try db.run("UPDATE catalog_series SET pos = ? WHERE id = ? AND pos <> ?", [i, s.id, i])
+                    continue
+                }
                 if prev != nil {
                     try db.run(
                         "UPDATE catalog_series SET title = ?, title_norm = ?, category_id = ?, cover_path = ?, status = ?, pos = ?, description = ?, updated_at = ?, series_sig = ?, episodes_sig = ? WHERE id = ?",
@@ -457,6 +462,13 @@ final class Store: @unchecked Sendable {
             }
         }
     }
+    /// 一批集开始下载：新的先建记录，然后全部记为“下载中”。整批一个事务。
+    func startDownloads(_ fresh: [DlItem], ids: [String]) throws {
+        try db.transaction {
+            if !fresh.isEmpty { try queuedMany(fresh) }
+            for id in ids { try setDlState(id, .downloading) }
+        }
+    }
     func setDlState(_ id: String, _ state: DlStatus) throws {
         try db.run("UPDATE user_download SET state = ? WHERE episode_id = ?", [state.rawValue, id])
     }
@@ -490,7 +502,7 @@ final class Store: @unchecked Sendable {
     func loadLibrary() throws -> [LibrarySeries] {
         try db.all(
             """
-            SELECT d.series_id AS series_id, COALESCE(s.title, max(d.series_title)) AS series_title,
+            SELECT d.series_id AS series_id, COALESCE(s.title, max(d.series_title)) AS series_title, s.cover_path AS cover_path,
                    count(*) AS n, sum(d.state = 'done') AS done, sum(d.state = 'paused') AS paused, min(d.requested_at) AS first_requested
             FROM user_download d LEFT JOIN catalog_series s ON s.id = d.series_id
             GROUP BY d.series_id ORDER BY first_requested DESC
@@ -498,7 +510,7 @@ final class Store: @unchecked Sendable {
         ).map {
             LibrarySeries(
                 seriesId: $0.str("series_id"), seriesTitle: $0.str("series_title"), n: Int($0.int("n")), done: Int($0.int("done")),
-                paused: Int($0.int("paused")), firstRequested: $0.int("first_requested"))
+                paused: Int($0.int("paused")), firstRequested: $0.int("first_requested"), coverPath: $0.str("cover_path"))
         }
     }
 

@@ -32,7 +32,7 @@ struct SeriesView: View {
             }
         }
         .task(id: model.catalogVersion) { load() }
-        .onChange(of: model.dataVersion) { refreshRows() }
+        .onChange(of: [model.progressVersion, model.favoritesVersion, model.downloadsVersion]) { refreshRows() }
     }
 
     /// 只看本机目录，不联网（只有启动和下拉刷新取 index.json）。本机目录没有这门课 = 已下架
@@ -158,7 +158,7 @@ struct SeriesView: View {
                         episodeId: $0.id, seriesId: h.id, seriesTitle: h.title, episodeTitle: $0.title, pos: $0.pos, audioPath: $0.audioPath
                     )
                 }
-            model.download(todo, single: false)
+            model.download(todo)
         case .pause: model.downloads.pauseAll(seriesId: h.id)
         case .resume: model.resumeDownloads(seriesId: h.id)
         case .allDone:
@@ -197,7 +197,7 @@ struct SeriesView: View {
         HStack(spacing: 0) {
             if let cn = h.categoryName {
                 Button {
-                    model.push(.category(h.categoryId))
+                    model.nav.push(.category(h.categoryId))
                 } label: {
                     HStack(spacing: Tok.Space.textGap) {
                         Text(cn).zFont(S.captionStrong).foregroundStyle(C.labelPrimary)

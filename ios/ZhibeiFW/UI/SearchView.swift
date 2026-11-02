@@ -59,7 +59,7 @@ struct SearchView: View {
                         .horizontal, Layout.pageMargin(W))
                 }
                 LazyVStack(spacing: 0) {
-                    ForEach(r.rows) { c in ListRowView(card: c) { model.push(.series(c.id)) } }
+                    ForEach(r.rows) { c in ListRowView(card: c) { model.nav.push(.series(c.id)) } }
                 }
             }
         }
@@ -87,7 +87,7 @@ struct CategoriesView: View {
         return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: CP.Tile.gap), count: cols), spacing: CP.Tile.gap) {
             ForEach(tiles) { t in
                 Button {
-                    model.push(.category(t.id))
+                    model.nav.push(.category(t.id))
                 } label: {
                     ZStack {
                         RoundedRectangle(cornerRadius: Tok.Radius.tile, style: .continuous).fill(
@@ -134,7 +134,7 @@ struct CategoryView: View {
             LazyVStack(spacing: CP.SeriesRow.gap) {
                 ForEach(rows) { c in
                     SeriesRowView(id: c.id, title: c.title, meta: [seriesStatusText(c.status)], coverPath: c.coverPath) {
-                        model.push(.series(c.id))
+                        model.nav.push(.series(c.id))
                     }
                     .onAppear { if c.id == rows.last?.id { more() } }
                 }
