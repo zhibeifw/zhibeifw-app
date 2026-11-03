@@ -244,9 +244,6 @@ final class RaceTests: XCTestCase {
         XCTAssertEqual(coverSourcePath(p, requestedPx: 564), "中观/入中论讲解/cover-640.jpg")
         XCTAssertEqual(coverSourcePath(p, requestedPx: 641), p)
         XCTAssertEqual(coverThumbPath("a.b/cover", width: 320), "a.b/cover")  // 没有扩展名就不动
-        XCTAssertEqual(coverRequestPx(108), 320)
-        XCTAssertEqual(coverRequestPx(564), 640)
-        XCTAssertEqual(coverRequestPx(1116), 1280)
         XCTAssertEqual(coverBucket(1206), 1280)
     }
 

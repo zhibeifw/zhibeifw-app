@@ -1,5 +1,5 @@
 {
-  "_说明": "normalizeText(输入) → 搜索用的标准写法；clock(秒) → 时间文字；remainingClock(位置, 时长) → 剩余时间；utf16Prefix(文字, n) → 不切断字符的前 n 个 UTF-16 码元。",
+  "_说明": "normalizeText(输入) → 搜索用的标准写法；clock(秒) → 时间文字；remainingClock(位置, 时长) → 剩余时间；utf16Prefix(文字, n) → 不切断字符的前 n 个 UTF-16 码元；coverRequestPx(视图宽度像素) → 向加载器要的宽度（0 表示还没量出宽度、先不取）。",
   "normalize": [
     [
       "  ＡＢＣ​ 入  行论 ",
@@ -51,6 +51,28 @@
       "短",
       5000,
       "短"
+    ]
+  ],
+  "coverRequestPx": [
+    [
+      0,
+      0
+    ],
+    [
+      -1,
+      0
+    ],
+    [
+      108,
+      320
+    ],
+    [
+      564,
+      640
+    ],
+    [
+      1116,
+      1280
     ]
   ]
 }

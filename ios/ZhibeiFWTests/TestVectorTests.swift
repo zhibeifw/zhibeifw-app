@@ -56,6 +56,7 @@ final class TestVectorTests: XCTestCase {
         for c in v["remainingClock"] as! [[Any]] {
             XCTAssertEqual(remainingClock((c[0] as! NSNumber).doubleValue, (c[1] as! NSNumber).doubleValue), c[2] as? String, "\(c)")
         }
+        for c in v["coverRequestPx"] as! [[Int]] { XCTAssertEqual(coverRequestPx(c[0]), c[1], "\(c)") }
         for c in v["utf16Prefix"] as! [[Any]] {
             XCTAssertEqual(String(utf16Prefix: c[0] as! String, c[1] as! Int), c[2] as? String, "\(c)")
         }

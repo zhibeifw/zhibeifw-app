@@ -4,6 +4,7 @@ import com.zhibeifw.app.core.Json
 import com.zhibeifw.app.core.JsonNull
 import com.zhibeifw.app.core.clock
 import com.zhibeifw.app.core.compareVersions
+import com.zhibeifw.app.core.coverRequestPx
 import com.zhibeifw.app.core.fileKey
 import com.zhibeifw.app.core.isHttpsOrigin
 import com.zhibeifw.app.core.isValidId
@@ -72,6 +73,8 @@ class TestVectorTest {
         for (c in cases(v, "normalize")) assertEquals(c[1], normalizeText(c[0] as String))
         for (c in cases(v, "clock")) assertEquals("$c", c[1], clock(c[0] as Double))
         for (c in cases(v, "remainingClock")) assertEquals("$c", c[2], remainingClock(c[0] as Double, c[1] as Double))
+        for (c in cases(v, "coverRequestPx"))
+            assertEquals("$c", (c[1] as Double).toInt(), coverRequestPx((c[0] as Double).toInt()))
         for (c in cases(v, "utf16Prefix")) assertEquals("$c", c[2], utf16Prefix(c[0] as String, (c[1] as Double).toInt()))
     }
 }

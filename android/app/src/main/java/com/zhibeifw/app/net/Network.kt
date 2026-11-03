@@ -77,11 +77,12 @@ object PrefKeys {
 /** encodeURI 的等价物：保留 URL 里的保留字符，其余（中文等）按 UTF-8 百分号编码。 */
 fun buildUrl(origin: String, path: String): String {
     val keep = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789;,/?:@&=+$-_.!~*'()#"
+    val hex = "0123456789ABCDEF"
     val sb = StringBuilder(origin).append('/')
     for (b in path.toByteArray(Charsets.UTF_8)) {
-        val c = (b.toInt() and 0xFF).toChar()
-        if (b >= 0 && keep.indexOf(c) >= 0) sb.append(c) else sb.append('%')
-            .append("%02X".format(b.toInt() and 0xFF))
+        val v = b.toInt() and 0xFF
+        val c = v.toChar()
+        if (b >= 0 && keep.indexOf(c) >= 0) sb.append(c) else sb.append('%').append(hex[v ushr 4]).append(hex[v and 0x0F])
     }
     return sb.toString()
 }

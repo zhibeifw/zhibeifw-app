@@ -13,6 +13,8 @@ struct SearchView: View {
     /// iOS 26 用根视图上系统搜索框的文字，iOS 18 用页面里的搜索栏
     private var text: String { hasTabSearch ? model.searchQuery : localText }
     @State private var result: Store.SearchResult?
+    /// 每次搜索加一：查询在后台做，只用最后一次的结果
+    @State private var searchSeq = 0
 
     var body: some View {
         let m = Layout.pageMargin(W)
@@ -39,14 +41,20 @@ struct SearchView: View {
         .onChange(of: model.searchSubmitted) { runSearch() }
         .onChange(of: model.searchQuery) { _, v in
             if v.count > MAX_QUERY_LENGTH { model.searchQuery = String(v.prefix(MAX_QUERY_LENGTH)) }
-            if v.isEmpty { result = nil }
+            if v.isEmpty { searchSeq += 1; result = nil }
         }
     }
 
     private func runSearch() {
         let q = normalizeText(text)
         guard !q.isEmpty else { return }
-        result = try? model.store.searchSeries(text)
+        // 搜不到整句时会从开头逐字加长多查几次，放到后台，不卡输入
+        searchSeq += 1
+        let seq = searchSeq, query = text, store = model.store!
+        Task {
+            let r = await Task.detached(priority: .userInitiated) { try? store.searchSeries(query) }.value
+            if seq == searchSeq { result = r }
+        }
     }
 
     @ViewBuilder private func results(_ r: Store.SearchResult) -> some View {

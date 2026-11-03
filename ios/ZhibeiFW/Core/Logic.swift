@@ -336,7 +336,8 @@ func coverSourcePath(_ path: String, requestedPx: Int) -> String {
     return coverThumbPath(path, width: w)
 }
 /// 视图向加载器要的宽度：用小图的范围里取小图的宽度，再大按 256 一档（尺寸小幅变化时不必重新取图）。
-func coverRequestPx(_ px: Int) -> Int { COVER_THUMB_WIDTHS.first(where: { px <= $0 }) ?? coverBucket(px) }
+/// 视图还没量出宽度（0）时返回 0，调用方据此先不取图。
+func coverRequestPx(_ px: Int) -> Int { px <= 0 ? 0 : COVER_THUMB_WIDTHS.first(where: { px <= $0 }) ?? coverBucket(px) }
 
 // MARK: - 资料库的节数文字
 

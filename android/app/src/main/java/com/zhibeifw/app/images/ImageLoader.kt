@@ -259,6 +259,7 @@ fun CoverImage(
         var img by remember(path) { mutableStateOf(first) }
         val alpha = remember(path) { Animatable(if (first != null) 1f else 0f) }
         LaunchedEffect(path, px, originVersion) {
+            if (px <= 0) return@LaunchedEffect // 还没量出宽度：等量好了再取，免得先下一张不需要的小图
             val exact = loader.cached(path, px)
             if (exact != null) {
                 img = exact.asImageBitmap(); failed = false; alpha.snapTo(1f); return@LaunchedEffect

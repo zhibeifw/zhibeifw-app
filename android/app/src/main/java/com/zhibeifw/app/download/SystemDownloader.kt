@@ -1,11 +1,15 @@
 package com.zhibeifw.app.download
 
 import android.app.DownloadManager as AndroidDownloads
+import android.content.BroadcastReceiver
 import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
 import android.database.ContentObserver
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
+import androidx.core.content.ContextCompat
 import com.zhibeifw.app.core.fileKey
 import java.io.File
 import java.util.concurrent.ConcurrentHashMap
@@ -20,7 +24,8 @@ import kotlinx.coroutines.withContext
  *  · 有网就下（系统默认允许流量和漫游），参数用系统默认值；
  *  · 系统没有公开的“暂停”：暂停 = 从系统里删掉，继续时从头下。
  * 系统把文件下到 App 专属的外部目录（不需要存储权限），文件名是集 ID 的文件键；下完由 DownloadManager 复制进资料库再交还系统删掉。
- * 进度：系统下载表有变化就通知（ContentObserver），收到后查一次表。
+ * 进度：系统下载表有变化就通知（ContentObserver），收到后查一次表；另外收系统的“下载完成”广播，
+ * 万一某些系统上收不到表的变化通知，下完的也能及时收尾。
  */
 class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private val dm = ctx.getSystemService(AndroidDownloads::class.java)
@@ -50,11 +55,23 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private val throttles = ConcurrentHashMap<Long, ProgressThrottle>()
 
     init {
-        ctx.contentResolver.registerContentObserver(
-            Uri.parse("content://downloads/my_downloads"), true,
-            object : ContentObserver(main) {
-                override fun onChange(selfChange: Boolean) = scan()
-            })
+        runCatching {
+            ctx.contentResolver.registerContentObserver(
+                Uri.parse("content://downloads/my_downloads"), true,
+                object : ContentObserver(main) {
+                    override fun onChange(selfChange: Boolean) = scan()
+                })
+        }
+        runCatching {
+            ContextCompat.registerReceiver(
+                ctx,
+                object : BroadcastReceiver() {
+                    override fun onReceive(c: Context, i: Intent) = scan()
+                },
+                IntentFilter(AndroidDownloads.ACTION_DOWNLOAD_COMPLETE),
+                ContextCompat.RECEIVER_EXPORTED
+            )
+        }
     }
 
     private fun dir() = ctx.getExternalFilesDir(DIR)
@@ -114,12 +131,15 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                 val iUri = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_LOCAL_URI)
                 while (c.moveToNext()) {
                     val sysId = c.getLong(iId)
-                    val file = c.getString(iUri)?.let { Uri.parse(it).path }?.let(::File)
+                    // 下到 App 专属目录时系统给的是 file:// 地址；不是的话不拿它当文件路径，按我们交给系统时的文件名找
+                    val uri = c.getString(iUri)?.let(Uri::parse)
+                    val named = if (uri?.scheme == "file") uri.path?.let(::File) else null
                     // 先按本次交给系统时记下的编号认；App 重启后按文件名认（刚交给系统时文件名可能还是空的，不能当成认不出）
-                    val id = idsBySys[sysId] ?: file?.name?.removeSuffix(".part")?.let { byKey[it] }
+                    val id = idsBySys[sysId] ?: named?.name?.removeSuffix(".part")?.let { byKey[it] }
                     if (id == null) {
-                        if (file != null) orphans.add(sysId); continue
+                        if (named != null) orphans.add(sysId); continue
                     }
+                    val file = named ?: if (uri != null) File(dir(), fileKey(id) + ".part") else null
                     remember(id, sysId)
                     out.add(
                         Row(

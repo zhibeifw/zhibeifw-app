@@ -422,7 +422,8 @@ fun coverSourcePath(path: String, requestedPx: Int): String =
     COVER_THUMB_WIDTHS.firstOrNull { requestedPx <= it }?.let { coverThumbPath(path, it) } ?: path
 
 /** 视图向加载器要的宽度：用小图的范围里取小图的宽度，再大按 256 一档（尺寸小幅变化时不必重新取图）。 */
-fun coverRequestPx(px: Int): Int = COVER_THUMB_WIDTHS.firstOrNull { px <= it } ?: coverBucket(px)
+/** 视图还没量出宽度（0）时返回 0，调用方据此先不取图。 */
+fun coverRequestPx(px: Int): Int = if (px <= 0) 0 else COVER_THUMB_WIDTHS.firstOrNull { px <= it } ?: coverBucket(px)
 
 // ---------- 资料库的节数文字 ----------
 /** 全部下完：“3 节”；还有在下载 / 排队 / 暂停的：“3 节 · 已下载 1 节”。 */

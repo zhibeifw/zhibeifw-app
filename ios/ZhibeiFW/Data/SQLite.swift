@@ -189,7 +189,9 @@ final class SQLiteDB: @unchecked Sendable {
                 case SQLITE_INTEGER: v[names[Int(i)]] = .int(sqlite3_column_int64(st, i))
                 case SQLITE_FLOAT: v[names[Int(i)]] = .double(sqlite3_column_double(st, i))
                 case SQLITE_NULL: v[names[Int(i)]] = .null
-                default: v[names[Int(i)]] = .text(String(cString: sqlite3_column_text(st, i)))
+                default:
+                    // 取文本失败（内存不足等）时是空指针，不能直接转字符串
+                    if let p = sqlite3_column_text(st, i) { v[names[Int(i)]] = .text(String(cString: p)) } else { v[names[Int(i)]] = .null }
                 }
             }
             rows.append(Row(values: v))

@@ -20,7 +20,26 @@ object Limits {
     const val MAX_FEATURED = 50
 }
 
-fun utf8ByteLength(s: String): Int = s.toByteArray(Charsets.UTF_8).size
+/** UTF-8 编码后的字节数：逐个字符算，不为了取长度再生成一份字节数组（目录文件最大 10 MB）。 */
+fun utf8ByteLength(s: String): Int {
+    var n = 0
+    var i = 0
+    while (i < s.length) {
+        val c = s[i].code
+        n += when {
+            c < 0x80 -> 1
+            c < 0x800 -> 2
+            Character.isHighSurrogate(s[i]) && i + 1 < s.length && Character.isLowSurrogate(s[i + 1]) -> {
+                i++; 4
+            }
+            // 落单的代理码元编码时会换成“?”
+            c in 0xD800..0xDFFF -> 1
+            else -> 3
+        }
+        i++
+    }
+    return n
+}
 
 /** 课程 ID、集 ID：文字、十进制数字、下划线、连字符，NFC 标准写法，1–100 个字符（UTF-16 码元）。 */
 fun isValidId(v: Any?): Boolean {

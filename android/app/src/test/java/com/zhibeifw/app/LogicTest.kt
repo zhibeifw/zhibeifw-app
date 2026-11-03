@@ -195,6 +195,8 @@ class FileKeyTest {
         assertTrue(isNoSpaceError(java.io.IOException("write failed: ENOSPC (No space left on device)")))
         assertTrue(isNoSpaceError(RuntimeException("x", java.io.IOException("No space left on device"))))
         assertFalse(isNoSpaceError(java.io.FileNotFoundException("missing")))
+        for (t in listOf("", "abc", "入中论", "é", "aaaa😀b", "\uD800x", "x\uDC00"))
+            assertEquals(t, t.toByteArray(Charsets.UTF_8).size, utf8ByteLength(t))
     }
 }
 
@@ -343,10 +345,6 @@ class RaceTest {
         assertEquals("中观/入中论讲解/cover-640.jpg", coverSourcePath(p, 564))
         assertEquals(p, coverSourcePath(p, 641))
         assertEquals("a.b/cover", coverThumbPath("a.b/cover", 320))
-        assertEquals(320, coverRequestPx(108)); assertEquals(
-            640,
-            coverRequestPx(564)
-        ); assertEquals(1280, coverRequestPx(1116))
         assertEquals(1280, coverBucket(1206))
     }
 

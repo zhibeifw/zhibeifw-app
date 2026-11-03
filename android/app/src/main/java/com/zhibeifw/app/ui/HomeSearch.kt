@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -62,6 +63,8 @@ import com.zhibeifw.app.data.SeriesCard
 import com.zhibeifw.app.design.C
 import com.zhibeifw.app.design.ZIcon
 import com.zhibeifw.app.design.generated.Tok
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.zhibeifw.app.design.generated.Tok.Component as CP
 import com.zhibeifw.app.design.generated.Tok.Font.Style as S
 import com.zhibeifw.app.design.ts
@@ -181,10 +184,18 @@ fun SearchView(model: AppModel) {
     var result by remember { mutableStateOf<SearchResult?>(null) }
     // 按“搜索”时的词：页面重建（深色模式切换、窗口大小变化、进程被回收后回来）后按它把结果重新搜出来，不退回空提示
     var submitted by rememberSaveable { mutableStateOf<String?>(null) }
-    LaunchedEffect(Unit) {
-        submitted?.let { q ->
-            if (result == null) result = runCatching { model.store.searchSeries(q) }.getOrNull()
+    // 每次搜索加一：查询在后台做，只用最后一次的结果
+    var searchSeq by remember { mutableIntStateOf(0) }
+    // 搜不到整句时会从开头逐字加长多查几次，放到后台，不卡输入
+    fun search(q: String) {
+        val seq = ++searchSeq
+        model.launch {
+            val r = withContext(Dispatchers.IO) { runCatching { model.store.searchSeries(q) }.getOrNull() }
+            if (seq == searchSeq) result = r
         }
+    }
+    LaunchedEffect(Unit) {
+        submitted?.let { q -> if (result == null) search(q) }
     }
     var focused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
@@ -199,7 +210,7 @@ fun SearchView(model: AppModel) {
     } // 滚动时键盘收起，输入框也失焦（和 iOS 一致）
     fun run() {
         if (normalizeText(text).isEmpty()) return
-        result = runCatching { model.store.searchSeries(text) }.getOrNull()
+        search(text)
         submitted = text
         kb?.hide()
         focus.clearFocus() // 搜完输入框失焦（和 iOS 一致）
@@ -218,7 +229,7 @@ fun SearchView(model: AppModel) {
                     onQueryChange = { v ->
                         text =
                             if (v.length > MAX_QUERY_LENGTH) v.take(MAX_QUERY_LENGTH) else v; if (text.isEmpty()) {
-                        result = null; submitted = null
+                        searchSeq++; result = null; submitted = null
                     }
                     },
                     onSearch = { run() },
@@ -245,7 +256,7 @@ fun SearchView(model: AppModel) {
                     trailingIcon = if (text.isEmpty()) null else ({
                         Box(
                             Modifier.size(Tok.Space.MinTouchTarget.android.d)
-                                .pressable { text = ""; result = null; submitted = null }
+                                .pressable { text = ""; searchSeq++; result = null; submitted = null }
                                 .semantics { contentDescription = "清除" },
                             contentAlignment = Alignment.Center
                         ) {
@@ -258,7 +269,7 @@ fun SearchView(model: AppModel) {
                     }),
                 )
                 if (focused || text.isNotEmpty()) TextButton(onClick = {
-                    text = ""; result = null; submitted = null; focus.clearFocus()
+                    text = ""; searchSeq++; result = null; submitted = null; focus.clearFocus()
                 }) { Text("取消", style = S.body.ts(C.labelPrimary())) }
             }
             Spacer(Modifier.height(CP.Tile.topGap.d))
