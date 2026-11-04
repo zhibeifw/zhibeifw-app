@@ -40,6 +40,10 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private val sysIds = ConcurrentHashMap<String, Long>()
     private val idsBySys = ConcurrentHashMap<Long, String>()
 
+    /** 数据库里没下完的集已经全部登记进 byKey（第一次对账时）：在这之前认不出的一律不当孤儿删 */
+    @Volatile
+    private var candidatesLoaded = false
+
     /** 已经排着一次查表：系统下载表连续变化时只查一次 */
     private val scanQueued = AtomicBoolean(false)
 
@@ -104,9 +108,18 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     override fun release(id: String) = stop(id)
 
     override suspend fun activeIds(candidates: Collection<String>): Set<String>? {
-        for (c in candidates) byKey[fileKey(c)] = c
-        // 在同一条线程上查：排在前面、还没交给系统的那几集先交出去，查表时就在了
-        val all = suspendCancellableCoroutine { cont -> io.execute { cont.resume(rows()) } }
+        // 登记和查表都在同一条线程上按顺序做：排在前面、还没交给系统的那几集先交出去，查表时就在了；
+        // 启动时 setHandler 排的那次查表也不会撞上“登记到一半”，把上次没下完的当成孤儿删掉
+        val all = suspendCancellableCoroutine { cont ->
+            io.execute {
+                val r = runCatching {
+                    for (c in candidates) byKey[fileKey(c)] = c
+                    candidatesLoaded = true
+                    rows()
+                }.getOrNull()
+                cont.resume(r)
+            }
+        }
         // 查不了系统表：不能当成“系统里什么都没有”，否则在下的都会被记成暂停
         val active = (all ?: return null).filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
         main.post { scan() } // App 没开着时下完、失败的，现在认得出是哪一集了，交出去收尾
@@ -167,7 +180,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                 }
             }
         }.isSuccess
-        if (orphans.isNotEmpty() && byKey.isNotEmpty()) runCatching { dm.remove(*orphans.toLongArray()) }
+        if (orphans.isNotEmpty() && candidatesLoaded) runCatching { dm.remove(*orphans.toLongArray()) }
         return if (ok) out else null
     }
 
@@ -199,7 +212,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                             r.reason == AndroidDownloads.ERROR_INSUFFICIENT_SPACE
                         )
                     )
-                    forget(r.id); dm.remove(r.sysId)
+                    forget(r.id); runCatching { dm.remove(r.sysId) }
                 }
 
                 else -> {

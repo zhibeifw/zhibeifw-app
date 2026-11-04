@@ -440,27 +440,29 @@ final class PlayerController {
     // MARK: 锁屏与控制中心
 
     private func setupRemoteCommands() {
+        // 系统没有承诺这些回调一定在主线程上：交给主线程去做，不用 assumeIsolated（不在主线程时会让进程中止）
         let cc = MPRemoteCommandCenter.shared()
         cc.playCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.resume() }; return .success
+            Task { @MainActor in self?.resume() }; return .success
         }
         cc.pauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.pause() }; return .success
+            Task { @MainActor in self?.pause() }; return .success
         }
         cc.togglePlayPauseCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.toggle() }; return .success
+            Task { @MainActor in self?.toggle() }; return .success
         }
         cc.skipForwardCommand.preferredIntervals = [NSNumber(value: SEEK_FORWARD_SECONDS)]
         cc.skipBackwardCommand.preferredIntervals = [NSNumber(value: SEEK_BACK_SECONDS)]
         cc.skipForwardCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.seek(by: SEEK_FORWARD_SECONDS) }; return .success
+            Task { @MainActor in self?.seek(by: SEEK_FORWARD_SECONDS) }; return .success
         }
         cc.skipBackwardCommand.addTarget { [weak self] _ in
-            MainActor.assumeIsolated { self?.seek(by: -SEEK_BACK_SECONDS) }; return .success
+            Task { @MainActor in self?.seek(by: -SEEK_BACK_SECONDS) }; return .success
         }
         cc.changePlaybackPositionCommand.addTarget { [weak self] e in
             guard let e = e as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
-            MainActor.assumeIsolated { self?.seek(to: e.positionTime) }
+            let t = e.positionTime
+            Task { @MainActor in self?.seek(to: t) }
             return .success
         }
         // 不放“上一集 / 下一集”

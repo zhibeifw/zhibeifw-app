@@ -5,6 +5,7 @@ import com.zhibeifw.app.core.FileKind
 import com.zhibeifw.app.core.parseIndex
 import com.zhibeifw.app.net.NetResult
 import com.zhibeifw.app.net.Network
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -20,8 +21,16 @@ data class SyncSummary(val index: FileStatus) {
 
 object CatalogSync {
     suspend fun syncIndex(store: Store, net: Network): FileStatus {
-        val etag = withContext(Dispatchers.IO) { store.etag(INDEX_PATH) }
-        return when (val r = net.request(INDEX_PATH, etag, FileKind.INDEX.limit)) {
+        // 读库、选线路出错都按“同步失败”处理，不往外抛（调用方多在没有错误处理的协程里）
+        val etag = withContext(Dispatchers.IO) { runCatching { store.etag(INDEX_PATH) }.getOrNull() }
+        val r = try {
+            net.request(INDEX_PATH, etag, FileKind.INDEX.limit)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.w("CatalogSync", "取目录失败", e); return FileStatus.FAILED
+        }
+        return when (r) {
             NetResult.NotModified -> FileStatus.UNCHANGED
             NetResult.NotFound -> FileStatus.MISSING
             is NetResult.Error -> FileStatus.FAILED
@@ -46,8 +55,7 @@ object CatalogSync {
     suspend fun initialize(store: Store, net: Network): Boolean {
         val s = syncIndex(store, net)
         if (s == FileStatus.UPDATED || s == FileStatus.UNCHANGED) {
-            withContext(Dispatchers.IO) { store.markInitialized() }
-            return true
+            return withContext(Dispatchers.IO) { runCatching { store.markInitialized() }.isSuccess }
         }
         return false
     }

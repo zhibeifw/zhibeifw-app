@@ -32,11 +32,14 @@ import com.zhibeifw.app.images.ImageLoader
 import com.zhibeifw.app.net.Connectivity
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
-import com.zhibeifw.app.net.prefs
+import com.zhibeifw.app.net.editPrefs
+import com.zhibeifw.app.net.readPrefs
 import com.zhibeifw.app.player.PlayerController
 import com.zhibeifw.app.ui.SheetSpec
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -76,7 +79,9 @@ class AppModel(private val ctx: Context) {
     val images = ImageLoader(net, File(ctx.cacheDir, "covers-cache"))
     var player: PlayerController? by mutableStateOf(null); private set
     var downloads: DownloadManager? by mutableStateOf(null); private set
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // 后台任务里没接住的错误只记日志，不让 App 崩溃
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main +
+        CoroutineExceptionHandler { _, e -> Log.w("AppModel", "后台任务出错", e) })
 
     var phase by mutableStateOf<Phase>(Phase.Launching)
     var home by mutableStateOf(HomeData())
@@ -137,7 +142,6 @@ class AppModel(private val ctx: Context) {
                     Migrator.migrate(db) // 失败重试一次，仍失败就提示并停下
                 }
                 store = Store(db)
-                importV1Prefs()
                 true
             } catch (e: Exception) {
                 Log.e("AppModel", "数据库打开或升级失败", e)
@@ -147,6 +151,8 @@ class AppModel(private val ctx: Context) {
         if (!ok) {
             phase = Phase.DbError; return
         }
+        // 偏好迁移和数据库无关：出错不能进“数据库出错”页
+        withContext(Dispatchers.IO) { runCatching { importV1Prefs() } }
         val p = PlayerController(ctx, store, files, net)
         player = p
         val dm = DownloadManager(SystemDownloader(ctx), store, files)
@@ -179,7 +185,20 @@ class AppModel(private val ctx: Context) {
         }
     }
 
+    /** 正在首次初始化：网络恢复和“重试”同时来时只跑一轮 */
+    private var initRunning = false
+
     suspend fun runInitialization() {
+        if (initRunning) return
+        initRunning = true
+        try {
+            initializeOnce()
+        } finally {
+            initRunning = false
+        }
+    }
+
+    private suspend fun initializeOnce() {
         phase = Phase.Initializing(1, false)
         val ok = CatalogSync.initializeWithRetry(
             store,
@@ -195,9 +214,9 @@ class AppModel(private val ctx: Context) {
 
     /** 从 v1.0 的 ExpoSQLiteStorage 读出线路相关的小偏好。只读一次。 */
     private suspend fun importV1Prefs() {
-        val p = ctx.prefs.data.first()
+        val p = ctx.readPrefs()
         if (p[PrefKeys.migratedV1] != null) return
-        ctx.prefs.edit { it[PrefKeys.migratedV1] = "1" }
+        ctx.editPrefs { it[PrefKeys.migratedV1] = "1" }
         if (!files.v1KVPath.exists()) return
         runCatching {
             val kv = Db(
@@ -216,7 +235,7 @@ class AppModel(private val ctx: Context) {
             } finally {
                 kv.db.close()
             }
-            ctx.prefs.edit {
+            ctx.editPrefs {
                 if (last != null && isHttpsOrigin(last)) it[PrefKeys.lastService] = last
                 if (doms != null && parseDomains(doms) != null) it[PrefKeys.domains] = doms
             }
@@ -255,13 +274,18 @@ class AppModel(private val ctx: Context) {
         syncing = true
         if (!userInitiated) autoUpdating = true
         try {
-            val task = scope.async { CatalogSync.sync(store, net) }
-            inflightSync = task
-            val s = try {
-                task.await()
-            } finally {
-                inflightSync = null
+            // 由同步任务自己做完时清掉：下拉刷新的页面被关掉、等的人被取消时，同步还在跑，不能让下一次另起一个
+            lateinit var task: Deferred<SyncSummary>
+            task = scope.async(start = CoroutineStart.LAZY) {
+                try {
+                    CatalogSync.sync(store, net)
+                } finally {
+                    if (inflightSync === task) inflightSync = null
+                }
             }
+            inflightSync = task
+            task.start()
+            val s = task.await()
             lastSyncAt = System.currentTimeMillis()
             // 有新内容立刻换上；用户下拉刷新则完成后一律重读
             if (userInitiated || s.changed) loadHome()

@@ -22,7 +22,9 @@ struct SearchView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // iOS 18–25：页面里的系统搜索栏（UISearchBar）；iOS 26 搜索框在底部“搜索”标签上，这里不放
                 if !hasTabSearch {
-                    SystemSearchBar(text: $localText, placeholder: "课程名", maxLength: MAX_QUERY_LENGTH, onSearch: runSearch) { result = nil }
+                    SystemSearchBar(text: $localText, placeholder: "课程名", maxLength: MAX_QUERY_LENGTH, onSearch: runSearch) {
+                        searchSeq += 1; result = nil  // 让还在后台的旧搜索作废
+                    }
                         .frame(maxWidth: .infinity, minHeight: CP.SearchField.height)  // 不让系统按内容算宽度，“取消”键留在屏幕里
                         .accessibilityLabel("搜索课程名")
                         .padding(.horizontal, m - Tok.Space.searchBarInset)
@@ -33,7 +35,7 @@ struct SearchView: View {
                     results(r).padding(.top, CP.Tile.topGap)
                 } else {
                     // 没搜之前：系统的空状态提示
-                    EmptyStateView(text: "输入课程名搜索").padding(.top, Tok.Space.scale[6] * 3)
+                    EmptyStateView(text: "输入课程名搜索", symbol: "magnifyingglass").padding(.top, Tok.Space.scale[6] * 3)
                 }
             }
         }
@@ -59,7 +61,7 @@ struct SearchView: View {
 
     @ViewBuilder private func results(_ r: Store.SearchResult) -> some View {
         if r.rows.isEmpty {
-            EmptyStateView(text: "未找到相关内容").padding(.top, Tok.Space.scale[6] * 3)
+            EmptyStateView(text: "未找到相关内容", symbol: "magnifyingglass").padding(.top, Tok.Space.scale[6] * 3)
         } else {
             VStack(alignment: .leading, spacing: 0) {
                 if r.fallback {

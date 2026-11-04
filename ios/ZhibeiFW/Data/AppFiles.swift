@@ -40,7 +40,7 @@ struct AppFiles: Sendable {
     /// 下载完成后的本地文件（相对 App 文件目录，如 audio/h_xxx.mp3），数据库里存相对路径。
     func finalRelative(_ episodeId: String, audioPath: String) -> String {
         let ext = (audioPath as NSString).pathExtension.lowercased()
-        let safeExt = ext.range(of: "^[a-z0-9]{1,5}$", options: .regularExpression) != nil ? ext : "mp3"
+        let safeExt = ext.range(of: "^[a-z0-9]{1,5}\\z", options: .regularExpression) != nil ? ext : "mp3"
         return "audio/" + fileKey(episodeId) + "." + safeExt
     }
     func absolute(_ relative: String) -> URL { documents.appendingPathComponent(relative) }

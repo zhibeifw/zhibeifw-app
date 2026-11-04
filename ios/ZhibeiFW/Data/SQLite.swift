@@ -37,7 +37,7 @@ struct Row {
     func optInt(_ k: String) -> Int64? {
         switch values[k] {
         case .int(let i)?: return i
-        case .double(let d)?: return Int64(d)
+        case .double(let d)?: return d.isFinite ? Int64(exactly: d.rounded(.towardZero)) : nil  // 无穷大、NaN、超范围返回 nil，不让进程中止
         case .text(let s)?: return Int64(s)
         default: return nil
         }

@@ -43,7 +43,7 @@ const val MINUS = "−"
 /** 全 App 统一的时间写法：分钟:秒，不分小时（113:32）。 */
 fun clock(sec: Double): String {
     val s = max(0.0, floor(if (sec.isFinite()) sec else 0.0)).toLong()
-    return "%02d:%02d".format(s / 60, s % 60)
+    return String.format(java.util.Locale.ROOT, "%02d:%02d", s / 60, s % 60) // 不随系统语言换数字写法
 }
 
 fun remainingClock(position: Double, duration: Double) =

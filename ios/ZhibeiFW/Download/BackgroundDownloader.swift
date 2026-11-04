@@ -41,12 +41,20 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         Task { @MainActor in h(e) }
     }
 
-    @discardableResult
-    func start(id: String, url: URL, resumeData: Data?) -> Int? {
-        let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
-        task.taskDescription = id
-        task.resume()
-        return task.taskIdentifier
+    /// 建任务用的串行队列：按交出的先后建，不占主线程
+    private let startQueue = DispatchQueue(label: "dl.start")
+
+    func start(id: String, url: URL, resumeFile: URL) async -> Int? {
+        await withCheckedContinuation { c in
+            startQueue.async { [session = session!] in
+                let resume = try? Data(contentsOf: resumeFile)
+                try? FileManager.default.removeItem(at: resumeFile)
+                let task = resume.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
+                task.taskDescription = id
+                task.resume()
+                c.resume(returning: task.taskIdentifier)
+            }
+        }
     }
 
     func pause(id: String, task tid: Int?) async -> Data? {
@@ -58,8 +66,13 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         Task { await task(id, tid)?.cancel() }
     }
 
-    func activeIds() async -> Set<String> {
-        Set(await session.allTasks.filter { $0.state == .running || $0.state == .suspended }.compactMap(\.taskDescription))
+    /// 同一集有几个任务时取编号最大（最新）的那个
+    func activeTasks() async -> [String: Int] {
+        var m: [String: Int] = [:]
+        for t in await session.allTasks where t.state == .running || t.state == .suspended {
+            if let id = t.taskDescription { m[id] = max(m[id] ?? 0, t.taskIdentifier) }
+        }
+        return m
     }
 
     /// 知道编号就按编号找；按集 ID 找的话，暂停后马上继续时同一集新旧两个任务都在跑，可能停错

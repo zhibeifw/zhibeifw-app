@@ -72,11 +72,9 @@ final class ImageLoader: @unchecked Sendable {
             if let img = Self.downsample(lf, maxPixel: px) { store(img, key, path); return img }
         }
         if path.hasPrefix("local:") { return nil }  // 只有本地封面的键：本地文件没了就没有，不去网上取
-        var src = source(path, requested)
-        if let m = memory.object(forKey: memKey(src, px)) { return m }
-        guard await ensureOnDisk(path, requested) else { return nil }
-        if Task.isCancelled { return nil }
-        src = source(path, requested)  // 小图不存在时，上一步已改成原图
+        if let m = memory.object(forKey: memKey(source(path, requested), px)) { return m }
+        // 用它确保在磁盘上的那个文件（小图不存在时是原图），不再算一次：中间开关可能被别的线程改了
+        guard let src = await ensureOnDisk(path, requested), !Task.isCancelled else { return nil }
         guard let img = Self.downsample(diskFile(src), maxPixel: px) else {
             try? FileManager.default.removeItem(at: diskFile(src)); return nil
         }
@@ -84,24 +82,29 @@ final class ImageLoader: @unchecked Sendable {
         return img
     }
 
-    /// 保证这个尺寸要用的文件在磁盘上（小图没有就下原图）。预先下载也用它。
+    /// 保证这个尺寸要用的文件在磁盘上（小图没有就下原图），返回那个文件的路径；取不到返回 nil。预先下载也用它。
     @discardableResult
-    func ensureOnDisk(_ path: String, _ requested: Int) async -> Bool {
+    func ensureOnDisk(_ path: String, _ requested: Int) async -> String? {
         let src = source(path, requested)
-        if FileManager.default.fileExists(atPath: diskFile(src).path) { return true }
+        if FileManager.default.fileExists(atPath: diskFile(src).path) {
+            // 缓存里的小图同样说明服务器有小图：不算的话，第二次启动后碰到几门缺小图的课就会全部改用原图
+            if src != path { lock.withLock { thumbHits += 1 } }
+            return src
+        }
         let r = await fetch(src)
         if src != path { lock.withLock { if r == .ok { thumbHits += 1 } else if r == .notFound { thumbMisses += 1 } } }
-        if r == .ok { return true }
+        if r == .ok { return src }
         // 只有服务器明确说“没有这张小图”（404）才改用原图；网络失败不算
-        guard src != path, r == .notFound else { return false }
+        guard src != path, r == .notFound else { return nil }
         lock.withLock { _ = noThumbs.insert(path) }
-        return FileManager.default.fileExists(atPath: diskFile(path).path) ? true : await fetch(path) == .ok
+        if FileManager.default.fileExists(atPath: diskFile(path).path) { return path }
+        return await fetch(path) == .ok ? path : nil
     }
 
     /// 原图在磁盘缓存里的文件（没有就先下载）；取不到返回 nil。
     func originalFile(_ path: String) async -> URL? {
-        guard await ensureOnDisk(path, Int.max) else { return nil }
-        let f = diskFile(path)
+        guard let src = await ensureOnDisk(path, Int.max) else { return nil }
+        let f = diskFile(src)
         return FileManager.default.fileExists(atPath: f.path) ? f : nil
     }
 
@@ -118,6 +121,9 @@ final class ImageLoader: @unchecked Sendable {
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 if code == 404 || code == 403 { return .notFound }  // R2 公开桶不存在的文件回 404（个别配置回 403）
                 guard code == 200 else { return .failed }
+                guard let size = (try? tmp.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= FileKind.cover.limit else {
+                    return .failed
+                }
                 // rename(2) 覆盖旧文件是原子的：不会有“旧的删了、新的还没到”的一瞬间让读文件的地方扑空
                 // 缓存目录可能被系统清理空间时整个删掉：没有就重建，否则以后每张都失败
                 if rename(tmp.path, file.path) != 0 {
@@ -143,8 +149,8 @@ final class ImageLoader: @unchecked Sendable {
         Task.detached(priority: .utility) {
             await withTaskGroup(of: Void.self) { g in
                 var it = list.makeIterator()
-                for _ in 0..<3 { if let x = it.next() { g.addTask { await self.ensureOnDisk(x.path, x.requested) } } }
-                while await g.next() != nil { if let x = it.next() { g.addTask { await self.ensureOnDisk(x.path, x.requested) } } }
+                for _ in 0..<3 { if let x = it.next() { g.addTask { _ = await self.ensureOnDisk(x.path, x.requested) } } }
+                while await g.next() != nil { if let x = it.next() { g.addTask { _ = await self.ensureOnDisk(x.path, x.requested) } } }
             }
         }
     }

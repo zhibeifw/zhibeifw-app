@@ -20,7 +20,7 @@ final class UpgradeChecker {
             UPGRADE_PATH, etag: Prefs.d.string(forKey: Prefs.kUpdateEtag), maxBytes: FileKind.upgrade.limit)
         switch r {
         case .ok(let data, let etag):
-            guard let u = parseUpgrade(data) else { return }
+            guard let u = parseUpgrade(data) else { applySaved(); return }
             Prefs.d.set(String(data: data, encoding: .utf8), forKey: Prefs.kUpdateBody)
             Prefs.d.set(etag, forKey: Prefs.kUpdateEtag)
             Prefs.d.set(now, forKey: Prefs.kUpdateChecked)
@@ -28,7 +28,7 @@ final class UpgradeChecker {
         case .notModified:
             Prefs.d.set(now, forKey: Prefs.kUpdateChecked)
             applySaved()
-        default: break
+        default: applySaved()  // 网络失败：沿用上次的结论（“此版本过旧”提示条不因离线而消失）
         }
     }
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.clearAndSetSemantics
+import com.zhibeifw.app.core.FileKind
 import com.zhibeifw.app.core.coverBucket
 import com.zhibeifw.app.core.coverRequestPx
 import com.zhibeifw.app.core.coverSourcePath
@@ -128,8 +129,8 @@ class ImageLoader(private val net: Network, val diskDir: File) {
             }
             if (path.isEmpty() || path.startsWith("local:")) return@withContext null // 只有本地封面的键：本地文件没了就没有，不去网上取
             memory.get(key(source(path, requested), px))?.let { return@withContext it }
-            if (!ensureOnDisk(path, requested)) return@withContext null
-            val src = source(path, requested) // 小图不存在时，上一步已改成原图
+            // 用它确保在磁盘上的那个文件（小图不存在时是原图），不再算一次：中间开关可能被别的线程改了
+            val src = ensureOnDisk(path, requested) ?: return@withContext null
             val bmp = decode(diskFile(src), px) ?: run { diskFile(src).delete(); null }
             bmp?.also { put(key(src, px), path, it) }
         }
@@ -137,23 +138,27 @@ class ImageLoader(private val net: Network, val diskDir: File) {
 
     /** 原图在磁盘缓存里的文件（没有就先下载）；取不到返回 null。 */
     suspend fun originalFile(path: String): File? {
-        if (!ensureOnDisk(path, Int.MAX_VALUE)) return null
-        return diskFile(path).takeIf { it.exists() }
+        val src = ensureOnDisk(path, Int.MAX_VALUE) ?: return null
+        return diskFile(src).takeIf { it.exists() }
     }
 
-    /** 保证这个尺寸要用的文件在磁盘上（小图没有就下原图）。预先下载也用它。 */
-    suspend fun ensureOnDisk(path: String, requested: Int): Boolean {
+    /** 保证这个尺寸要用的文件在磁盘上（小图没有就下原图），返回那个文件的路径；取不到返回 null。预先下载也用它。 */
+    suspend fun ensureOnDisk(path: String, requested: Int): String? {
         val src = source(path, requested)
-        if (diskFile(src).exists()) return true
+        if (diskFile(src).exists()) {
+            // 缓存里的小图同样说明服务器有小图：不算的话，第二次启动后碰到几门缺小图的课就会全部改用原图
+            if (src != path) thumbHits.incrementAndGet()
+            return src
+        }
         val r = fetch(src)
         if (src != path) {
             if (r == Fetch.OK) thumbHits.incrementAndGet() else if (r == Fetch.NOT_FOUND) thumbMisses.incrementAndGet()
         }
-        if (r == Fetch.OK) return true
+        if (r == Fetch.OK) return src
         // 只有服务器明确说“没有这张小图”（404）才改用原图；网络失败不算
-        if (src == path || r != Fetch.NOT_FOUND) return false
+        if (src == path || r != Fetch.NOT_FOUND) return null
         noThumbs.add(path)
-        return diskFile(path).exists() || fetch(path) == Fetch.OK
+        return if (diskFile(path).exists() || fetch(path) == Fetch.OK) path else null
     }
 
     /** 下载一个文件到磁盘缓存；同一个文件并发只下一次。 */
@@ -191,12 +196,26 @@ class ImageLoader(private val net: Network, val diskDir: File) {
                 val code = c.responseCode
                 if (code == 404 || code == 403) return Fetch.NOT_FOUND // R2 公开桶不存在的文件回 404（个别配置回 403）
                 if (code != 200) return Fetch.FAILED
+                if (c.contentLengthLong > FileKind.COVER.limit) return Fetch.FAILED
                 // 缓存目录可能被系统清理空间时整个删掉：没有就重建，否则以后每张都失败
                 file.parentFile?.mkdirs()
                 val tmp = File(file.path + ".tmp")
                 // 下到一半断了、被取消或改名失败：删掉半截的临时文件，不在缓存目录里留碎片
                 try {
-                    c.inputStream.use { ins -> tmp.outputStream().use { ins.copyTo(it) } }
+                    c.inputStream.use { ins ->
+                        tmp.outputStream().use { out ->
+                            // 服务器没给长度或给错了：边读边数，超过上限就不要
+                            val buf = ByteArray(64 * 1024)
+                            var total = 0L
+                            while (true) {
+                                val n = ins.read(buf)
+                                if (n < 0) break
+                                total += n
+                                if (total > FileKind.COVER.limit) throw java.io.IOException("封面过大")
+                                out.write(buf, 0, n)
+                            }
+                        }
+                    }
                     if (tmp.renameTo(file)) Fetch.OK else {
                         tmp.delete(); Fetch.FAILED
                     }

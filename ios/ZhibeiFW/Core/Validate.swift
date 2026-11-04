@@ -4,12 +4,13 @@ import Foundation
 // 解析失败整个文件丢弃（调用方沿用本机旧数据）；文件里单条不合规的，整条丢弃。规则与 v1.0 validate.ts 逐条一致。
 
 enum FileKind {
-    case domains, index, upgrade
+    case domains, index, upgrade, cover
     var limit: Int {
         switch self {
         case .domains: return 10 * 1024
         case .index: return 10 * 1024 * 1024
         case .upgrade: return 10 * 1024
+        case .cover: return 10 * 1024 * 1024  // 封面也是外部来的：服务器配错时一张“封面”不能写满缓存
         }
     }
 }
@@ -72,7 +73,7 @@ private func isTitle(_ v: Any?) -> String? {
 
 private let originRegex = try! NSRegularExpression(
     pattern:
-        "^https://(\\[[0-9A-Fa-f:.]{2,45}\\]|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)(?::[0-9]{1,5})?$"
+        "^https://(\\[[0-9A-Fa-f:.]{2,45}\\]|[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*)(?::[0-9]{1,5})?\\z"
 )
 
 /// https://域名[:端口]，不带路径、不带结尾斜杠、不带账号密码。IPv6 须带方括号。

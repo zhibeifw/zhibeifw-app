@@ -135,7 +135,13 @@ final class AppModel {
         }
     }
 
+    /// 正在首次初始化：网络恢复和“重试”同时来时只跑一轮
+    @ObservationIgnored private var initRunning = false
+
     func runInitialization() async {
+        guard !initRunning else { return }
+        initRunning = true
+        defer { initRunning = false }
         phase = .initializing(attempt: 1, failed: false)
         let ok = await CatalogSync.initializeWithRetry(
             store: store, net: Network.shared,
@@ -222,7 +228,7 @@ final class AppModel {
 
     /// 对账（启动、回到前台）：系统后台会话里还在跑的任务不算中断。
     func reconcileDownloads() async {
-        let active = await BackgroundDownloader.shared.activeIds()
+        let active = await BackgroundDownloader.shared.activeTasks()
         downloads.reconcile(active: active)
     }
 
@@ -328,11 +334,12 @@ final class AppModel {
     /// 继续已暂停的（从头下）。
     func resumeDownloads(seriesId: String?, episodeId: String? = nil) {
         guard requireNetwork() else { return }
-        if let e = episodeId, let r = store.getDownload(e) {
-            downloads.enqueue([r.item])
-        } else {
-            downloads.resumePaused(seriesId: seriesId)
+        if let e = episodeId {
+            // 只继续这一集；记录没了就不动（不能变成继续整门课，和 Android 一致）
+            if let r = store.getDownload(e) { downloads.enqueue([r.item]) }
+            return
         }
+        downloads.resumePaused(seriesId: seriesId)
     }
 
     func dlItem(episodeId: String) -> DlItem? {

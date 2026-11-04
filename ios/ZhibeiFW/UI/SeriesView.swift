@@ -27,7 +27,7 @@ struct SeriesView: View {
         ) {
             switch state {
             case .loading: ProgressView().frame(maxWidth: .infinity).padding(.top, Tok.Space.scale[6] * 3)
-            case .gone: EmptyStateView(text: "这门课已下架").padding(.top, Tok.Space.scale[6] * 3)
+            case .gone: EmptyStateView(text: "这门课已下架", symbol: "xmark.circle").padding(.top, Tok.Space.scale[6] * 3)
             case .ready: if let h = header { content(h) }
             }
         }

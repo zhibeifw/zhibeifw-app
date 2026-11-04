@@ -30,7 +30,7 @@ struct SplashView: View {
 
 struct DbErrorView: View {
     var body: some View {
-        EmptyStateView(text: "升级本机数据时出错，你的收听记录和下载都还在。请重启 App 再试；仍然不行请联系我们。")
+        EmptyStateView(text: "升级本机数据时出错，你的收听记录和下载都还在。请重启 App 再试；仍然不行请联系我们。", symbol: "exclamationmark.triangle")
     }
 }
 

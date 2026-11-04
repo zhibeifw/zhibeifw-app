@@ -1,6 +1,12 @@
 package com.zhibeifw.app.net
 
 import android.content.Context
+import kotlinx.coroutines.CancellationException
+import androidx.datastore.preferences.core.emptyPreferences
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.MutablePreferences
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
+import android.util.Log
 import android.net.ConnectivityManager
 import android.net.Network as AndroidNetwork
 import android.net.NetworkCapabilities
@@ -62,7 +68,32 @@ sealed class NetResult {
     data class Error(val reason: String) : NetResult()
 }
 
-val Context.prefs by preferencesDataStore(name = "prefs")
+// 偏好都是可以丢的小东西（线路、检查更新的时间等）：文件损坏就清空重建，读写出错一律不往外抛
+val Context.prefs by preferencesDataStore(
+    name = "prefs",
+    corruptionHandler = ReplaceFileCorruptionHandler { emptyPreferences() },
+)
+
+/** 读偏好：读不了（文件损坏、读盘出错）当成空的 */
+suspend fun Context.readPrefs(): Preferences =
+    try {
+        prefs.data.first()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("Prefs", "读偏好失败", e); emptyPreferences()
+    }
+
+/** 写偏好：写盘失败（存储空间不足等）只记日志，不往外抛 */
+suspend fun Context.editPrefs(block: suspend (MutablePreferences) -> Unit) {
+    try {
+        prefs.edit(block)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Log.w("Prefs", "写偏好失败", e)
+    }
+}
 
 /** 小偏好（DataStore）。 */
 object PrefKeys {
@@ -170,7 +201,7 @@ class Network(private val ctx: Context) {
     }
 
     private suspend fun doResolve(): String? {
-        val p = ctx.prefs.data.first()
+        val p = ctx.readPrefs()
         val saved = p[PrefKeys.domains]?.let { parseDomains(it) }
         val origins = orderOrigins(
             p[PrefKeys.lastService],
@@ -194,7 +225,7 @@ class Network(private val ctx: Context) {
         if (won == null) {
             setService(null); return null
         }
-        ctx.prefs.edit {
+        ctx.editPrefs {
             it[PrefKeys.domains] = won.second.toJson()
             it[PrefKeys.lastService] = won.first
         }
@@ -204,10 +235,10 @@ class Network(private val ctx: Context) {
 
     /** 手动入口（只有“关于 → 刷新网络线路”用）：忘掉记住的域名，重新选。返回 (选到的域名, 和原来是否同一个)。 */
     suspend fun refreshRoutes(): Pair<String?, Boolean> {
-        val before = ctx.prefs.data.first()[PrefKeys.lastService] ?: service
+        val before = ctx.readPrefs()[PrefKeys.lastService] ?: service
         ?: NetConfig.builtinDomains.first()
         setService(null)
-        ctx.prefs.edit { it.remove(PrefKeys.lastService) }
+        ctx.editPrefs { it.remove(PrefKeys.lastService) }
         val r = resolve()
         return r to (r != null && r == before)
     }

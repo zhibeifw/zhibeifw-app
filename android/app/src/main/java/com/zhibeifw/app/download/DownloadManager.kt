@@ -159,7 +159,10 @@ class DownloadManager(
             list.filter { seen.add(it.episodeId) && (items[it.episodeId]?.status.let { s -> s == null || s == DlStatus.PAUSED }) }
         if (todo.isEmpty()) return
         val fresh = todo.filter { items[it.episodeId]?.status != DlStatus.PAUSED }
-        runCatching { store.startDownloads(fresh, todo.map { it.episodeId }) } // 整批一个事务
+        // 整批一个事务；连下载记录都写不进去，就别交给系统（否则下完找不到记录，这几集一直挂着“下载中”）
+        if (runCatching { store.startDownloads(fresh, todo.map { it.episodeId }) }.isFailure) {
+            onBatchFailed?.invoke(); return
+        }
         val tokens = HashMap<String, Int>()
         for (it in todo) {
             set(
@@ -218,7 +221,10 @@ class DownloadManager(
     private suspend fun finish(id: String, file: File) {
         val r = runCatching { store.getDownload(id) }.getOrNull()
         if (r == null || r.state == DlStatus.DONE) {
-            system.release(id); return
+            system.release(id)
+            // 记录没了：内存里也别再挂着“下载中”
+            if (r == null && items[id]?.status != DlStatus.DONE) set(id, null)
+            return
         }
         // 用户已经暂停了：下完的文件不要，让系统删掉（多半暂停时已删过；启动对账记为暂停的那种系统里还留着）
         if (r.state == DlStatus.PAUSED || items[id]?.status == DlStatus.PAUSED) {
@@ -394,8 +400,9 @@ class DownloadManager(
             set(id, DlProgress(DlStatus.PAUSED, 0, r.total, r.seriesId), notify = false)
         }
         // 旧版本自己下载时留下的半截文件；资料库里没有下载记录对应的音频（复制到一半被关掉等）
-        val keepAudio = all.map { it.localFile ?: files.finalRelative(it.episodeId, it.audioPath) }
-            .map { it.substringAfterLast('/') }
+        // 要留的文件现查一次库：上面等系统表期间可能有新记录
+        val keepAudio = (runCatching { store.allDownloads() }.getOrNull() ?: all)
+            .map { (it.localFile ?: files.finalRelative(it.episodeId, it.audioPath)).substringAfterLast('/') }
         withContext(Dispatchers.IO) {
             files.partDir.listFiles()?.forEach { it.delete() }
             val onDisk = files.audioDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()

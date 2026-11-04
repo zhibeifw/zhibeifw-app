@@ -73,6 +73,10 @@ class PlaybackService : MediaSessionService() {
                         .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
                         .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
                         .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+                        // 播放服务对外公开（Media3 要求）：别的 App 连上来只能控制播放，不能把内容换掉
+                        .remove(Player.COMMAND_SET_MEDIA_ITEM)
+                        .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
+                        .remove(Player.COMMAND_SET_PLAYLIST_METADATA)
                         .build()
                     return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
                         .setAvailablePlayerCommands(cmds).build()

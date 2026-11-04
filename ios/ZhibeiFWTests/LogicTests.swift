@@ -284,3 +284,17 @@ final class NearEndTests: XCTestCase {
         XCTAssertFalse(isNearEnd(0, 0))
     }
 }
+
+final class BadNumberTests: XCTestCase {
+    /// 库里有无穷大、NaN、超大值时不崩
+    func testNonFiniteDoesNotCrash() {
+        XCTAssertEqual(clock(.infinity), "00:00")
+        XCTAssertEqual(clock(.nan), "00:00")
+        XCTAssertFalse(clock(1e300).isEmpty)
+        XCTAssertFalse(pillState(Prog(position: 0, duration: .infinity, completed: false)).text.isEmpty)
+        XCTAssertFalse(pillState(nil, knownDuration: 1e300).text.isEmpty)
+        XCTAssertNil(Row(values: ["x": .double(.infinity)]).optInt("x"))
+        XCTAssertNil(Row(values: ["x": .double(1e300)]).optInt("x"))
+        XCTAssertEqual(Row(values: ["x": .double(3.9)]).optInt("x"), 3)
+    }
+}

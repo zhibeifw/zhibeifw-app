@@ -39,7 +39,7 @@ struct RecentView: View {
             }
         ) {
             if rows.isEmpty {
-                EmptyStateView(text: "暂无收听记录").padding(.top, Tok.Space.scale[6] * 4)
+                EmptyStateView(text: "暂无收听记录", symbol: "clock").padding(.top, Tok.Space.scale[6] * 4)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { r in
@@ -60,7 +60,7 @@ struct FavoritesView: View {
     var body: some View {
         PageScaffold(title: "收藏", subtitle: rows.isEmpty ? nil : "\(rows.count) 门课") {
             if rows.isEmpty {
-                EmptyStateView(text: "暂无收藏").padding(.top, Tok.Space.scale[6] * 4)
+                EmptyStateView(text: "暂无收藏", symbol: "bookmark").padding(.top, Tok.Space.scale[6] * 4)
             } else {
                 LazyVStack(spacing: CP.SeriesRow.gap) {
                     ForEach(rows) { f in
@@ -96,7 +96,7 @@ struct LibraryView: View {
         let pausedAny = model.downloads.items.values.contains { $0.status == .paused }
         PageScaffold(title: "已下载", subtitle: rows.isEmpty ? nil : "\(rows.count) 门课 · " + libraryCountText(total: lessons, done: doneAll)) {
             if rows.isEmpty {
-                EmptyStateView(text: "暂无下载").padding(.top, Tok.Space.scale[6] * 4)
+                EmptyStateView(text: "暂无下载", symbol: "arrow.down.circle").padding(.top, Tok.Space.scale[6] * 4)
             } else {
                 VStack(spacing: CP.SeriesRow.gap) {
                     if activeAny || pausedAny {
@@ -186,7 +186,7 @@ struct LibraryCourseView: View {
             title: title, subtitle: rows.isEmpty ? nil : libraryCountText(total: rows.count, done: done) + (downloading ? " · 下载中" : "")
         ) {
             if rows.isEmpty {
-                EmptyStateView(text: "暂无下载").padding(.top, Tok.Space.scale[6] * 4)
+                EmptyStateView(text: "暂无下载", symbol: "arrow.down.circle").padding(.top, Tok.Space.scale[6] * 4)
             } else {
                 LazyVStack(spacing: 0) {
                     ForEach(rows) { r in

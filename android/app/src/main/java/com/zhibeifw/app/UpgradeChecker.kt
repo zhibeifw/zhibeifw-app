@@ -4,7 +4,7 @@ import android.content.Context
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.Preferences
 import com.zhibeifw.app.core.FileKind
 import com.zhibeifw.app.core.RemindLater
 import com.zhibeifw.app.core.UpdateChannel
@@ -19,7 +19,8 @@ import com.zhibeifw.app.net.NetResult
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
 import com.zhibeifw.app.net.buildUrl
-import com.zhibeifw.app.net.prefs
+import com.zhibeifw.app.net.editPrefs
+import com.zhibeifw.app.net.readPrefs
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -38,10 +39,14 @@ class UpgradeChecker(
     var outdatedDismissed by mutableStateOf(false)
     var updateDialog by mutableStateOf<UpdateDecision.Optional?>(null); private set
 
+    private suspend fun applySaved(p: Preferences) {
+        p[PrefKeys.updateBody]?.let { parseUpgrade(it) }?.let { apply(it, manual = false) }
+    }
+
     /** 检查更新。手动检查时返回要显示在“检查更新”那一行右边的结果（有新版本时同时弹更新对话框）；自动检查返回 null。 */
     suspend fun check(manual: Boolean): String? {
         val now = System.currentTimeMillis()
-        val p = ctx.prefs.data.first()
+        val p = ctx.readPrefs()
         val last = p[PrefKeys.updateCheckedAt]
         if (!manual && !shouldAutoCheck(last, now)) {
             p[PrefKeys.updateBody]?.let { parseUpgrade(it) }?.let { apply(it, manual = false) }
@@ -51,8 +56,10 @@ class UpgradeChecker(
             net.request(UPGRADE_PATH, p[PrefKeys.updateEtag], FileKind.UPGRADE.limit)) {
             is NetResult.Ok -> {
                 val text = String(r.body, Charsets.UTF_8)
-                val u = parseUpgrade(text) ?: return if (manual) "检查失败" else null
-                ctx.prefs.edit {
+                val u = parseUpgrade(text) ?: run {
+                    applySaved(p); return if (manual) "检查失败" else null
+                }
+                ctx.editPrefs {
                     it[PrefKeys.updateBody] = text; r.etag?.let { e ->
                     it[PrefKeys.updateEtag] = e
                 }; it[PrefKeys.updateCheckedAt] = now
@@ -61,12 +68,15 @@ class UpgradeChecker(
             }
 
             NetResult.NotModified -> {
-                ctx.prefs.edit { it[PrefKeys.updateCheckedAt] = now }
+                ctx.editPrefs { it[PrefKeys.updateCheckedAt] = now }
                 p[PrefKeys.updateBody]?.let { parseUpgrade(it) }?.let { apply(it, manual) }
                     ?: "已是最新版本"
             }
 
-            else -> "检查失败" // 自动检查失败不提示
+            else -> {
+                applySaved(p) // 网络失败：沿用上次的结论（“此版本过旧”提示条不因离线而消失）
+                "检查失败" // 自动检查失败不提示
+            }
         }
         return if (manual) result else null
     }
@@ -81,7 +91,7 @@ class UpgradeChecker(
 
             is UpdateDecision.Optional -> {
                 outdated = null
-                val p = ctx.prefs.data.first()
+                val p = ctx.readPrefs()
                 val remind =
                     p[PrefKeys.remindVersion]?.let { RemindLater(it, p[PrefKeys.remindAt] ?: 0) }
                 if (manual || !suppressedByRemindLater(
@@ -102,7 +112,7 @@ class UpgradeChecker(
     fun remindLater(version: String) {
         updateDialog = null
         scope.launch {
-            ctx.prefs.edit {
+            ctx.editPrefs {
                 it[PrefKeys.remindVersion] = version; it[PrefKeys.remindAt] =
                 System.currentTimeMillis()
             }

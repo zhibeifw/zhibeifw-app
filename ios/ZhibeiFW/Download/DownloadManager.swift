@@ -23,14 +23,15 @@ enum DownloadEvent {
 /// 系统的下载服务（两端各一份；测试里换成假的）。
 protocol SystemDownloads: AnyObject {
     func setHandler(_ h: @escaping @MainActor (DownloadEvent) -> Void)
-    /// 交给系统下载；有续传数据就从断点接着下。返回系统的任务编号。
-    @discardableResult func start(id: String, url: URL, resumeData: Data?) -> Int?
+    /// 交给系统下载；resumeFile 里有续传数据就从断点接着下（读完删掉）。返回系统的任务编号。
+    /// 建后台任务要和系统的下载进程打交道，一集要一两毫秒以上，放在下载器自己的队列上做，不占主线程。
+    func start(id: String, url: URL, resumeFile: URL) async -> Int?
     /// 暂停：停下这一集，返回系统给的续传数据（拿不到为 nil）。
     /// task：要停的系统任务编号；nil 表示不知道（上次运行交给系统的），按集 ID 找。
     func pause(id: String, task: Int?) async -> Data?
     func cancel(id: String, task: Int?)
-    /// 系统里还在下（含排队、等网络）的集。
-    func activeIds() async -> Set<String>
+    /// 系统里还在下（含排队、等网络）的集 → 系统任务编号。
+    func activeTasks() async -> [String: Int]
 }
 
 /// 进度节流：变化够 1% 且距上次够 0.25 秒才放行（线程安全，在下载线程上调用）。
@@ -143,6 +144,9 @@ final class DownloadManager {
         return nil
     }
 
+    /// 这一集还在交给系统（等线路、建任务）
+    func isHandingOver(_ id: String) -> Bool { starting.contains(id) }
+
     /// 有没有排队或正在下的集
     var hasActive: Bool { items.values.contains { $0.status == .queued || $0.status == .downloading } }
 
@@ -165,7 +169,10 @@ final class DownloadManager {
         }
         guard !todo.isEmpty else { return }
         let fresh = todo.filter { items[$0.episodeId]?.status != .paused }
-        try? store.startDownloads(fresh, ids: todo.map(\.episodeId))  // 整批一个事务
+        // 整批一个事务；连下载记录都写不进去，就别交给系统（否则下完找不到记录，这几集一直挂着“下载中”）
+        do { try store.startDownloads(fresh, ids: todo.map(\.episodeId)) } catch {
+            NSLog("写下载记录失败：\(error)"); onBatchFailed?(); return
+        }
         var tokens: [String: Int] = [:]
         for it in todo {
             let cur = items[it.episodeId]
@@ -183,16 +190,27 @@ final class DownloadManager {
         Task {
             let o = await origin()
             for it in todo {
+                let id = it.episodeId, token = tokens[id]
                 // 等线路期间被暂停、取消，或者暂停后又继续了（那一轮自己会交给系统）
-                guard gen[it.episodeId] == tokens[it.episodeId] else { continue }
-                starting.remove(it.episodeId)
-                guard items[it.episodeId]?.status == .downloading else { continue }
-                guard let o, let url = buildUrl(o, it.audioPath) else { fail(it.episodeId, nil); continue }
+                guard gen[id] == token else { continue }
+                guard items[id]?.status == .downloading else { starting.remove(id); continue }
+                guard let o, let url = buildUrl(o, it.audioPath) else { starting.remove(id); fail(id, nil); continue }
                 // 上一轮暂停、取消留下的“自己停的”记号：这一集重新开始了，不再适用
-                stopping.remove(it.episodeId)
-                let resume = try? Data(contentsOf: files.resumeDataFile(it.episodeId))
-                try? FileManager.default.removeItem(at: files.resumeDataFile(it.episodeId))
-                if let t = system.start(id: it.episodeId, url: url, resumeData: resume) { liveTask[it.episodeId] = t }
+                stopping.remove(id)
+                // 拿到任务编号之前一直算“正在交给系统”：这期间暂停、取消不用去系统里停，对账也不会当成中断
+                let t = await system.start(id: id, url: url, resumeFile: files.resumeDataFile(id))
+                guard gen[id] == token else {
+                    // 交给系统的这段时间里被暂停、取消或又继续了：刚建的任务撤掉，它的事件一律不认；
+                    // 已暂停的留下续传数据，继续时还能接着下
+                    if let t {
+                        retired.insert(t)
+                        let data = await system.pause(id: id, task: t)
+                        if let data, items[id]?.status == .paused { try? data.write(to: files.resumeDataFile(id)) }
+                    }
+                    continue
+                }
+                starting.remove(id)
+                if let t { liveTask[id] = t }
             }
             finishBatchIfIdle()
         }
@@ -245,7 +263,13 @@ final class DownloadManager {
         stopping.remove(id)
         // 用户已经暂停或取消了：下完的文件不要，状态保持用户点的那样
         let inferred = inferredPaused.remove(id) != nil
-        guard let r = store.getDownload(id), r.state != .done, inferred || (r.state != .paused && items[id]?.status != .paused) else {
+        guard let r = store.getDownload(id) else {
+            // 记录没了：内存里也别再挂着“下载中”
+            try? FileManager.default.removeItem(at: tmp)
+            if items[id]?.status != .done { set(id, nil) }
+            return
+        }
+        guard r.state != .done, inferred || (r.state != .paused && items[id]?.status != .paused) else {
             try? FileManager.default.removeItem(at: tmp); return
         }
         let rel = files.finalRelative(id, audioPath: r.audioPath)
@@ -381,7 +405,7 @@ final class DownloadManager {
     // MARK: 对账（启动、回到前台）
 
     /// active：系统里还在下的集。没下完、系统里也没有的，记为已暂停（有续传数据的继续时从断点接着下）。
-    func reconcile(active: Set<String>) {
+    func reconcile(active: [String: Int]) {
         // 已下载完成的：文件不在就删记录（这一集回到未下载）
         for r in (try? store.doneDownloads()) ?? [] {
             if let lf = r.localFile, FileManager.default.fileExists(atPath: files.absolute(lf).path) {
@@ -395,8 +419,10 @@ final class DownloadManager {
         }
         for r in ((try? store.allDownloads()) ?? []) where r.state != .done {
             let id = r.episodeId
+            // 上次运行交给系统的任务：记下编号，以后暂停、取消按编号停，不按集 ID 猜
+            if let t = active[id], liveTask[id] == nil, !starting.contains(id), !stopping.contains(id) { liveTask[id] = t }
             // liveTask：等系统列任务期间刚交给系统的，不在 active 里
-            if active.contains(id) || starting.contains(id) || stopping.contains(id) || liveTask[id] != nil {
+            if active[id] != nil || starting.contains(id) || stopping.contains(id) || liveTask[id] != nil {
                 if items[id] == nil { set(id, DlProgress(status: .downloading, written: 0, total: r.total, seriesId: r.seriesId), notify: false) }
                 continue
             }

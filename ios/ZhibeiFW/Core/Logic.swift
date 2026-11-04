@@ -6,7 +6,7 @@ import Foundation
 
 /// 只允许“数字.数字.数字”（可少写后面的段，缺的按 0），逐段按整数比较，绝不做字符串比较。
 func parseVersion(_ v: Any?) -> [String]? {
-    guard let s = v as? String, s.range(of: "^[0-9]+(\\.[0-9]+){0,2}$", options: .regularExpression) != nil else { return nil }
+    guard let s = v as? String, s.range(of: "^[0-9]+(\\.[0-9]+){0,2}\\z", options: .regularExpression) != nil else { return nil }
     var parts = s.split(separator: ".").map { p -> String in
         let t = p.drop(while: { $0 == "0" })
         return t.isEmpty ? "0" : String(t)
@@ -32,7 +32,8 @@ let MINUS = "\u{2212}"
 
 /// 全 App 统一的时间写法：分钟:秒，不分小时（113:32）。
 func clock(_ sec: Double) -> String {
-    let s = Int(max(0, (sec.isFinite ? sec : 0).rounded(.down)))
+    // Int(Double) 遇到无穷大、NaN、超范围会让进程中止：先截到合理范围（库里可能有旧版本写进去的坏数据）
+    let s = Int(min(max(0, (sec.isFinite ? sec : 0).rounded(.down)), 1e9))
     return String(format: "%02d:%02d", s / 60, s % 60)
 }
 
@@ -44,7 +45,10 @@ enum PillKind { case new, half, done }
 struct PillState: Equatable { var kind: PillKind; var text: String }
 struct Prog: Equatable { var position: Double; var duration: Double; var completed: Bool }
 
-private func minutes(_ sec: Double) -> Int { max(1, Int((sec / 60).rounded())) }
+private func minutes(_ sec: Double) -> Int {
+    guard sec.isFinite else { return 1 }
+    return max(1, Int(min(sec / 60, 1e6).rounded()))
+}
 
 /// 单集播放胶囊的三种状态。
 func pillState(_ p: Prog?, knownDuration: Double = 0) -> PillState {
@@ -109,7 +113,7 @@ func isValidColorSetting(_ v: Any?) -> Bool { (v as? String) == "random" || isPa
 func isValidIconSetting(_ v: Any?) -> Bool {
     guard let s = v as? String else { return false }
     if s == "random" { return true }
-    return s.utf16.count >= 1 && s.utf16.count <= 40 && s.range(of: "^[a-z0-9]+(-[a-z0-9]+)*$", options: .regularExpression) != nil
+    return s.utf16.count >= 1 && s.utf16.count <= 40 && s.range(of: "^[a-z0-9]+(-[a-z0-9]+)*\\z", options: .regularExpression) != nil
 }
 
 func resolveCategoryColor(_ color: String?, id: String) -> ZColor {

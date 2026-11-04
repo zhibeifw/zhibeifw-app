@@ -21,7 +21,13 @@ final class FakeSystem: SystemDownloads {
     var holdPause = false
 
     func setHandler(_ h: @escaping @MainActor (DownloadEvent) -> Void) { handler = h }
-    func start(id: String, url: URL, resumeData: Data?) -> Int? {
+    /// 设了就让 start 等到放行（模拟建任务要一点时间）
+    var startGate: CheckedContinuation<Void, Never>?
+    var holdStart = false
+    func start(id: String, url: URL, resumeFile: URL) async -> Int? {
+        let resumeData = try? Data(contentsOf: resumeFile)
+        try? FileManager.default.removeItem(at: resumeFile)
+        if holdStart { await withCheckedContinuation { startGate = $0 } }
         started.append((id, resumeData)); active.insert(id)
         guard numbersTasks else { return nil }
         lastTask += 1
@@ -33,7 +39,7 @@ final class FakeSystem: SystemDownloads {
         active.remove(id); return pauseData
     }
     func cancel(id: String, task: Int?) { cancelled.append(id); stoppedTasks.append(task); active.remove(id) }
-    func activeIds() async -> Set<String> { active }
+    func activeTasks() async -> [String: Int] { Dictionary(uniqueKeysWithValues: active.map { ($0, 0) }) }
 }
 
 @MainActor
@@ -70,7 +76,12 @@ final class DownloadManagerTests: XCTestCase {
     /// 交给系统（等线路是异步的）
     private func enqueue(_ list: [DlItem]) async {
         dm.enqueue(list)
-        for _ in 0..<50 where sys.started.count < list.count { await Task.yield() }
+        await settle()
+    }
+
+    /// 建任务是异步的：等管理器记下任务编号、移出“正在交给系统”
+    private func settle() async {
+        for _ in 0..<500 where dm.items.keys.contains(where: dm.isHandingOver) { await Task.yield() }
     }
 
     private func send(_ e: DownloadEvent) { sys.handler?(e) }
@@ -129,6 +140,7 @@ final class DownloadManagerTests: XCTestCase {
         sys.started = []
         dm.resumePaused()
         for _ in 0..<50 where sys.started.isEmpty { await Task.yield() }
+        await settle()
         XCTAssertEqual(sys.started.first?.resume, Data("resume".utf8))
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
         XCTAssertEqual(dm.ratio("a"), 0.4)
@@ -148,7 +160,7 @@ final class DownloadManagerTests: XCTestCase {
     func testFinishAfterReconcileInferredPause() async throws {
         await enqueue([item("a", 0)])
         sys.active = []
-        dm.reconcile(active: [])
+        dm.reconcile(active: [:])
         XCTAssertEqual(dm.items["a"]?.status, .paused)
         send(.finished("a", try tmpFile()))
         XCTAssertEqual(dm.items["a"]?.status, .done)
@@ -171,11 +183,36 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: savingTmp.path))
     }
 
+    /// 建任务期间用户暂停了：刚建的任务撤掉，这一集保持暂停，之后它的事件不认
+    func testPauseWhileStartingRetiresNewTask() async {
+        sys.numbersTasks = true
+        sys.holdStart = true
+        dm.enqueue([item("a", 0)])
+        for _ in 0..<50 where sys.startGate == nil { await Task.yield() }
+        dm.pause("a")
+        XCTAssertEqual(dm.items["a"]?.status, .paused)
+        sys.startGate?.resume()
+        for _ in 0..<50 where sys.stoppedTasks.isEmpty { await Task.yield() }
+        XCTAssertEqual(sys.stoppedTasks, [1])  // 刚建的 1 号任务被撤掉
+        send(.progress("a", 500, 1000, task: 1))
+        XCTAssertEqual(dm.items["a"]?.status, .paused)
+    }
+
+    /// 上次运行交给系统的任务：对账时记下编号，暂停时按编号停
+    func testReconcileAdoptsTaskNumberFromLastRun() async {
+        try? store.startDownloads([item("a", 0)], ids: ["a"])
+        dm.reconcile(active: ["a": 7])
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        dm.pause("a")
+        for _ in 0..<50 where sys.stoppedTasks.isEmpty { await Task.yield() }
+        XCTAssertEqual(sys.stoppedTasks, [7])
+    }
+
     /// 等系统列任务期间刚交给系统的（不在 active 里）：不记成暂停
     func testReconcileKeepsTaskStartedMeanwhile() async {
         sys.numbersTasks = true
         await enqueue([item("a", 0)])
-        dm.reconcile(active: [])
+        dm.reconcile(active: [:])
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
     }
 
@@ -253,6 +290,7 @@ final class DownloadManagerTests: XCTestCase {
         sys.started = []
         dm.resumePaused()
         for _ in 0..<50 where sys.started.isEmpty { await Task.yield() }  // 任务 2
+        await settle()
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
         send(.progress("a", 999, 1000, task: 1))
         send(.failed("a", URLError(.cancelled), Data("old".utf8), task: 1))
@@ -318,7 +356,7 @@ final class DownloadManagerTests: XCTestCase {
         try store.setDlDone("a", localFile: "audio/a.mp3")
         try Data(count: 10).write(to: files.absolute("audio/a.mp3"))
         try Data(count: 10).write(to: files.absolute("audio/x.mp3"))
-        dm.reconcile(active: [])
+        dm.reconcile(active: [:])
         XCTAssertTrue(FileManager.default.fileExists(atPath: files.absolute("audio/a.mp3").path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: files.absolute("audio/x.mp3").path))
     }
@@ -329,7 +367,7 @@ final class DownloadManagerTests: XCTestCase {
         try store.setDlState("a", .downloading)
         try Data(count: 1000).write(to: files.doneFile("a"))
         try Data(count: 10).write(to: files.partDir.appendingPathComponent("old.tmp"))
-        dm.reconcile(active: [])
+        dm.reconcile(active: [:])
         XCTAssertEqual(dm.items["a"]?.status, .done)
         let r = store.getDownload("a")
         XCTAssertEqual(r?.state, .done)
@@ -342,7 +380,7 @@ final class DownloadManagerTests: XCTestCase {
     func testReconcile() throws {
         try store.queuedMany([item("a", 0), item("b", 1)])
         try store.setDlState("a", .downloading); try store.setDlState("b", .downloading)
-        dm.reconcile(active: ["a"])
+        dm.reconcile(active: ["a": 9])
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
         XCTAssertEqual(dm.items["b"]?.status, .paused)
         XCTAssertEqual(store.getDownload("b")?.state, .paused)

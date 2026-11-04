@@ -171,7 +171,7 @@ enum Migrator {
     static func rebuildCatalog(_ db: SQLiteDB, _ catalog: [Migration]) throws -> Int {
         try db.transaction {
             let names = try db.all("SELECT name FROM sqlite_master WHERE type = 'table' AND name != 'catalog_meta'").map { $0.str("name") }
-            for n in names where n.range(of: "^catalog_[a-z_]+$", options: .regularExpression) != nil {
+            for n in names where n.range(of: "^catalog_[a-z_]+\\z", options: .regularExpression) != nil {
                 try db.exec("DROP TABLE IF EXISTS \"\(n)\"")  // 名字已校验：只是我们自己建的 catalog_ 表
             }
             try db.run("DELETE FROM catalog_meta WHERE key = 'schema'")

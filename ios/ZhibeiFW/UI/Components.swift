@@ -383,27 +383,16 @@ struct MoreButton: View {
 
 // MARK: - 空状态、错误、提示条
 
-/// 空状态与加载失败：系统的 ContentUnavailableView，图标按情况选系统图标。
+/// 空状态与加载失败：系统的 ContentUnavailableView，图标由调用方指定（不按文案猜，改文案不会让图标悄悄变错）。
 struct EmptyStateView: View {
     var text: String
+    var symbol: String = "books.vertical"
     var retry: (() -> Void)? = nil
     var body: some View {
         ContentUnavailableView {
-            Label(text, systemImage: Self.symbol(for: text))
+            Label(text, systemImage: symbol)
         } actions: {
             if let retry { Button("重试", action: retry).buttonStyle(.bordered) }
-        }
-    }
-
-    static func symbol(for text: String) -> String {
-        switch text {
-        case _ where text.contains("收听记录"): "clock"
-        case _ where text.contains("收藏"): "bookmark"
-        case _ where text.contains("下载"): "arrow.down.circle"
-        case _ where text.contains("未找到") || text.contains("搜索"): "magnifyingglass"
-        case _ where text.contains("下架"): "xmark.circle"
-        case _ where text.contains("无法"): "wifi.exclamationmark"
-        default: "books.vertical"
         }
     }
 }

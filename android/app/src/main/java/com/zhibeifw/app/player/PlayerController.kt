@@ -7,6 +7,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.media.AudioManager
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -68,6 +69,15 @@ class PlayerController(
     val player = PlayerHolder.get(ctx)
     private val main = Handler(Looper.getMainLooper())
     // 后台任务里没接住的错误（比如读库出错）只记日志，不让 App 崩溃
+    private var callWatch: Job? = null
+    private val audio = ctx.getSystemService(AudioManager::class.java)
+
+    /** 正在响铃或通话（含网络电话）：不需要电话权限 */
+    private fun inCall() = when (audio?.mode) {
+        AudioManager.MODE_RINGTONE, AudioManager.MODE_IN_CALL, AudioManager.MODE_IN_COMMUNICATION -> true
+        else -> false
+    }
+
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main +
         CoroutineExceptionHandler { _, e -> Log.w("Player", "后台任务出错", e) })
 
@@ -134,10 +144,21 @@ class PlayerController(
                 } else clearStall()
             }
 
-            // 来电、导航播报等短暂抢走音频：播放器只是“暂时不出声”，抢完会自己接着播。
-            // 按 PRD 当成暂停（存进度、界面显示暂停），结束后不自动恢复，和 iOS 一致
+            // 别的声音短暂抢走音频时，播放器只是“暂时不出声”，抢完会自己接着播。
+            // 通知提示音、导航播报这样就好（语音内容遇到“可压低音量”的抢占也是先停下，不能把每声提示音都当成暂停）；
+            // 来电按 PRD 当成暂停（存进度、界面显示暂停），通话结束不自动恢复，和 iOS 一致：
+            // 停着的这段时间里看系统是不是进了响铃或通话状态
             override fun onPlaybackSuppressionReasonChanged(reason: Int) {
-                if (reason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) pause()
+                callWatch?.cancel(); callWatch = null
+                if (reason != Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) return
+                callWatch = scope.launch {
+                    while (player.playbackSuppressionReason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) {
+                        if (inCall()) {
+                            pause(); return@launch
+                        }
+                        delay(500)
+                    }
+                }
             }
 
             override fun onPlaybackStateChanged(state: Int) {

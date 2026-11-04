@@ -6,7 +6,10 @@ import java.text.Normalizer
 // 规则与 v1.0 validate.ts、iOS Validate.swift 逐条一致。JSON 解析用自己写的 Json.kt。
 
 enum class FileKind(val limit: Int) {
-    DOMAINS(10 * 1024), INDEX(10 * 1024 * 1024), UPGRADE(10 * 1024)
+    DOMAINS(10 * 1024), INDEX(10 * 1024 * 1024), UPGRADE(10 * 1024),
+
+    /** 封面也是外部来的：服务器配错时一张“封面”不能写满缓存 */
+    COVER(10 * 1024 * 1024)
 }
 
 object Limits {
