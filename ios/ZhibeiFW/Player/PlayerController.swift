@@ -51,6 +51,8 @@ final class PlayerController {
     @ObservationIgnored var onProgressSaved: (() -> Void)?
     @ObservationIgnored var onDamaged: ((String) -> Void)?
     @ObservationIgnored private var observers: [NSKeyValueObservation] = []
+    /// 当前这个音频的加载状态：直接看音频本身（隔着播放器看“当前音频的状态”，换音频时会漏掉失败）
+    @ObservationIgnored private var itemObserver: NSKeyValueObservation?
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var lastSavedAt: Double = -.infinity
     @ObservationIgnored private var generation = 0
@@ -64,10 +66,24 @@ final class PlayerController {
     @ObservationIgnored private var pendingSeek: (to: Double, until: Date)?
     @ObservationIgnored private var durationRecorded = false
     @ObservationIgnored private var artwork: MPMediaItemArtwork?
+    // 取线路、问文件在不在、卡住多久算失败：平时用网络模块和规格里的秒数，测试里换掉
+    @ObservationIgnored private let routes: () async -> String?
+    @ObservationIgnored private let headStatus: (String) async -> Int?
+    @ObservationIgnored private let stallLimit: Double
+    @ObservationIgnored private let probeAfter: Double
 
-    init(store: Store, files: AppFiles) {
+    init(
+        store: Store, files: AppFiles,
+        routes: @escaping () async -> String? = { await Network.shared.ensureRoutes() },
+        headStatus: @escaping (String) async -> Int? = { await Network.shared.headStatus($0) },
+        stallLimit: Double = STALL_LIMIT_SEC, probeAfter: Double = PROBE_AFTER_SEC
+    ) {
         self.store = store
         self.files = files
+        self.routes = routes
+        self.headStatus = headStatus
+        self.stallLimit = stallLimit
+        self.probeAfter = probeAfter
         player.automaticallyWaitsToMinimizeStalling = true
         configureSession()
         observePlayer()
@@ -117,20 +133,15 @@ final class PlayerController {
     }
 
     private func observePlayer() {
+        // 回调转到主线程时可能已经过时（比如音频刚失败、刚换了一集）：到了主线程再读播放器现在的状态，
+        // 免得晚到的“在播”清掉刚报的错误，或者把新一集“等着开播”的标记清掉
         observers.append(
-            player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] p, _ in
-                let st = p.timeControlStatus
-                Task { @MainActor in self?.onTimeControl(st) }
+            player.observe(\.timeControlStatus, options: [.initial, .new]) { [weak self] _, _ in
+                Task { @MainActor in guard let self else { return }; self.onTimeControl(self.player.timeControlStatus) }
             })
         observers.append(
-            player.observe(\.rate, options: [.initial, .new]) { [weak self] p, _ in
-                let r = p.rate
-                Task { @MainActor in self?.onRate(r) }
-            })
-        observers.append(
-            player.observe(\.currentItem?.status, options: [.new]) { [weak self] p, _ in
-                let failed = p.currentItem?.status == .failed
-                Task { @MainActor in if failed { self?.onItemFailed() } }
+            player.observe(\.rate, options: [.initial, .new]) { [weak self] _, _ in
+                Task { @MainActor in guard let self else { return }; self.onRate(self.player.rate) }
             })
         timeObserver = player.addPeriodicTimeObserver(forInterval: CMTime(seconds: 0.5, preferredTimescale: 600), queue: .main) {
             [weak self] t in
@@ -211,16 +222,17 @@ final class PlayerController {
         let gen = generation
         if streaming {
             let path = c.info.audioPath
-            probeTask = Task { [weak self] in
-                try? await Task.sleep(nanoseconds: UInt64(PROBE_AFTER_SEC * 1e9))
+            let head = headStatus
+            probeTask = Task { [weak self, probeAfter] in
+                try? await Task.sleep(nanoseconds: UInt64(probeAfter * 1e9))
                 guard !Task.isCancelled else { return }
-                let code = await Network.shared.headStatus(path)
+                let code = await head(path)
                 guard let self, !Task.isCancelled, gen == self.generation, self.stallTask != nil, code == 404 || code == 410 else { return }
                 self.fail(.gone)
             }
         }
-        stallTask = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: UInt64(STALL_LIMIT_SEC * 1e9))
+        stallTask = Task { [weak self, stallLimit] in
+            try? await Task.sleep(nanoseconds: UInt64(stallLimit * 1e9))
             guard !Task.isCancelled, let self, gen == self.generation else { return }
             self.fail(.cannotPlay)
         }
@@ -277,7 +289,7 @@ final class PlayerController {
             var isLocal = false
             if case .file(let u) = local {
                 url = u; isLocal = true
-            } else if let origin = await Network.shared.ensureRoutes() {
+            } else if let origin = await self.routes() {
                 url = buildUrl(origin, info.audioPath)
             }
             guard gen == self.generation else { return }
@@ -292,6 +304,13 @@ final class PlayerController {
             self.positionKnown = true
             let item = AVPlayerItem(url: url)
             item.audioTimePitchAlgorithm = .timeDomain
+            self.itemObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] it, _ in
+                guard it.status == .failed else { return }
+                Task { @MainActor in
+                    guard let self, gen == self.generation else { return }
+                    self.onItemFailed()
+                }
+            }
             self.player.replaceCurrentItem(with: item)
             if startAt > 1 {
                 var ok = await self.player.seek(
@@ -448,6 +467,8 @@ final class PlayerController {
         if let n = next, let info = try? store.getEpisodeInfo(n) {
             play(info, ctx: c.ctx)  // 自动接下一集：锁屏信息在 play() 里同时更新
         } else {
+            // 这一集到此结束：之后系统报的“暂停”不再存位置，免得用归零的位置把“已听完”冲掉
+            positionKnown = false
             needsReload = true
             position = 0
         }

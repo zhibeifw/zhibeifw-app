@@ -16,6 +16,7 @@ import androidx.media3.common.MediaMetadata
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.PlaybackParameters
 import androidx.media3.common.Player
+import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.zhibeifw.app.core.PlayContext
@@ -59,13 +60,18 @@ const val PROBE_AFTER_MS = 5_000L
 val SEEK_BACK_SECONDS = Tok.Player.seekBackSeconds.toDouble()
 val SEEK_FORWARD_SECONDS = Tok.Player.seekForwardSeconds.toDouble()
 
+// 取线路、问文件在不在、卡住多久算失败、用哪个播放器：平时用网络模块、规格里的时长和播放服务共用的那一个，测试里换掉
 class PlayerController(
     private val ctx: Context,
     private val store: Store,
     private val files: AppFiles,
-    private val net: Network
+    private val net: Network,
+    val player: ExoPlayer = PlayerHolder.get(ctx),
+    private val routes: suspend () -> String? = { net.ensureRoutes() },
+    private val headStatus: suspend (String) -> Int? = { net.headStatus(it) },
+    private val stallLimitMs: Long = STALL_LIMIT_MS,
+    private val probeAfterMs: Long = PROBE_AFTER_MS
 ) {
-    val player = PlayerHolder.get(ctx)
     private val main = Handler(Looper.getMainLooper())
     // 后台任务里没接住的错误（比如读库出错）只记日志，不让 App 崩溃
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main +
@@ -244,15 +250,15 @@ class PlayerController(
         if (streaming) {
             val path = c.info.audioPath
             probeJob = scope.launch {
-                delay(PROBE_AFTER_MS)
-                val code = net.headStatus(path)
+                delay(probeAfterMs)
+                val code = headStatus(path)
                 if (gen == generation && stallJob != null && (code == 404 || code == 410)) fail(
                     PlayerError.GONE
                 )
             }
         }
         stallJob = scope.launch {
-            delay(STALL_LIMIT_MS)
+            delay(stallLimitMs)
             if (gen == generation) fail(PlayerError.CANNOT_PLAY)
         }
     }
@@ -305,7 +311,7 @@ class PlayerController(
             var isLocal = false
             if (local is AppFiles.LocalAudio.Found) {
                 uri = Uri.fromFile(local.file).toString(); isLocal = true
-            } else net.ensureRoutes()?.let { uri = buildUrl(it, info.audioPath) }
+            } else routes()?.let { uri = buildUrl(it, info.audioPath) }
             if (gen != generation) return@launch
             val u = uri ?: run { fail(PlayerError.CANNOT_PLAY); return@launch }
             val prog = runCatching { store.loadProgress(info.episodeId) }.getOrNull()
@@ -481,7 +487,8 @@ class PlayerController(
         val info = next?.let { runCatching { store.getEpisodeInfo(it) }.getOrNull() }
         if (info != null) play(info, c.ctx) // 自动接下一集：MediaItem 换了，锁屏信息同时更新
         else {
-            stopAtEnd(); needsReload = true; position = 0.0
+            // 这一集到此结束：之后播放器报的“暂停”不再存位置，免得用归零的位置把“已听完”冲掉
+            stopAtEnd(); positionKnown = false; needsReload = true; position = 0.0
         }
     }
 
