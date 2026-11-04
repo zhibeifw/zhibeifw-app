@@ -360,4 +360,15 @@ class RaceTest {
         assertEquals(0L, r.int("n"))
         assertEquals(3.0, r.double("i"), 0.0)
     }
+
+    @Test
+    fun nearEndShortAudio() {
+        assertFalse(isNearEnd(0.0, 20.0))
+        assertFalse(isNearEnd(10.0, 20.0))
+        assertTrue(isNearEnd(19.0, 20.0))
+        assertFalse(isNearEnd(0.0, 31.0))
+        assertTrue(isNearEnd(1.0, 31.0))
+        assertTrue(isNearEnd(3570.0, 3600.0))
+        assertFalse(isNearEnd(0.0, 0.0))
+    }
 }

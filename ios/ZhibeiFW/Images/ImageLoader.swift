@@ -119,7 +119,12 @@ final class ImageLoader: @unchecked Sendable {
                 if code == 404 || code == 403 { return .notFound }  // R2 公开桶不存在的文件回 404（个别配置回 403）
                 guard code == 200 else { return .failed }
                 // rename(2) 覆盖旧文件是原子的：不会有“旧的删了、新的还没到”的一瞬间让读文件的地方扑空
-                guard rename(tmp.path, file.path) == 0 else { return .failed }
+                // 缓存目录可能被系统清理空间时整个删掉：没有就重建，否则以后每张都失败
+                if rename(tmp.path, file.path) != 0 {
+                    guard errno == ENOENT else { return .failed }
+                    try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+                    guard rename(tmp.path, file.path) == 0 else { return .failed }
+                }
                 return .ok
             }
             inflight[src] = t

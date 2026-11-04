@@ -176,6 +176,23 @@ class DownloadManagerDeviceTest {
         assertTrue(savingTmp.exists())
     }
 
+    /** 对账查系统表在前、刚好在这期间把一集交给系统：对账不把它记成暂停 */
+    @Test
+    fun reconcileIgnoresStartDuringQuery() = onMain {
+        val route = CompletableDeferred<String?>()
+        dm.origin = { route.await() }
+        dm.enqueue(listOf(item("a"))); settle()
+        val gate = CompletableDeferred<Unit>()
+        sys.gate = gate; sys.active = emptySet()
+        val job = CoroutineScope(Dispatchers.Main).launch { dm.reconcile() }
+        settle()
+        route.complete("https://example.invalid"); settle()
+        assertEquals(listOf("a"), sys.started)
+        gate.complete(Unit); job.join()
+        assertEquals(DlStatus.DOWNLOADING, dm.items["a"]?.status)
+        assertEquals(DlStatus.DOWNLOADING, store.getDownload("a")?.state)
+    }
+
     /** 查不了系统表：这次不对账，在下的不会被记成暂停 */
     @Test
     fun reconcileSkipsWhenTableUnreadable() = onMain {

@@ -177,6 +177,8 @@ class DownloadManager(
                 // 等线路期间被暂停、取消，或者暂停后又继续了（那一轮自己会交给系统）
                 if (gen[it.episodeId] != tokens[it.episodeId]) continue
                 starting.remove(it.episodeId)
+                // 交给系统是在另一条线程上排队做的：换一个代号，正在查系统表的对账（查表可能早于交出）看到代号变了就不碰这一集
+                bump(it.episodeId)
                 if (items[it.episodeId]?.status != DlStatus.DOWNLOADING) continue
                 if (o == null) {
                     fail(it.episodeId); continue

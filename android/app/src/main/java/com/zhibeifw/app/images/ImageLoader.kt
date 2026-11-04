@@ -191,6 +191,8 @@ class ImageLoader(private val net: Network, val diskDir: File) {
                 val code = c.responseCode
                 if (code == 404 || code == 403) return Fetch.NOT_FOUND // R2 公开桶不存在的文件回 404（个别配置回 403）
                 if (code != 200) return Fetch.FAILED
+                // 缓存目录可能被系统清理空间时整个删掉：没有就重建，否则以后每张都失败
+                file.parentFile?.mkdirs()
                 val tmp = File(file.path + ".tmp")
                 // 下到一半断了、被取消或改名失败：删掉半截的临时文件，不在缓存目录里留碎片
                 try {

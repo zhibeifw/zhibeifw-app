@@ -149,8 +149,14 @@ final class PlayerController {
     }
 
     private func onItemFailed() {
-        guard current != nil, positionKnown || pendingStart else { return }
-        // 音频加载失败（网络不通等）：统一提示“网络异常”。播放器里是一个失败的音频，再点要整个重新加载
+        guard let c = current, positionKnown || pendingStart else { return }
+        // 已下载的本地文件放不了：文件坏了（截断、0 字节等），按“下载文件已损坏”处理，改回未下载，免得一直重试一个坏文件
+        if !streaming {
+            onDamaged?(c.episodeId)
+            fail(.damaged)
+            return
+        }
+        // 在线音频加载失败（网络不通等）：统一提示“网络异常”。播放器里是一个失败的音频，再点要整个重新加载
         fail(.cannotPlay)
     }
 

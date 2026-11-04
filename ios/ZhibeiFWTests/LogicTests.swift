@@ -271,3 +271,16 @@ final class ImageLoaderTests: XCTestCase {
         XCTAssertNotNil(loader.cached("c/s/cover.jpg", maxPixel: 320, local: true))
     }
 }
+
+final class NearEndTests: XCTestCase {
+    /// 不到 30 秒的短音频按播到 95% 算听完，不是一开始就算
+    func testShortAudio() {
+        XCTAssertFalse(isNearEnd(0, 20))
+        XCTAssertFalse(isNearEnd(10, 20))
+        XCTAssertTrue(isNearEnd(19, 20))
+        XCTAssertFalse(isNearEnd(0, 31))
+        XCTAssertTrue(isNearEnd(1, 31))
+        XCTAssertTrue(isNearEnd(3570, 3600))
+        XCTAssertFalse(isNearEnd(0, 0))
+    }
+}

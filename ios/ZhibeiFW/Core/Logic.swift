@@ -216,7 +216,12 @@ func pickNext(_ ordered: [String], current: String) -> String? {
 }
 
 let COMPLETED_TAIL_SECONDS: Double = 30
-func isNearEnd(_ position: Double, _ duration: Double) -> Bool { duration > 0 && position >= duration - COMPLETED_TAIL_SECONDS }
+/// 不到 30 秒的短音频：“最后 30 秒”就是从头开始，改按播到 95% 算
+func isNearEnd(_ position: Double, _ duration: Double) -> Bool {
+    guard duration > 0 else { return false }
+    if duration <= COMPLETED_TAIL_SECONDS { return position >= duration * 0.95 }
+    return position >= duration - COMPLETED_TAIL_SECONDS
+}
 
 /// 列表里正在播放的这一集用播放器的实时位置。
 func liveProgress(currentId: String?, position: Double, duration: Double, active: Bool, episodeId: String, fromDb: Prog?) -> Prog? {

@@ -149,7 +149,11 @@ class PlayerController(
 
             override fun onPlayerError(e: PlaybackException) {
                 Log.w("Player", "播放出错", e)
-                if (current != null) fail(PlayerError.CANNOT_PLAY)
+                val c = current ?: return
+                // 已下载的本地文件放不了：文件坏了（截断、0 字节等），按“下载文件已损坏”处理，改回未下载，免得一直重试一个坏文件
+                if (!streaming) {
+                    onDamaged?.invoke(c.episodeId); fail(PlayerError.DAMAGED)
+                } else fail(PlayerError.CANNOT_PLAY)
             }
         })
         tick()

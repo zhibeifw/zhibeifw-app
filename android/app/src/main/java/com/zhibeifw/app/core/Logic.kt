@@ -266,8 +266,12 @@ fun pickNext(ordered: List<String>, current: String): String? {
 }
 
 const val COMPLETED_TAIL_SECONDS = 30.0
-fun isNearEnd(position: Double, duration: Double) =
-    duration > 0 && position >= duration - COMPLETED_TAIL_SECONDS
+/** 不到 30 秒的短音频：“最后 30 秒”就是从头开始，改按播到 95% 算 */
+fun isNearEnd(position: Double, duration: Double): Boolean {
+    if (duration <= 0) return false
+    if (duration <= COMPLETED_TAIL_SECONDS) return position >= duration * 0.95
+    return position >= duration - COMPLETED_TAIL_SECONDS
+}
 
 /** 列表里正在播放的这一集用播放器的实时位置。 */
 fun liveProgress(
