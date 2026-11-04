@@ -56,6 +56,8 @@ final class PlayerController {
     @ObservationIgnored private var generation = 0
     @ObservationIgnored private var positionKnown = false
     @ObservationIgnored private var markedDone = false
+    /// 用户想听：点了播放 / 继续以后为真，自己点暂停（含睡眠定时、拔耳机、锁屏暂停）后为假；打断结束时据此决定接不接着播
+    @ObservationIgnored private var wantsPlay = false
     @ObservationIgnored private var needsReload = false
     @ObservationIgnored private var stallTask: Task<Void, Never>?
     @ObservationIgnored private var probeTask: Task<Void, Never>?
@@ -88,12 +90,17 @@ final class PlayerController {
             MainActor.assumeIsolated { self?.pause() }
         }
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
-            // 来电等打断：系统暂停，通话结束不自动恢复（Android 同）；状态由 KVO 反映，这里只存位置
+            // 来电、导航播报等打断：按系统默认，开始时系统暂停（状态由 KVO 反映，这里存下位置）；
+            // 结束时系统建议接着播、而打断前用户想听（没自己点暂停），就接着播（Android 同）
             guard
-                let t = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:)),
-                t == .began
+                let t = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:))
             else { return }
-            MainActor.assumeIsolated { self?.saveNow() }
+            let opts = AVAudioSession.InterruptionOptions(rawValue: n.userInfo?[AVAudioSessionInterruptionOptionKey] as? UInt ?? 0)
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                if t == .began { self.saveNow(); return }
+                if opts.contains(.shouldResume) { self.resumeAfterInterruption() }
+            }
         }
         nc.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] n in
             MainActor.assumeIsolated {
@@ -241,6 +248,7 @@ final class PlayerController {
 
     func play(_ info: EpisodeInfo, ctx: PlayContext) {
         dropExpiredSleep()
+        wantsPlay = true
         generation += 1
         let gen = generation
         if let prev = current, positionKnown, !markedDone { save(position, duration, for: prev) }
@@ -312,16 +320,24 @@ final class PlayerController {
     func resume() {
         guard let c = current else { return }
         dropExpiredSleep()
+        wantsPlay = true
         if needsReload || player.currentItem == nil { play(c.info, ctx: c.ctx); return }
         if positionKnown { player.playImmediately(atRate: Float(rate)) } else { pendingStart = true }
     }
 
     func pause() {
         guard current != nil else { return }
+        wantsPlay = false
         pendingStart = false
         clearStall()
         player.pause()
         if positionKnown && !markedDone { save(position, duration) }
+    }
+
+    /// 打断结束、系统建议接着播：播完、出错、标记已听完后不算（那些情况要用户自己再点）
+    private func resumeAfterInterruption() {
+        guard wantsPlay, current != nil, !needsReload, !markedDone else { return }
+        if positionKnown { player.playImmediately(atRate: Float(rate)) } else { pendingStart = true }
     }
 
     func retry() {

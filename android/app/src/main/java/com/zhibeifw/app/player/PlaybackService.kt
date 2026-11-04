@@ -27,7 +27,7 @@ object PlayerHolder {
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true
-            ) // 来电等抢占音频时按系统默认暂停
+            ) // 来电、导航播报等短暂抢占音频：按系统默认暂时停下，结束后接着播
             .setHandleAudioBecomingNoisy(true) // 拔耳机自动暂停
             .setSeekBackIncrementMs(SEEK_BACK_MS)
             .setSeekForwardIncrementMs(SEEK_FORWARD_MS)
