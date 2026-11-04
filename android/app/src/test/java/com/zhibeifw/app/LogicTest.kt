@@ -1,6 +1,7 @@
 package com.zhibeifw.app
 
 import com.zhibeifw.app.core.*
+import com.zhibeifw.app.data.Row
 import com.zhibeifw.app.design.generated.IconData
 import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.net.pickFirstReachable
@@ -355,5 +356,16 @@ class RaceTest {
         assertEquals("2 节 · 已下载 0 节", libraryCountText(2, 0))
         assertEquals(listOf("3 节"), libraryCountLines(3, 3))
         assertEquals(listOf("3 节", "已下载 1 节"), libraryCountLines(3, 1))
+    }
+
+    @Test
+    fun rowNumbersOfAnyType() {
+        val r = Row(mapOf("i" to 3, "l" to 4L, "d" to 2.5, "s" to "7", "n" to null))
+        assertEquals(3L, r.int("i"))
+        assertEquals(4L, r.int("l"))
+        assertEquals(2L, r.int("d"))
+        assertEquals(7L, r.int("s"))
+        assertEquals(0L, r.int("n"))
+        assertEquals(3.0, r.double("i"), 0.0)
     }
 }

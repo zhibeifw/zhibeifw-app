@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
@@ -151,9 +152,12 @@ class Network(private val ctx: Context) {
         val d = resolveLock.withLock {
             resolving ?: scope.async { doResolve() }.also { resolving = it }
         }
-        val v = d.await()
-        resolveLock.withLock { if (resolving === d) resolving = null }
-        return v
+        // 等的时候被取消、或者选择本身出错，也要放开：否则后面的调用一直拿这次的旧结果或异常，不会重新选
+        try {
+            return d.await()
+        } finally {
+            withContext(NonCancellable) { resolveLock.withLock { if (resolving === d) resolving = null } }
+        }
     }
 
     private suspend fun doResolve(): String? {

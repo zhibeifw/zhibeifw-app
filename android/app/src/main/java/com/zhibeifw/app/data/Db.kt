@@ -18,12 +18,12 @@ class Row(val values: Map<String, Any?>) {
 
     fun int(k: String): Long = optInt(k) ?: 0
     fun optInt(k: String): Long? = when (val v = values[k]) {
-        is Long -> v; is Double -> v.toLong(); is String -> v.toLongOrNull(); else -> null
+        is Number -> v.toLong(); is String -> v.toLongOrNull(); else -> null
     }
 
     fun double(k: String): Double = optDouble(k) ?: 0.0
     fun optDouble(k: String): Double? = when (val v = values[k]) {
-        is Long -> v.toDouble(); is Double -> v; is String -> v.toDoubleOrNull(); else -> null
+        is Number -> v.toDouble(); is String -> v.toDoubleOrNull(); else -> null
     }
 
     fun bool(k: String): Boolean = int(k) != 0L

@@ -178,7 +178,8 @@ final class SQLiteDB: @unchecked Sendable {
         var rows: [Row] = []
         let n = sqlite3_column_count(st)
         var names: [String] = []
-        for i in 0..<n { names.append(String(cString: sqlite3_column_name(st, i))) }
+        // 内存不足时可能拿到空指针，直接转字符串会崩
+        for i in 0..<n { names.append(sqlite3_column_name(st, i).map { String(cString: $0) } ?? "") }
         while true {
             let rc = sqlite3_step(st)
             if rc == SQLITE_DONE { break }
