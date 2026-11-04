@@ -205,11 +205,6 @@ fun orphanCoverKeys(onDisk: List<String>, seriesWithDownloads: List<String>): Li
     return onDisk.filter { it !in keep }
 }
 
-fun orphanPartKeys(onDisk: List<String>, keepEpisodeIds: List<String>): List<String> {
-    val keep = keepEpisodeIds.map(::fileKey).toSet()
-    return onDisk.filter { it !in keep }
-}
-
 /** 资料库音频目录里没有下载记录对应的文件名（keep：各条记录的本地文件名）。 */
 fun orphanAudioNames(onDisk: List<String>, keep: List<String>): List<String> {
     val k = keep.toSet()
@@ -336,18 +331,12 @@ class PushGuard(
     private val now: () -> Long = { System.currentTimeMillis() }
 ) {
     private val lastAt = HashMap<String, Long>()
-    private val shown = HashSet<String>()
     fun allow(key: String): Boolean {
-        if (key in shown) return false
         val t = now()
         val p = lastAt[key]
         if (p != null && t - p < windowMs) return false
         lastAt[key] = t
         return true
-    }
-
-    fun setShown(key: String, on: Boolean) {
-        if (on) shown.add(key) else shown.remove(key)
     }
 }
 

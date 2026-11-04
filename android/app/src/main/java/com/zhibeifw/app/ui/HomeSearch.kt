@@ -370,22 +370,23 @@ fun CategoryView(model: AppModel, categoryId: String) {
     var rows by remember { mutableStateOf<List<SeriesCard>>(emptyList()) }
     var done by remember { mutableStateOf(false) }
     var loaded by remember { mutableStateOf(false) }
-    var busy by remember { mutableStateOf(false) }
+    // 分类名在目录变了时查一次，不在每次重画时查库
+    val title = remember(model.catalogVersion) {
+        runCatching { model.store.categoryName(categoryId) }.getOrNull() ?: categoryId
+    }
     LaunchedEffect(model.catalogVersion) {
         rows = runCatching { model.store.loadCategorySeries(categoryId, pageSize, 0) }.getOrDefault(emptyList())
         done = rows.size < pageSize
         loaded = true
     }
     fun more() {
-        if (done || busy) return
-        busy = true
+        if (done) return
         val next = runCatching { model.store.loadCategorySeries(categoryId, pageSize, rows.size) }.getOrDefault(emptyList())
         val seen = rows.map { it.id }.toHashSet()
         rows = rows + next.filter { seen.add(it.id) }
         if (next.size < pageSize) done = true
-        busy = false
     }
-    PageScaffold(model, runCatching { model.store.categoryName(categoryId) }.getOrNull() ?: categoryId) {
+    PageScaffold(model, title) {
         if (loaded && rows.isEmpty()) item("empty") {
             EmptyStateView(
                 "暂无课程",

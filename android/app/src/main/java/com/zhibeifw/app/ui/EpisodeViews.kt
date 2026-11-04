@@ -84,7 +84,7 @@ fun AppModel.runDownloadAction(a: DlMenuAction, e: EpisodeItem) {
     when (a) {
         // 资料库里的集可能已不在目录里：用下载记录里存的信息重新下（v1.0 这里误落到“标记已听完”的分支过）
         DlMenuAction.DOWNLOAD -> (dlItem(e.episodeId)
-            ?: store.getDownload(e.episodeId)?.item)?.let { download(listOf(it)) }
+            ?: runCatching { store.getDownload(e.episodeId) }.getOrNull()?.item)?.let { download(listOf(it)) }
 
         DlMenuAction.PAUSE -> downloads?.pause(e.episodeId)
         DlMenuAction.RESUME -> resumeDownloads(e.seriesId, episodeId = e.episodeId)

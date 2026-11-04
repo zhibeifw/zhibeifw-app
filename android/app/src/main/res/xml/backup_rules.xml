@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 已下载的音频不参与备份（与 v1.0 一致） -->
+<!-- 已下载的音频、课程封面（恢复后对账会因音频不在而一并清掉）、升级前的临时备份都不参与备份：
+     自动备份每个 App 上限 25 MB，超了整份不备份，收听进度和收藏也跟着丢 -->
 <full-backup-content>
     <exclude domain="file" path="audio/" />
+    <exclude domain="file" path="covers/" />
+    <exclude domain="file" path="backup/" />
 </full-backup-content>

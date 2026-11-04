@@ -27,6 +27,7 @@ import com.zhibeifw.app.data.Store
 import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.buildUrl
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,7 +67,9 @@ class PlayerController(
 ) {
     val player = PlayerHolder.get(ctx)
     private val main = Handler(Looper.getMainLooper())
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // 后台任务里没接住的错误（比如读库出错）只记日志，不让 App 崩溃
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main +
+        CoroutineExceptionHandler { _, e -> Log.w("Player", "后台任务出错", e) })
 
     var current by mutableStateOf<NowPlaying?>(null); private set
     var isPlaying by mutableStateOf(false); private set
@@ -129,6 +132,12 @@ class PlayerController(
                 if (playWhenReady) {
                     pendingStart = false; tick()
                 } else clearStall()
+            }
+
+            // 来电、导航播报等短暂抢走音频：播放器只是“暂时不出声”，抢完会自己接着播。
+            // 按 PRD 当成暂停（存进度、界面显示暂停），结束后不自动恢复，和 iOS 一致
+            override fun onPlaybackSuppressionReasonChanged(reason: Int) {
+                if (reason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS) pause()
             }
 
             override fun onPlaybackStateChanged(state: Int) {
@@ -279,7 +288,7 @@ class PlayerController(
         position = 0.0; duration = 0.0; error = null; buffering = true
         pendingStart = true
 
-        val local = files.localAudio(info.episodeId, store)
+        val local = runCatching { files.localAudio(info.episodeId, store) }.getOrDefault(AppFiles.LocalAudio.None)
         if (local is AppFiles.LocalAudio.Missing) {
             onDamaged?.invoke(info.episodeId)
             fail(PlayerError.DAMAGED)
@@ -293,7 +302,7 @@ class PlayerController(
             } else net.ensureRoutes()?.let { uri = buildUrl(it, info.audioPath) }
             if (gen != generation) return@launch
             val u = uri ?: run { fail(PlayerError.CANNOT_PLAY); return@launch }
-            val prog = store.loadProgress(info.episodeId)
+            val prog = runCatching { store.loadProgress(info.episodeId) }.getOrNull()
             val startAt = prog?.let { if (it.completed) 0.0 else it.position } ?: 0.0
             val known = prog?.duration ?: 0.0
             needsReload = false
@@ -456,12 +465,14 @@ class PlayerController(
             needsReload = true
             return
         }
-        val next = when (val x = c.ctx) {
-            is PlayContext.Series -> pickNext(store.seriesEpisodeIds(x.seriesId), c.episodeId)
-            is PlayContext.Library -> pickNext(store.doneEpisodeIds(x.seriesId), c.episodeId)
-            PlayContext.Single -> null
-        }
-        val info = next?.let { store.getEpisodeInfo(it) }
+        val next = runCatching {
+            when (val x = c.ctx) {
+                is PlayContext.Series -> pickNext(store.seriesEpisodeIds(x.seriesId), c.episodeId)
+                is PlayContext.Library -> pickNext(store.doneEpisodeIds(x.seriesId), c.episodeId)
+                PlayContext.Single -> null
+            }
+        }.getOrNull()
+        val info = next?.let { runCatching { store.getEpisodeInfo(it) }.getOrNull() }
         if (info != null) play(info, c.ctx) // 自动接下一集：MediaItem 换了，锁屏信息同时更新
         else {
             stopAtEnd(); needsReload = true; position = 0.0
@@ -476,7 +487,4 @@ class PlayerController(
         player.pause()
     }
 
-    fun release() {
-        controller?.release()
-    }
 }

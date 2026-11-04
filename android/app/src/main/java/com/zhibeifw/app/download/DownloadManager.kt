@@ -1,5 +1,6 @@
 package com.zhibeifw.app.download
 
+import android.util.Log
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
@@ -16,6 +17,7 @@ import com.zhibeifw.app.net.buildUrl
 import java.io.File
 import kotlin.math.abs
 import kotlin.math.min
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -52,8 +54,8 @@ interface SystemDownloads {
     /** 下完的文件已复制进资料库：交还系统删掉。 */
     fun release(id: String)
 
-    /** 系统里还在下（含排队、等网络、刚下完待收尾）的集；candidates 是数据库里没下完的集，用来认出系统里的下载。 */
-    suspend fun activeIds(candidates: Collection<String>): Set<String>
+    /** 系统里还在下（含排队、等网络、刚下完待收尾）的集；candidates 是数据库里没下完的集，用来认出系统里的下载。查不了返回 null。 */
+    suspend fun activeIds(candidates: Collection<String>): Set<String>?
 }
 
 /** 进度节流：变化够 1% 且距上次够 0.25 秒才放行（线程安全，在查询线程上调用）。 */
@@ -110,7 +112,9 @@ class DownloadManager(
     /** 存储空间不足：“手机存储空间不足，下载失败”。 */
     var onDiskFull: (() -> Unit)? = null
 
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+    // 后台任务里没接住的错误（比如读库出错）只记日志，不让 App 崩溃
+    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main +
+        CoroutineExceptionHandler { _, e -> Log.w("Download", "后台任务出错", e) })
 
     /** 正在交给系统（还在等线路）的集：对账时别把它们当成中断 */
     private val starting = HashSet<String>()
@@ -202,10 +206,8 @@ class DownloadManager(
                 scope.launch { finish(e.id, e.file); finishBatchIfIdle() }; return
             }
 
-            is DownloadEvent.Failed -> if (e.diskFull) diskFullFail(e.id) else if (store.getDownload(
-                    e.id
-                ) != null
-            ) fail(e.id)
+            is DownloadEvent.Failed -> if (e.diskFull) diskFullFail(e.id)
+            else if (runCatching { store.getDownload(e.id) }.getOrNull() != null) fail(e.id)
         }
         finishBatchIfIdle()
     }
@@ -308,7 +310,7 @@ class DownloadManager(
 
     fun resumePaused(seriesId: String? = null) {
         enqueue(
-            store.allDownloads()
+            runCatching { store.allDownloads() }.getOrDefault(emptyList())
                 .filter { it.state == DlStatus.PAUSED && (seriesId == null || it.seriesId == seriesId) }
                 .map { it.item })
     }
@@ -361,9 +363,15 @@ class DownloadManager(
         }
         val all = runCatching { store.allDownloads() }.getOrElse { return }
         val pending = all.filter { it.state != DlStatus.DONE }
-        val active = system.activeIds(pending.map { it.episodeId })
-        for (r in pending) {
-            val id = r.episodeId
+        val gens = pending.associate { it.episodeId to gen[it.episodeId] }
+        // 查不了系统表：这次不对账，免得把在下的都记成暂停
+        val active = system.activeIds(pending.map { it.episodeId }) ?: return
+        for (r0 in pending) {
+            val id = r0.episodeId
+            // 等系统表期间用户暂停、取消、继续过，或者已经下完：以现在的为准
+            if (gen[id] != gens[id]) continue
+            val r = runCatching { store.getDownload(id) }.getOrNull() ?: continue
+            if (r.state == DlStatus.DONE) continue
             if (id in active || id in starting) {
                 if (items[id] == null) set(id, DlProgress(DlStatus.DOWNLOADING, 0, r.total, r.seriesId), notify = false)
                 continue

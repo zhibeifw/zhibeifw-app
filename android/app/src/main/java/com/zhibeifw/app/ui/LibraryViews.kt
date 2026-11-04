@@ -318,8 +318,7 @@ fun LibraryCourseView(model: AppModel, seriesId: String) {
             EpisodeRowView(model, e, PlayContext.Library(seriesId), showDownloadedIcon = false) {
                 listOf(
                     listOf(model.markItem(it), model.goCourseItem(it.seriesId)),
-                    model.downloadItems(it)
-                        .map { mi -> if (mi.title == "删除下载") mi.copy(destructive = true) else mi })
+                    model.downloadItems(it))
             }
         }
     }

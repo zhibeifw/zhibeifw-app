@@ -118,15 +118,16 @@ final class ImageLoader: @unchecked Sendable {
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
                 if code == 404 || code == 403 { return .notFound }  // R2 公开桶不存在的文件回 404（个别配置回 403）
                 guard code == 200 else { return .failed }
-                try? FileManager.default.removeItem(at: file)
-                do { try FileManager.default.moveItem(at: tmp, to: file) } catch { return .failed }
+                // rename(2) 覆盖旧文件是原子的：不会有“旧的删了、新的还没到”的一瞬间让读文件的地方扑空
+                guard rename(tmp.path, file.path) == 0 else { return .failed }
                 return .ok
             }
             inflight[src] = t
             return t
         }
         let ok = await task.value
-        lock.withLock { inflight[src] = nil }
+        // 只清自己等的这一个：别的调用可能已经为同一个文件起了新的下载
+        lock.withLock { if inflight[src] == task { inflight[src] = nil } }
         return ok
     }
 
@@ -167,7 +168,12 @@ final class ImageLoader: @unchecked Sendable {
             largest.removeAll(); noThumbs.removeAll(); thumbHits = 0; thumbMisses = 0
         }
         let fm = FileManager.default
-        if fm.fileExists(atPath: diskDir.path) { try fm.removeItem(at: diskDir) }
+        // 磁盘缓存不设上限，可能有几千个文件：先改名（一下就完），旧目录放到后台删，不卡界面
+        if fm.fileExists(atPath: diskDir.path) {
+            let trash = diskDir.deletingLastPathComponent().appendingPathComponent("covers-cache-trash-\(UUID().uuidString)")
+            try fm.moveItem(at: diskDir, to: trash)
+            DispatchQueue.global(qos: .utility).async { try? FileManager.default.removeItem(at: trash) }
+        }
         try fm.createDirectory(at: diskDir, withIntermediateDirectories: true)
     }
 }
@@ -203,7 +209,7 @@ struct CoverImage: View {
                 if image.map({ Int(max($0.size.width, $0.size.height) * $0.scale) < px }) ?? true { load(px) }
             }
             // 换了一门课（比如播放胶囊换到另一门课）：清掉旧图后要马上取新图，尺寸没变不会再触发上面的尺寸回调
-            .onChange(of: path) { _, _ in
+            .onChange(of: key) { _, _ in
                 image = nil; failed = false; task?.cancel(); if lastPx > 0 { load(nil) }
             }
             .onChange(of: origin.version) { _, _ in if image == nil { load(nil) } }

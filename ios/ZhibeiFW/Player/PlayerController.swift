@@ -88,7 +88,7 @@ final class PlayerController {
             MainActor.assumeIsolated { self?.pause() }
         }
         nc.addObserver(forName: AVAudioSession.interruptionNotification, object: nil, queue: .main) { [weak self] n in
-            // 来电等打断：系统暂停，通话结束不自动恢复（ndroid 同）；状态由 KVO 反映，这里只存位置
+            // 来电等打断：系统暂停，通话结束不自动恢复（Android 同）；状态由 KVO 反映，这里只存位置
             guard
                 let t = (n.userInfo?[AVAudioSessionInterruptionTypeKey] as? UInt).flatMap(AVAudioSession.InterruptionType.init(rawValue:)),
                 t == .began

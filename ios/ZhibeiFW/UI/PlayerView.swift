@@ -6,10 +6,9 @@ struct PlayerSheet: View {
     @Environment(AppModel.self) private var model
 
     var body: some View {
+        // 不在外面判断有没有当前课：播放器被清空时，收起的那一下 PlayerView 还要用最后一次的课来画
         GeometryReader { geo in
-            if model.player.current != nil {
-                PlayerView(size: geo.size, safe: geo.safeAreaInsets)
-            }
+            PlayerView(size: geo.size, safe: geo.safeAreaInsets)
         }
         .background(C.background.ignoresSafeArea())
         .presentationDetents([.large])

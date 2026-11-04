@@ -154,7 +154,7 @@ final class AppModel {
     private func importV1Prefs() {
         guard !Prefs.d.bool(forKey: Prefs.kMigratedV1) else { return }
         defer { Prefs.d.set(true, forKey: Prefs.kMigratedV1) }
-        guard FileManager.default.fileExists(atPath: files.v1KVPath.path), let kv = try? SQLiteDB(path: files.v1KVPath.path) else { return }
+        guard FileManager.default.fileExists(atPath: files.v1KVPath.path), let kv = try? SQLiteDB(path: files.v1KVPath.path, readOnly: true) else { return }
         for key in [Prefs.kLastService, Prefs.kDomains] {
             if let v = (try? kv.first("SELECT value FROM storage WHERE key = ?", [key]))??.optStr("value") {
                 if key == Prefs.kLastService ? isHttpsOrigin(v) : parseDomains(v) != nil { Prefs.d.set(v, forKey: key) }

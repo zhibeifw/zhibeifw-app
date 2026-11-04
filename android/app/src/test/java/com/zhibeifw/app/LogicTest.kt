@@ -187,10 +187,6 @@ class FileKeyTest {
 
     @Test
     fun orphans() {
-        assertEquals(
-            listOf("x"),
-            orphanPartKeys(listOf(fileKey("入中论讲解_01"), "x"), listOf("入中论讲解_01"))
-        )
         assertEquals(listOf("y"), orphanCoverKeys(listOf(fileKey("中观"), "y"), listOf("中观")))
         assertEquals(listOf("x.mp3"), orphanAudioNames(listOf("a.mp3", "x.mp3"), listOf("a.mp3", "b.m4a")))
         assertTrue(isNoSpaceError(java.io.IOException("write failed: ENOSPC (No space left on device)")))
@@ -219,10 +215,6 @@ class InteractionTest {
         val g = PushGuard(700) { now }
         assertTrue(g.allow("a")); assertFalse(g.allow("a")); assertTrue(g.allow("b"))
         now = 800; assertTrue(g.allow("a"))
-        g.setShown("p", true); assertFalse(g.allow("p")); g.setShown(
-            "p",
-            false
-        ); assertTrue(g.allow("p"))
     }
 
     @Test

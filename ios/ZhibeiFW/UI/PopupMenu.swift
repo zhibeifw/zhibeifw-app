@@ -1,9 +1,10 @@
 import SwiftUI
 
-// 菜单与课程简介弹窗：用系统自带的（LATFORM-DIFFERENCES A16）。
+// 菜单与课程简介弹窗：用系统自带的（PLATFORM-DIFFERENCES A16）。
 
 struct MenuItem: Identifiable {
-    let id = UUID()
+    /// 同一组里的标题不重复：用标题当身份，每次重画不会被当成一组新的
+    var id: String { title }
     var title: String
     var icon: String? = nil
     var destructive = false

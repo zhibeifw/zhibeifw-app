@@ -1,6 +1,7 @@
 package com.zhibeifw.app.design
 
-import androidx.compose.foundation.Canvas
+import androidx.compose.ui.draw.drawWithCache
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
@@ -249,19 +250,21 @@ class IconElement(val fill: Boolean, val evenOdd: Boolean, val width: Float, val
 @Composable
 fun ZIcon(name: String, size: Dp, color: Color, modifier: Modifier = Modifier) {
     val els = IconData.get(name)
-    Canvas(modifier.size(size).clearAndSetSemantics { }) {
-        if (els == null) return@Canvas
+    // 路径只在尺寸变了时重建：列表里图标多，动画期间每帧新建会给垃圾回收添负担
+    Spacer(modifier.size(size).clearAndSetSemantics { }.drawWithCache {
         val k = min(this.size.width, this.size.height) / 24f
-        for (e in els) {
-            val path = e.path(k)
-            if (e.fill) drawPath(path, color, style = Fill)
-            else drawPath(
-                path,
-                color,
-                style = Stroke(width = e.width * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
-            )
+        val paths = els.orEmpty().map { it to it.path(k) }
+        onDrawBehind {
+            for ((e, path) in paths) {
+                if (e.fill) drawPath(path, color, style = Fill)
+                else drawPath(
+                    path,
+                    color,
+                    style = Stroke(width = e.width * k, cap = StrokeCap.Round, join = StrokeJoin.Round)
+                )
+            }
         }
-    }
+    })
 }
 
 /** 后退 15 / 前进 30 秒：用系统媒体库 Media3 自带的图标（和锁屏、通知栏同一套）。 */

@@ -35,7 +35,8 @@ func isValidId(_ v: Any?) -> Bool {
     guard let s = v as? String else { return false }
     let n = s.utf16.count
     guard n >= 1, n <= Limits.maxIdLength else { return false }
-    guard s == s.precomposedStringWithCanonicalMapping else { return false }
+    // 按码位比：String 的 == 是规范等价比较，NFD 和 NFC 永远“相等”，起不到检查作用
+    guard s.unicodeScalars.elementsEqual(s.precomposedStringWithCanonicalMapping.unicodeScalars) else { return false }
     for u in s.unicodeScalars {
         if u == "_" || u == "-" { continue }
         let p = u.properties.generalCategory
@@ -52,8 +53,12 @@ func isValidRelativePath(_ v: Any?) -> Bool {
     guard let s = v as? String else { return false }
     let n = s.utf16.count
     if n == 0 || n > Limits.maxPathLength { return false }
-    if s.hasPrefix("/") || s.contains("..") || s.contains("\\") { return false }
-    if s.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil || s.contains("//") { return false }
+    // 和 Android 一样按 UTF-16 码元逐字匹配：Swift 的 hasPrefix、contains 按字符（字素簇）比，
+    // “/”后面跟组合符号时会认不出开头的“/”
+    let ns = s as NSString
+    func has(_ p: String) -> Bool { ns.range(of: p, options: .literal).location != NSNotFound }
+    if s.utf16.first == 0x2F || has("..") || has("\\") { return false }
+    if s.range(of: "^[A-Za-z][A-Za-z0-9+.-]*:", options: .regularExpression) != nil || has("//") { return false }
     for u in s.utf16 where u <= 0x20 || u == 0x7F || u == 0x3F /* ? */ || u == 0x23 /* # */ { return false }
     return true
 }

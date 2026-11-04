@@ -148,11 +148,6 @@ func orphanCoverKeys(_ onDisk: [String], seriesWithDownloads: [String]) -> [Stri
     return onDisk.filter { !keep.contains($0) }
 }
 
-func orphanPartKeys(_ onDisk: [String], keepEpisodeIds: [String]) -> [String] {
-    let keep = Set(keepEpisodeIds.map(fileKey))
-    return onDisk.filter { !keep.contains($0) }
-}
-
 /// 资料库音频目录里没有下载记录对应的文件名（keep：各条记录的本地文件名）。
 func orphanAudioNames(_ onDisk: [String], keep: [String]) -> [String] {
     let k = Set(keep)
@@ -260,20 +255,17 @@ func downloadMenuItems(_ status: DlStatus?, canDownload: Bool = true) -> [DlMenu
 
 final class PushGuard {
     private var lastAt: [String: Double] = [:]
-    private var shown = Set<String>()
     let windowMs: Double
     let now: () -> Double
     init(windowMs: Double = 700, now: @escaping () -> Double = { Date().timeIntervalSince1970 * 1000 }) {
         self.windowMs = windowMs; self.now = now
     }
     func allow(_ key: String) -> Bool {
-        if shown.contains(key) { return false }
         let t = now()
         if let p = lastAt[key], t - p < windowMs { return false }
         lastAt[key] = t
         return true
     }
-    func setShown(_ key: String, _ on: Bool) { if on { shown.insert(key) } else { shown.remove(key) } }
 }
 
 // MARK: - 同步时机
@@ -288,7 +280,6 @@ func launchFreshWaitMs(online: Bool, elapsedMs: Double) -> Double { online ? max
 // MARK: - 更新检查
 
 let CHECK_INTERVAL_MS: Double = 24 * 3600 * 1000
-let REMIND_LATER_MS: Double = 7 * 24 * 3600 * 1000
 
 func shouldAutoCheck(lastCheckedAt: Double?, now: Double) -> Bool {
     guard let l = lastCheckedAt else { return true }

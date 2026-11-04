@@ -73,10 +73,11 @@ final class SQLiteDB: @unchecked Sendable {
     private let readLock = NSLock()
     let path: String
 
-    init(path: String) throws {
+    /// readOnly：只读打开（读 v1.0 的旧库），不改文件、不切 WAL
+    init(path: String, readOnly: Bool = false) throws {
         self.path = path
         var h: OpaquePointer?
-        let flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX
+        let flags = (readOnly ? SQLITE_OPEN_READONLY : SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE) | SQLITE_OPEN_FULLMUTEX
         let rc = sqlite3_open_v2(path, &h, flags, nil)
         guard rc == SQLITE_OK, let h else {
             let msg = h.map { String(cString: sqlite3_errmsg($0)) } ?? "无法打开"
@@ -85,7 +86,7 @@ final class SQLiteDB: @unchecked Sendable {
         }
         db = h
         sqlite3_busy_timeout(h, 5000)
-        try exec("PRAGMA journal_mode = WAL;")
+        if !readOnly { try exec("PRAGMA journal_mode = WAL;") }
     }
 
     deinit {

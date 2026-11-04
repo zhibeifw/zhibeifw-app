@@ -20,7 +20,6 @@ class AppFiles(val filesDir: File, val cacheDir: File) {
         listOf(dbDir, audioDir, coversDir, partDir, backupPath.parentFile!!).forEach { it.mkdirs() }
     }
 
-    fun partFile(episodeId: String) = File(partDir, fileKey(episodeId) + ".part")
     fun coverFile(seriesId: String) = File(coversDir, fileKey(seriesId) + ".jpg")
 
     /** 下载完成后的本地文件（相对 App 文件目录，如 audio/h_xxx.mp3），数据库里存相对路径。 */

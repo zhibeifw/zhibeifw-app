@@ -49,22 +49,24 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         return task.taskIdentifier
     }
 
-    func pause(id: String) async -> Data? {
-        guard let t = await task(id) else { return nil }
+    func pause(id: String, task tid: Int?) async -> Data? {
+        guard let t = await task(id, tid) else { return nil }
         return await withCheckedContinuation { c in t.cancel(byProducingResumeData: { c.resume(returning: $0) }) }
     }
 
-    func cancel(id: String) {
-        Task { await task(id)?.cancel() }
+    func cancel(id: String, task tid: Int?) {
+        Task { await task(id, tid)?.cancel() }
     }
 
     func activeIds() async -> Set<String> {
         Set(await session.allTasks.filter { $0.state == .running || $0.state == .suspended }.compactMap(\.taskDescription))
     }
 
-    private func task(_ id: String) async -> URLSessionDownloadTask? {
-        await session.allTasks.first { $0.taskDescription == id && ($0.state == .running || $0.state == .suspended) }
-            as? URLSessionDownloadTask
+    /// 知道编号就按编号找；按集 ID 找的话，暂停后马上继续时同一集新旧两个任务都在跑，可能停错
+    private func task(_ id: String, _ tid: Int?) async -> URLSessionDownloadTask? {
+        let all = await session.allTasks
+        if let tid { return all.first { $0.taskIdentifier == tid } as? URLSessionDownloadTask }
+        return all.first { $0.taskDescription == id && ($0.state == .running || $0.state == .suspended) } as? URLSessionDownloadTask
     }
 
     // MARK: URLSessionDownloadDelegate

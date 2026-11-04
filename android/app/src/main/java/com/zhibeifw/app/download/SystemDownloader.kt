@@ -15,8 +15,8 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import kotlin.coroutines.resume
+import kotlinx.coroutines.suspendCancellableCoroutine
 
 /**
  * Android 的下载：系统的 DownloadManager 服务。
@@ -80,31 +80,38 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
         handler = h; scan()
     }
 
+    // 交给系统、从系统删掉都是跨进程调用（每集几毫秒），一次几十上百集会卡住主线程；
+    // 放到查表用的那条线程上按顺序做：先交后删的顺序不会乱，暂停、取消总能删掉刚交出去的那一个
     override fun start(id: String, url: String, title: String, description: String) {
         val name = fileKey(id) + ".part"
         byKey[fileKey(id)] = id
-        File(dir(), name).delete() // 同名旧文件在的话系统会另起名字
-        val req = AndroidDownloads.Request(Uri.parse(url))
-            .setTitle(title)
-            .setDescription(description)
-            .setDestinationInExternalFilesDir(ctx, DIR, name)
-        remember(id, dm.enqueue(req))
+        io.execute {
+            runCatching {
+                File(dir(), name).delete() // 同名旧文件在的话系统会另起名字
+                val req = AndroidDownloads.Request(Uri.parse(url))
+                    .setTitle(title)
+                    .setDescription(description)
+                    .setDestinationInExternalFilesDir(ctx, DIR, name)
+                remember(id, dm.enqueue(req))
+            }.onFailure { emit(DownloadEvent.Failed(id, false)) }
+        }
     }
 
     override fun stop(id: String) {
-        forget(id)?.let { dm.remove(it) }
+        io.execute { forget(id)?.let { runCatching { dm.remove(it) } } }
     }
 
     override fun release(id: String) = stop(id)
 
-    override suspend fun activeIds(candidates: Collection<String>): Set<String> =
-        withContext(Dispatchers.IO) {
-            for (c in candidates) byKey[fileKey(c)] = c
-            val active =
-                rows().orEmpty().filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
-            main.post { scan() } // App 没开着时下完、失败的，现在认得出是哪一集了，交出去收尾
-            active
-        }
+    override suspend fun activeIds(candidates: Collection<String>): Set<String>? {
+        for (c in candidates) byKey[fileKey(c)] = c
+        // 在同一条线程上查：排在前面、还没交给系统的那几集先交出去，查表时就在了
+        val all = suspendCancellableCoroutine { cont -> io.execute { cont.resume(rows()) } }
+        // 查不了系统表：不能当成“系统里什么都没有”，否则在下的都会被记成暂停
+        val active = (all ?: return null).filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
+        main.post { scan() } // App 没开着时下完、失败的，现在认得出是哪一集了，交出去收尾
+        return active
+    }
 
     private class Row(
         val sysId: Long,

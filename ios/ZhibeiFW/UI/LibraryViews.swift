@@ -196,9 +196,7 @@ struct LibraryCourseView: View {
                         EpisodeRowView(item: e, ctx: .library(seriesId), showDownloadedIcon: false) { it in
                             [
                                 [model.markItem(it), model.goCourseItem(it.seriesId)],
-                                model.downloadItems(for: it).map {
-                                    var m = $0; if m.title == "删除下载" { m.destructive = true }; return m
-                                },
+                                model.downloadItems(for: it),
                             ]
                         }
                     }

@@ -133,7 +133,6 @@ final class ValidateTests: XCTestCase {
 
 final class FileKeyTests: XCTestCase {
     func testOrphans() {
-        XCTAssertEqual(orphanPartKeys([fileKey("入中论讲解_01"), "x"], keepEpisodeIds: ["入中论讲解_01"]), ["x"])
         XCTAssertEqual(orphanCoverKeys([fileKey("中观"), "y"], seriesWithDownloads: ["中观"]), ["y"])
         XCTAssertEqual(orphanAudioNames(["a.mp3", "x.mp3"], keep: ["a.mp3", "b.m4a"]), ["x.mp3"])
         XCTAssertTrue(isOutOfSpace(NSError(domain: NSCocoaErrorDomain, code: NSFileWriteOutOfSpaceError)))
@@ -163,7 +162,6 @@ final class InteractionTests: XCTestCase {
         let g = PushGuard(windowMs: 700) { now }
         XCTAssertTrue(g.allow("a")); XCTAssertFalse(g.allow("a")); XCTAssertTrue(g.allow("b"))
         now = 800; XCTAssertTrue(g.allow("a"))
-        g.setShown("p", true); XCTAssertFalse(g.allow("p")); g.setShown("p", false); XCTAssertTrue(g.allow("p"))
     }
     func testUpdate() {
         let u = UpgradeFile(latestVersion: "1.10.0", minVersion: "1.2.0", apkPath: "releases/a.apk")

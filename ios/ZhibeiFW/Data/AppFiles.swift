@@ -24,13 +24,14 @@ struct AppFiles: Sendable {
         for d in [dbDir, audioDir, coversDir, partDir, backupPath.deletingLastPathComponent()] {
             try? fm.createDirectory(at: d, withIntermediateDirectories: true)
         }
-        // 已下载的音频不进 iCloud 备份
-        var u = audioDir
-        var rv = URLResourceValues(); rv.isExcludedFromBackup = true
-        try? u.setResourceValues(rv)
+        // 已下载的音频、课程封面（可重新下载）、升级前的临时备份都不进 iCloud 备份
+        for d in [audioDir, coversDir, backupPath.deletingLastPathComponent()] {
+            var u = d
+            var rv = URLResourceValues(); rv.isExcludedFromBackup = true
+            try? u.setResourceValues(rv)
+        }
     }
 
-    func partFile(_ episodeId: String) -> URL { partDir.appendingPathComponent(fileKey(episodeId) + ".part") }
     func resumeDataFile(_ episodeId: String) -> URL { partDir.appendingPathComponent(fileKey(episodeId) + ".resume") }
     /// 系统下完、还没移入资料库的文件：按集命名，App 来不及处理就被关掉时，下次对账还认得出
     func doneFile(_ episodeId: String) -> URL { partDir.appendingPathComponent(fileKey(episodeId) + ".done") }

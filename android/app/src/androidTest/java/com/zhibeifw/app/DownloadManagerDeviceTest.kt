@@ -13,8 +13,10 @@ import com.zhibeifw.app.download.DownloadManager
 import com.zhibeifw.app.download.SystemDownloads
 import java.io.File
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -49,7 +51,14 @@ class DownloadManagerDeviceTest {
         override fun release(id: String) {
             released += id
         }
-        override suspend fun activeIds(candidates: Collection<String>) = emptySet<String>()
+        /** 系统表里在下的；null＝查不了 */
+        var active: Set<String>? = emptySet()
+        /** 设了就让查表等到放行 */
+        var gate: CompletableDeferred<Unit>? = null
+        override suspend fun activeIds(candidates: Collection<String>): Set<String>? {
+            gate?.await()
+            return active
+        }
     }
 
     private lateinit var dir: File
@@ -150,6 +159,29 @@ class DownloadManagerDeviceTest {
         assertEquals(0, diskFull)
         assertFalse(files.absolute(files.finalRelative("a", "c/s/a.mp3")).exists())
         assertEquals(listOf("a"), sys.released)
+    }
+
+    /** 查不了系统表：这次不对账，在下的不会被记成暂停 */
+    @Test
+    fun reconcileSkipsWhenTableUnreadable() = onMain {
+        dm.enqueue(listOf(item("a"))); settle()
+        sys.active = null
+        dm.reconcile()
+        assertEquals(DlStatus.DOWNLOADING, dm.items["a"]?.status)
+        assertEquals(DlStatus.DOWNLOADING, store.getDownload("a")?.state)
+    }
+
+    /** 查系统表期间用户取消了：对账以用户的为准，不把它加回来 */
+    @Test
+    fun reconcileRespectsCancelDuringQuery() = onMain {
+        dm.enqueue(listOf(item("a"))); settle()
+        val gate = CompletableDeferred<Unit>()
+        sys.gate = gate; sys.active = setOf("a")
+        val job = CoroutineScope(Dispatchers.Main).launch { dm.reconcile() }
+        settle()
+        dm.cancel("a")
+        gate.complete(Unit); job.join()
+        assertNull(dm.items["a"]); assertNull(store.getDownload("a"))
     }
 
     /** 对账清掉资料库里没有下载记录对应的音频 */

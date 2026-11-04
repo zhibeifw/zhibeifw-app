@@ -1,5 +1,7 @@
 package com.zhibeifw.app.ui
 
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import com.zhibeifw.app.design.generated.Tok.Component as CP
 import com.zhibeifw.app.design.generated.Tok.Font.Style as S
 import androidx.compose.foundation.Image
@@ -81,7 +83,8 @@ fun AboutView(model: AppModel) {
                             if (clearing) return@Row
                             clearing = true
                             model.launch {
-                                val ok = runCatching { model.images.clear() }.getOrDefault(false)
+                                // 磁盘缓存不设上限，可能有几千个文件：放到后台删，不卡界面
+                                val ok = withContext(Dispatchers.IO) { runCatching { model.images.clear() }.getOrDefault(false) }
                                 clearing = false
                                 clearResult = if (ok) "已清除" else "清除失败"
                             }

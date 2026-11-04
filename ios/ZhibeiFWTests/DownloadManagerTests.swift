@@ -9,6 +9,8 @@ final class FakeSystem: SystemDownloads {
     var handler: (@MainActor (DownloadEvent) -> Void)?
     var started: [(id: String, resume: Data?)] = []
     var cancelled: [String] = []
+    /// 暂停、取消时交下来的任务编号
+    var stoppedTasks: [Int?] = []
     var pauseData: Data? = Data("resume".utf8)
     var active = Set<String>()
     /// 给每个任务编号（像真的系统一样）；false 时不给（nil）
@@ -25,11 +27,12 @@ final class FakeSystem: SystemDownloads {
         lastTask += 1
         return lastTask
     }
-    func pause(id: String) async -> Data? {
+    func pause(id: String, task: Int?) async -> Data? {
+        stoppedTasks.append(task)
         if holdPause { await withCheckedContinuation { pauseGate = $0 } }
         active.remove(id); return pauseData
     }
-    func cancel(id: String) { cancelled.append(id); active.remove(id) }
+    func cancel(id: String, task: Int?) { cancelled.append(id); stoppedTasks.append(task); active.remove(id) }
     func activeIds() async -> Set<String> { active }
 }
 
@@ -116,6 +119,9 @@ final class DownloadManagerTests: XCTestCase {
         for _ in 0..<50 where store.getDownload("a")?.state != .paused { await Task.yield() }
         XCTAssertEqual(dm.items["a"]?.status, .paused)
         XCTAssertEqual(store.getDownload("a")?.bytes, 400)
+        // 暂停后进度环停在原处，总大小也记进库里（重启后还是 40%）
+        XCTAssertEqual(dm.ratio("a"), 0.4)
+        XCTAssertEqual(store.getDownload("a")?.total, 1000)
         send(.failed("a", URLError(.cancelled), nil))  // 系统随后报“已取消”：不算失败
         XCTAssertEqual(dm.items["a"]?.status, .paused)
         XCTAssertEqual(batchFailed, 0)
@@ -124,6 +130,36 @@ final class DownloadManagerTests: XCTestCase {
         dm.resumePaused()
         for _ in 0..<50 where sys.started.isEmpty { await Task.yield() }
         XCTAssertEqual(sys.started.first?.resume, Data("resume".utf8))
+        XCTAssertEqual(dm.items["a"]?.status, .downloading)
+        XCTAssertEqual(dm.ratio("a"), 0.4)
+    }
+
+    /// 暂停、取消按系统任务编号去停，不会停到同一集刚开始的新任务
+    func testStopUsesTaskNumber() async {
+        sys.numbersTasks = true
+        await enqueue([item("a", 0), item("b", 1)])
+        dm.pause("a")
+        for _ in 0..<50 where sys.stoppedTasks.isEmpty { await Task.yield() }
+        dm.cancel("b")
+        XCTAssertEqual(sys.stoppedTasks, [1, 2])
+    }
+
+    /// 对账时系统里找不到、被记为暂停的集，系统随后补交“下完”：照收，不丢掉
+    func testFinishAfterReconcileInferredPause() async throws {
+        await enqueue([item("a", 0)])
+        sys.active = []
+        dm.reconcile(active: [])
+        XCTAssertEqual(dm.items["a"]?.status, .paused)
+        send(.finished("a", try tmpFile()))
+        XCTAssertEqual(dm.items["a"]?.status, .done)
+        XCTAssertEqual(store.getDownload("a")?.state, .done)
+    }
+
+    /// 等系统列任务期间刚交给系统的（不在 active 里）：不记成暂停
+    func testReconcileKeepsTaskStartedMeanwhile() async {
+        sys.numbersTasks = true
+        await enqueue([item("a", 0)])
+        dm.reconcile(active: [])
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
     }
 

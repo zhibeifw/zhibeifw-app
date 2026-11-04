@@ -130,12 +130,14 @@ struct CategoryView: View {
     @Environment(AppModel.self) private var model
     @State private var rows: [SeriesCard] = []
     @State private var done = false
-    @State private var busy = false
     @State private var loaded = false
+    /// 分类名在目录变了时查一次，不在每次重画时查库
+    @State private var title = ""
     private let pageSize = 40
 
     var body: some View {
-        PageScaffold(title: model.store.categoryName(categoryId) ?? categoryId) {
+        // 第一次画时还没 reload：先查一次，免得推入页面时标题是空的
+        PageScaffold(title: title.isEmpty ? (model.store.categoryName(categoryId) ?? categoryId) : title) {
             if loaded && rows.isEmpty {
                 EmptyStateView(text: "暂无课程").padding(.top, Tok.Space.scale[6] * 3)
             }
@@ -152,15 +154,14 @@ struct CategoryView: View {
     }
 
     private func reload() {
+        title = model.store.categoryName(categoryId) ?? categoryId
         rows = (try? model.store.loadCategorySeries(categoryId, limit: pageSize, offset: 0)) ?? []
         done = rows.count < pageSize
         loaded = true
     }
 
     private func more() {
-        guard !done, !busy else { return }
-        busy = true
-        defer { busy = false }
+        guard !done else { return }
         let next = (try? model.store.loadCategorySeries(categoryId, limit: pageSize, offset: rows.count)) ?? []
         var seen = Set(rows.map(\.id))
         rows += next.filter { seen.insert($0.id).inserted }
