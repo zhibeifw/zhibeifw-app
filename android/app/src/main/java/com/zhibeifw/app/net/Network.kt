@@ -24,6 +24,7 @@ import java.net.HttpURLConnection
 import java.net.SocketTimeoutException
 import java.net.URL
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -150,14 +151,22 @@ class Network(private val ctx: Context) {
     /** 并发调用共用同一次选择。 */
     suspend fun resolve(): String? {
         val d = resolveLock.withLock {
-            resolving ?: scope.async { doResolve() }.also { resolving = it }
+            resolving ?: run {
+                // 选完（成功、出错都算）由这次选择自己放开，不由等的人放开：
+                // 某个等的人被取消时选择还在进行，放开了会让下一个调用再起一次，两次同时探测、同时写设置
+                lateinit var task: Deferred<String?>
+                task = scope.async(start = CoroutineStart.LAZY) {
+                    try {
+                        doResolve()
+                    } finally {
+                        withContext(NonCancellable) { resolveLock.withLock { if (resolving === task) resolving = null } }
+                    }
+                }
+                resolving = task
+                task.also { it.start() }
+            }
         }
-        // 等的时候被取消、或者选择本身出错，也要放开：否则后面的调用一直拿这次的旧结果或异常，不会重新选
-        try {
-            return d.await()
-        } finally {
-            withContext(NonCancellable) { resolveLock.withLock { if (resolving === d) resolving = null } }
-        }
+        return d.await()
     }
 
     private suspend fun doResolve(): String? {

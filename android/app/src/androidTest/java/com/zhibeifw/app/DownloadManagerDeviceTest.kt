@@ -161,6 +161,21 @@ class DownloadManagerDeviceTest {
         assertEquals(listOf("a"), sys.released)
     }
 
+    /** 另存封面留下的临时文件：封面已在、或这门课没下载了的删掉；还在另存的（有下载、没封面）留着 */
+    @Test
+    fun cleanupCoversRemovesStaleTemp() = onMain {
+        dm.enqueue(listOf(item("a"), DlItem("b1", "t", "T", "b1", 0, "c/t/b1.mp3"))); settle()
+        files.coversDir.mkdirs()
+        fun f(n: String) = File(files.coversDir, n).apply { writeBytes(ByteArray(1)) }
+        f(fileKey("s") + ".jpg")
+        val doneTmp = f(fileKey("s") + ".jpg.tmp")
+        val savingTmp = f(fileKey("t") + ".jpg.tmp")
+        val orphanTmp = f(fileKey("x") + ".jpg.tmp")
+        dm.cleanupCovers()
+        assertFalse(doneTmp.exists()); assertFalse(orphanTmp.exists())
+        assertTrue(savingTmp.exists())
+    }
+
     /** 查不了系统表：这次不对账，在下的不会被记成暂停 */
     @Test
     fun reconcileSkipsWhenTableUnreadable() = onMain {

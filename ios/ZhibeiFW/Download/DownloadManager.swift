@@ -364,8 +364,15 @@ final class DownloadManager {
 
     /// 没有任何下载记录的课，本机保存的封面删掉。
     func cleanupCovers() {
-        let keys = ((try? FileManager.default.contentsOfDirectory(atPath: files.coversDir.path)) ?? []).filter { $0.hasSuffix(".jpg") }.map
-        { String($0.dropLast(4)) }
+        let fm = FileManager.default
+        let names = (try? fm.contentsOfDirectory(atPath: files.coversDir.path)) ?? []
+        let keys = names.filter { $0.hasSuffix(".jpg") }.map { String($0.dropLast(4)) }
+        // 另存封面时中途被关掉留下的临时文件：封面已经在了、或这门课已经没有下载的才删（这两种情况都不会正在另存）
+        let keepKeys = Set(((try? store.seriesIdsWithDownloads()) ?? []).map(fileKey))
+        for n in names where n.hasSuffix(".jpg.tmp") {
+            let k = String(n.dropLast(8))
+            if keys.contains(k) || !keepKeys.contains(k) { try? fm.removeItem(at: files.coversDir.appendingPathComponent(n)) }
+        }
         for k in orphanCoverKeys(keys, seriesWithDownloads: (try? store.seriesIdsWithDownloads()) ?? []) {
             try? FileManager.default.removeItem(at: files.coversDir.appendingPathComponent(k + ".jpg"))
         }

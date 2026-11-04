@@ -155,6 +155,22 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(store.getDownload("a")?.state, .done)
     }
 
+    /// 另存封面留下的临时文件：封面已在、或这门课没下载了的删掉；还在另存的（有下载、没封面）留着
+    func testCleanupCoversRemovesStaleTemp() async throws {
+        await enqueue([item("a", 0), DlItem(episodeId: "b1", seriesId: "t", seriesTitle: "t", episodeTitle: "b1", pos: 0, audioPath: "c/t/b1.mp3")])
+        func f(_ n: String) throws -> URL {
+            let u = files.coversDir.appendingPathComponent(n); try Data([1]).write(to: u); return u
+        }
+        _ = try f(fileKey("s") + ".jpg")
+        let doneTmp = try f(fileKey("s") + ".jpg.tmp")
+        let savingTmp = try f(fileKey("t") + ".jpg.tmp")
+        let orphanTmp = try f(fileKey("x") + ".jpg.tmp")
+        dm.cleanupCovers()
+        XCTAssertFalse(FileManager.default.fileExists(atPath: doneTmp.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanTmp.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: savingTmp.path))
+    }
+
     /// 等系统列任务期间刚交给系统的（不在 active 里）：不记成暂停
     func testReconcileKeepsTaskStartedMeanwhile() async {
         sys.numbersTasks = true

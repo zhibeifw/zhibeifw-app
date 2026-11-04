@@ -16,7 +16,7 @@ class CoverArchive(private val files: AppFiles, private val images: ImageLoader,
         if (coverPath.isNullOrEmpty() || dest.exists()) return
         scope.launch(Dispatchers.IO) {
             val src = images.originalFile(coverPath) ?: return@launch
-            // 先拷到临时文件再改名：中途被关掉不会留下半张图（对账只清 .jpg，不会管它）
+            // 先拷到临时文件再改名：中途被关掉不会留下半张图（留下的临时文件由清理封面时删掉）
             val tmp = File(dest.path + ".tmp")
             runCatching { src.copyTo(tmp, overwrite = true) }.onFailure { tmp.delete(); return@launch }
             if (dest.exists() || !tmp.renameTo(dest)) tmp.delete()

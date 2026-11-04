@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import com.zhibeifw.app.core.DlStatus
+import com.zhibeifw.app.core.fileKey
 import com.zhibeifw.app.core.isNoSpaceError
 import com.zhibeifw.app.core.orphanAudioNames
 import com.zhibeifw.app.core.orphanCoverKeys
@@ -340,9 +341,15 @@ class DownloadManager(
 
     /** 没有任何下载记录的课，本机保存的封面删掉。 */
     fun cleanupCovers() {
-        val keys = files.coversDir.listFiles()?.map { it.name }?.filter { it.endsWith(".jpg") }
-            ?.map { it.removeSuffix(".jpg") } ?: emptyList()
+        val all = files.coversDir.listFiles().orEmpty()
+        val keys = all.map { it.name }.filter { it.endsWith(".jpg") }.map { it.removeSuffix(".jpg") }
         val keep = runCatching { store.seriesIdsWithDownloads() }.getOrElse { return }
+        // 另存封面时中途被关掉留下的临时文件：封面已经在了、或这门课已经没有下载的才删（这两种情况都不会正在另存）
+        val keepKeys = keep.map(::fileKey).toSet()
+        for (f in all) if (f.name.endsWith(".jpg.tmp")) {
+            val k = f.name.removeSuffix(".jpg.tmp")
+            if (k in keys || k !in keepKeys) f.delete()
+        }
         for (k in orphanCoverKeys(keys, keep)) File(
             files.coversDir,
             "$k.jpg"
