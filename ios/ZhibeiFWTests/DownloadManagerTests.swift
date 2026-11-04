@@ -136,6 +136,24 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(batchFailed, 0)
     }
 
+    /// 整门课取消：只撤没下完的，下完的和封面留着；整门课删除：音频、记录、封面都清掉
+    func testSeriesCancelThenRemove() async throws {
+        await enqueue([item("a", 0), item("b", 1), item("c", 2)])
+        send(.finished("a", try tmpFile()))
+        let cover = files.coversDir.appendingPathComponent(fileKey("s") + ".jpg")
+        try Data(count: 10).write(to: cover)
+        let audio = files.absolute(store.getDownload("a")!.localFile!)
+        dm.cancelSeries("s")
+        XCTAssertEqual(Set(sys.cancelled), ["b", "c"])
+        XCTAssertEqual(dm.items["a"]?.status, .done)
+        XCTAssertNil(dm.items["b"]); XCTAssertNil(store.getDownload("c"))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: cover.path))
+        dm.removeSeries("s")
+        XCTAssertNil(dm.items["a"]); XCTAssertNil(store.getDownload("a"))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: audio.path))
+        XCTAssertFalse(FileManager.default.fileExists(atPath: cover.path))
+    }
+
     func testDiskFullAlertsOnce() async {
         await enqueue([item("a", 0), item("b", 1)])
         send(.failed("a", DiskFullError(), nil))

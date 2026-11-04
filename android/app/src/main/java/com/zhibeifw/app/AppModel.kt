@@ -312,7 +312,10 @@ class AppModel(private val ctx: Context) {
     fun playAndOpen(episodeId: String, ctx: PlayContext) {
         val p = player ?: return
         if (p.current?.episodeId == episodeId) {
-            if (!p.looksPlaying && p.error == null) p.resume(); openPlayer(); return
+            // 已经是这一集：暂停着就接着播；出错的不自动重试（播放页上有重试）；都打开播放页
+            if (!p.looksPlaying && p.error == null) p.resume()
+            openPlayer()
+            return
         }
         if (p.start(episodeId, ctx)) openPlayer() else alert = AlertSpec("这一集已下架")
     }

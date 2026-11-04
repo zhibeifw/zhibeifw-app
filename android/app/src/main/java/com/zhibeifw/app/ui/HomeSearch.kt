@@ -341,7 +341,7 @@ private fun Tile(model: AppModel, t: CategoryTile, large: Boolean) {
     Box(
         Modifier.fillMaxWidth().heightIn(min = CP.Tile.height.d)
             .clip(RoundedCornerShape(Tok.Radius.tile.d))
-            .background(Color(resolveCategoryColor(t.color, t.id).light))
+            .background(resolveCategoryColor(t.color, t.id).c())
             .pressable { model.nav.push(Routes.category(t.id)) }
             .semantics { contentDescription = "${t.name}，点按查看全部课程" }
             .padding(CP.Tile.padding.d),

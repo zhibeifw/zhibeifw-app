@@ -101,7 +101,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
         withContext(Dispatchers.IO) {
             for (c in candidates) byKey[fileKey(c)] = c
             val active =
-                rows().filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
+                rows().orEmpty().filter { it.status != AndroidDownloads.STATUS_FAILED }.map { it.id }.toSet()
             main.post { scan() } // App 没开着时下完、失败的，现在认得出是哪一集了，交出去收尾
             active
         }
@@ -117,10 +117,11 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     )
 
     /** 查系统下载表里我们的下载（文件名认得出、却没有对应下载记录的直接删掉：记录已经没了） */
-    private fun rows(): List<Row> {
+    /** 查系统下载表；查不了返回 null */
+    private fun rows(): List<Row>? {
         val out = ArrayList<Row>()
         val orphans = ArrayList<Long>()
-        runCatching {
+        val ok = runCatching {
             dm.query(AndroidDownloads.Query())?.use { c ->
                 val iId = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_ID)
                 val iStatus = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_STATUS)
@@ -154,9 +155,9 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     )
                 }
             }
-        }
+        }.isSuccess
         if (orphans.isNotEmpty() && byKey.isNotEmpty()) runCatching { dm.remove(*orphans.toLongArray()) }
-        return out
+        return if (ok) out else null
     }
 
     private fun emit(e: DownloadEvent) = main.post { handler?.invoke(e) }
@@ -166,7 +167,12 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
         io.execute {
             // 先放开再查：查的过程中又有变化，会再排一次，不会漏
             scanQueued.set(false)
-            for (r in rows()) when (r.status) {
+            val all = rows() ?: return@execute
+            // 系统表里已经没有的编号不会再出现（编号不复用），记着它们没用
+            val live = all.mapTo(HashSet()) { it.sysId }
+            reported.retainAll(live)
+            throttles.keys.retainAll(live)
+            for (r in all) when (r.status) {
                 AndroidDownloads.STATUS_SUCCESSFUL ->
                     if (reported.add(r.sysId)) emit(
                         if (r.file != null) DownloadEvent.Finished(

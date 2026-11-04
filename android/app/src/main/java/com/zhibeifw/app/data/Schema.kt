@@ -186,23 +186,26 @@ object Migrator {
                         t
                     )?.optStr("sql") ?: continue
                     bak.execSQL(ddl) // 来自主库自己的建表语句（固定常量建的表）
-                    for (r in db.all("SELECT * FROM $t")) { // 表名是固定常量
-                        val cols = r.values.keys.toList()
-                        val st = bak.compileStatement(
-                            "INSERT INTO $t (${cols.joinToString(",")}) VALUES (${
-                                cols.joinToString(",") { "?" }
-                            })"
-                        )
-                        cols.forEachIndexed { i, c ->
-                            when (val v = r.values[c]) {
-                                null -> st.bindNull(i + 1)
-                                is Long -> st.bindLong(i + 1, v)
-                                is Double -> st.bindDouble(i + 1, v)
-                                else -> st.bindString(i + 1, v.toString())
+                    val rows = db.all("SELECT * FROM $t") // 表名是固定常量
+                    val cols = rows.firstOrNull()?.values?.keys?.toList() ?: continue
+                    // 同一张表各行的列一样：插入语句每张表只编译一次
+                    bak.compileStatement(
+                        "INSERT INTO $t (${cols.joinToString(",")}) VALUES (${
+                            cols.joinToString(",") { "?" }
+                        })"
+                    ).use { st ->
+                        for (r in rows) {
+                            st.clearBindings()
+                            cols.forEachIndexed { i, c ->
+                                when (val v = r.values[c]) {
+                                    null -> st.bindNull(i + 1)
+                                    is Long -> st.bindLong(i + 1, v)
+                                    is Double -> st.bindDouble(i + 1, v)
+                                    else -> st.bindString(i + 1, v.toString())
+                                }
                             }
+                            st.executeInsert()
                         }
-                        st.executeInsert()
-                        st.close()
                     }
                 }
                 bak.setTransactionSuccessful()

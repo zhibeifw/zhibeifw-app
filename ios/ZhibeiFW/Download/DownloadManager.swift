@@ -296,7 +296,13 @@ final class DownloadManager {
     }
 
     func cancel(_ id: String) {
-        guard let cur = items[id], cur.status != .done else { return }
+        if cancelOne(id) { cleanupCovers() }
+    }
+
+    /// 取消一集，不清封面（整门课一起取消时最后清一次）；真取消了返回 true
+    @discardableResult
+    private func cancelOne(_ id: String) -> Bool {
+        guard let cur = items[id], cur.status != .done else { return false }
         _ = bump(id)
         if cur.status != .paused && starting.remove(id) == nil {
             retire(id)
@@ -306,11 +312,13 @@ final class DownloadManager {
         try? store.removeDownload(id)
         set(id, nil)
         finishBatchIfIdle()
-        cleanupCovers()
+        return true
     }
 
     func cancelSeries(_ seriesId: String? = nil) {
-        for (k, v) in items where (seriesId == nil || v.seriesId == seriesId) && v.status != .done { cancel(k) }
+        let ids = items.filter { (seriesId == nil || $0.value.seriesId == seriesId) && $0.value.status != .done }.map(\.key)
+        for k in ids { cancelOne(k) }
+        if !ids.isEmpty { cleanupCovers() }
     }
 
     /// 继续已暂停的集（单集的灰色暂停环、整门课“继续下载”、资料库“继续全部”）。
@@ -322,15 +330,21 @@ final class DownloadManager {
 
     /// 删除下载（文件和记录；没下完的先停下）。
     func removeDownload(_ id: String) {
-        if let cur = items[id], cur.status != .done { cancel(id); return }
-        if let r = store.getDownload(id), let lf = r.localFile { try? FileManager.default.removeItem(at: files.absolute(lf)) }
-        try? store.removeDownload(id)
-        set(id, nil)
+        removeOne(id)
         cleanupCovers()
     }
 
+    /// 删一集，不清封面（整门课一起删时最后清一次）
+    private func removeOne(_ id: String) {
+        if let cur = items[id], cur.status != .done { cancelOne(id); return }
+        if let r = store.getDownload(id), let lf = r.localFile { try? FileManager.default.removeItem(at: files.absolute(lf)) }
+        try? store.removeDownload(id)
+        set(id, nil)
+    }
+
     func removeSeries(_ seriesId: String) {
-        for r in (try? store.downloadsOfSeries(seriesId)) ?? [] { removeDownload(r.episodeId) }
+        for r in (try? store.downloadsOfSeries(seriesId)) ?? [] { removeOne(r.episodeId) }
+        cleanupCovers()
     }
 
     /// 没有任何下载记录的课，本机保存的封面删掉。

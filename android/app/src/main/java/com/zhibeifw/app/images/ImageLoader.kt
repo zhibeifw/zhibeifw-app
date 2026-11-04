@@ -250,7 +250,7 @@ fun CoverImage(
     var failed by remember(path) { mutableStateOf(false) }
     // 没有封面、或确实取不到：内容色块；还在加载：淡灰底（不像色块那样显眼）
     val bg =
-        if ((path.isEmpty() && localFile == null) || failed) Color(placeholderColor(colorId).light) else C.backgroundSecondary()
+        if ((path.isEmpty() && localFile == null) || failed) placeholderColor(colorId).c() else C.backgroundSecondary()
     BoxWithConstraints(modifier.clip(shape).background(bg).clearAndSetSemantics { }) {
         val px = coverRequestPx(with(LocalDensity.current) { maxWidth.roundToPx() })
         // 换尺寸（播放页弹出、横竖屏）时不清空：正确尺寸解码好之前，先用内存里这张图的任一尺寸顶上，不闪色块

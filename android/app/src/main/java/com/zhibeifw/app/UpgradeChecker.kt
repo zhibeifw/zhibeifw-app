@@ -112,7 +112,8 @@ class UpgradeChecker(
     /** 立刻更新：打开官网 APK 直链，交给浏览器 / 下载管理器。 */
     fun openApk(apkPath: String) {
         updateDialog = null
-        val origin = net.currentOrigin ?: return
+        // 正在刷新线路时还没有选定的域名：用最近一次选出过的，交给浏览器去下；都没有才不动
+        val origin = net.displayOrigin ?: return
         openUrl(buildUrl(origin, apkPath))
     }
 }

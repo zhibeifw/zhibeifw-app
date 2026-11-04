@@ -18,6 +18,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
+import com.zhibeifw.app.core.fileKey
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -91,6 +92,25 @@ class DownloadManagerDeviceTest {
         sys.onEvent!!(DownloadEvent.Finished("a", src)); settle()
         assertEquals(DlStatus.DONE, dm.items["a"]?.status)
         assertTrue(files.absolute(store.getDownload("a")!!.localFile!!).length() == 1000L)
+    }
+
+    /** 整门课取消：只撤没下完的，下完的和封面留着；整门课删除：音频、记录、封面都清掉 */
+    @Test
+    fun seriesCancelThenRemove() = onMain {
+        dm.enqueue(listOf(item("a"), item("b"), item("c"))); settle()
+        val src = File(dir, "a.part").apply { writeBytes(ByteArray(1000)) }
+        sys.onEvent!!(DownloadEvent.Finished("a", src)); settle()
+        val cover = File(files.coversDir, fileKey("s") + ".jpg").apply { parentFile?.mkdirs(); writeBytes(ByteArray(10)) }
+        val audio = files.absolute(store.getDownload("a")!!.localFile!!)
+        dm.cancelSeries("s")
+        assertEquals(setOf("b", "c"), sys.stopped.toSet())
+        assertEquals(DlStatus.DONE, dm.items["a"]?.status)
+        assertNull(dm.items["b"]); assertNull(store.getDownload("c"))
+        assertTrue(cover.exists())
+        dm.removeSeries("s")
+        assertNull(dm.items["a"]); assertNull(store.getDownload("a"))
+        assertFalse(audio.exists())
+        assertFalse(cover.exists())
     }
 
     /** 等线路期间暂停又继续：只交给系统一次 */

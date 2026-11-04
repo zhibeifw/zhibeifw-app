@@ -102,4 +102,23 @@ class StoreDeviceTest {
         assertEquals(listOf("a", "b"), store.loadFavorites().map { it.id })
         assertFalse(store.isFavorite("z"))
     }
+
+    @Test
+    fun backupCopiesUserTables() {
+        store.recordPlayback("课A_1", "课A", 10.0, 600.0, at = 1)
+        store.recordPlayback("课A_2", "课A", 20.0, 600.0, at = 2)
+        store.addFavorite("课A", at = 3)
+        val bak = File(dir, "bak.db")
+        Migrator.backupUserTables(db, bak)
+        val b = Db.open(bak.path)
+        try {
+            assertEquals(2L, b.first("SELECT COUNT(*) AS n FROM user_progress")?.values?.get("n"))
+            assertEquals(20.0, b.first("SELECT position FROM user_progress WHERE episode_id = '课A_2'")?.values?.get("position"))
+            assertEquals(1L, b.first("SELECT COUNT(*) AS n FROM user_favorite")?.values?.get("n"))
+            // 空表也建出来
+            assertEquals(0L, b.first("SELECT COUNT(*) AS n FROM user_download")?.values?.get("n"))
+        } finally {
+            b.db.close()
+        }
+    }
 }

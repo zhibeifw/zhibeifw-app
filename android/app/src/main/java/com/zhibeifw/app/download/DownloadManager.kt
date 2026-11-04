@@ -283,19 +283,25 @@ class DownloadManager(
     }
 
     fun cancel(id: String) {
-        val cur = items[id] ?: return
-        if (cur.status == DlStatus.DONE) return
+        if (cancelOne(id)) cleanupCovers()
+    }
+
+    /** 取消一集，不清封面（整门课一起取消时最后清一次）；真取消了返回 true */
+    private fun cancelOne(id: String): Boolean {
+        val cur = items[id] ?: return false
+        if (cur.status == DlStatus.DONE) return false
         bump(id); starting.remove(id)
         system.stop(id)
         runCatching { store.removeDownload(id) }
         set(id, null)
         finishBatchIfIdle()
-        cleanupCovers()
+        return true
     }
 
     fun cancelSeries(seriesId: String? = null) {
-        items.filter { (seriesId == null || it.value.seriesId == seriesId) && it.value.status != DlStatus.DONE }.keys.toList()
-            .forEach(::cancel)
+        val ids = items.filter { (seriesId == null || it.value.seriesId == seriesId) && it.value.status != DlStatus.DONE }.keys.toList()
+        ids.forEach { cancelOne(it) }
+        if (ids.isNotEmpty()) cleanupCovers()
     }
 
     fun resumePaused(seriesId: String? = null) {
@@ -307,19 +313,25 @@ class DownloadManager(
 
     /** 删除下载（文件和记录；没下完的先停下）。 */
     fun removeDownload(id: String) {
+        removeOne(id)
+        cleanupCovers()
+    }
+
+    /** 删一集，不清封面（整门课一起删时最后清一次） */
+    private fun removeOne(id: String) {
         items[id]?.let {
             if (it.status != DlStatus.DONE) {
-                cancel(id); return
+                cancelOne(id); return
             }
         }
         runCatching { store.getDownload(id)?.localFile }.getOrNull()?.let { files.absolute(it).delete() }
         runCatching { store.removeDownload(id) }
         set(id, null)
-        cleanupCovers()
     }
 
     fun removeSeries(seriesId: String) {
-        for (r in runCatching { store.downloadsOfSeries(seriesId) }.getOrDefault(emptyList())) removeDownload(r.episodeId)
+        for (r in runCatching { store.downloadsOfSeries(seriesId) }.getOrDefault(emptyList())) removeOne(r.episodeId)
+        cleanupCovers()
     }
 
     /** 没有任何下载记录的课，本机保存的封面删掉。 */

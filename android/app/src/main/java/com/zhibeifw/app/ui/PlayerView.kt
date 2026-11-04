@@ -135,10 +135,11 @@ fun PlayerLayer(model: AppModel) {
 @Composable
 private fun PlayerView(model: AppModel, p: PlayerController) {
     var scrub by remember { mutableStateOf<Double?>(null) }
-    // 睡眠定时倒计时：前台每秒刷新显示（到点暂停由播放器侧保证）
+    // 睡眠定时倒计时：只在按分钟定时时每秒刷新显示，其余时候不让整页每秒重组（到点暂停由播放器侧保证）
     var tick by remember { mutableStateOf(0) }
-    LaunchedEffect(Unit) {
-        while (true) {
+    val counting = p.sleep is SleepSetting.Timer
+    LaunchedEffect(counting) {
+        while (counting) {
             delay(1000); tick++
         }
     }
@@ -265,7 +266,7 @@ private fun Controls(
         Row(Modifier.padding(top = CP.Player.timeTop.d)) {
             Txt(clock(pos), S.caption, C.labelSecondary())
             Spacer(Modifier.weight(1f))
-            val now = remember(tick) { SystemClock.elapsedRealtime() } // 每秒刷新一次倒计时
+            val now = remember(tick, p.sleep) { SystemClock.elapsedRealtime() } // 每秒刷新一次倒计时；换定时时立刻重取
             val right = when (val s = p.sleep) {
                 SleepSetting.End -> sleepLabel(null)
                 is SleepSetting.Timer -> sleepLabel(s.secondsLeft(now))
