@@ -101,8 +101,12 @@ class ImageLoader(private val net: Network, val diskDir: File) {
     private fun key(src: String, px: Int) = "$src#$px"
     private fun diskFile(src: String) = File(diskDir, diskName(src))
 
-    fun cached(path: String, requested: Int): Bitmap? =
-        memory.get(key(source(path, requested), coverBucket(requested)))
+    /** 内存里这个尺寸的图；有本地封面时 load 按原图路径存，这里也先按它找 */
+    fun cached(path: String, requested: Int, local: Boolean = false): Bitmap? {
+        val px = coverBucket(requested)
+        if (local) memory.get(key(path, px))?.let { return it }
+        return memory.get(key(source(path, requested), px))
+    }
 
     /** 这张图在内存里已有的任一尺寸（取最大的）：正确尺寸还在解码时先用它显示。 */
     fun anyCached(path: String): Bitmap? = largest[path]?.let { memory.get(it.first) }
@@ -165,8 +169,9 @@ class ImageLoader(private val net: Network, val diskDir: File) {
             }
         }
         if (mine) {
+            // 下载本身不随发起它的视图取消：别的视图可能也在等它，取消了会让它们都拿到“失败”
             val ok = try {
-                download(src, diskFile(src))
+                withContext(NonCancellable) { download(src, diskFile(src)) }
             } catch (e: Throwable) {
                 Fetch.FAILED
             }
@@ -255,12 +260,12 @@ fun CoverImage(
         val px = coverRequestPx(with(LocalDensity.current) { maxWidth.roundToPx() })
         // 换尺寸（播放页弹出、横竖屏）时不清空：正确尺寸解码好之前，先用内存里这张图的任一尺寸顶上，不闪色块
         val first =
-            remember(path) { (loader.cached(path, px) ?: loader.anyCached(path))?.asImageBitmap() }
+            remember(path) { (loader.cached(path, px, localFile != null) ?: loader.anyCached(path))?.asImageBitmap() }
         var img by remember(path) { mutableStateOf(first) }
         val alpha = remember(path) { Animatable(if (first != null) 1f else 0f) }
         LaunchedEffect(path, px, originVersion) {
             if (px <= 0) return@LaunchedEffect // 还没量出宽度：等量好了再取，免得先下一张不需要的小图
-            val exact = loader.cached(path, px)
+            val exact = loader.cached(path, px, localFile != null)
             if (exact != null) {
                 img = exact.asImageBitmap(); failed = false; alpha.snapTo(1f); return@LaunchedEffect
             }

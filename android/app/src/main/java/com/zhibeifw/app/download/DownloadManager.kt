@@ -215,8 +215,10 @@ class DownloadManager(
         if (r == null || r.state == DlStatus.DONE) {
             system.release(id); return
         }
-        // 用户已经暂停了（暂停时已从系统里删掉）：下完的文件不要
-        if (r.state == DlStatus.PAUSED || items[id]?.status == DlStatus.PAUSED) return
+        // 用户已经暂停了：下完的文件不要，让系统删掉（多半暂停时已删过；启动对账记为暂停的那种系统里还留着）
+        if (r.state == DlStatus.PAUSED || items[id]?.status == DlStatus.PAUSED) {
+            system.release(id); return
+        }
         val g = gen[id]
         val rel = files.finalRelative(id, r.audioPath)
         val final = files.absolute(rel)

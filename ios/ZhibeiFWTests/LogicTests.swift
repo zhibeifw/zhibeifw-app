@@ -255,3 +255,21 @@ final class RaceTests: XCTestCase {
         XCTAssertEqual(libraryCountLines(total: 3, done: 1), ["3 节", "已下载 1 节"])
     }
 }
+
+final class ImageLoaderTests: XCTestCase {
+    /// 有本地封面时取过一次，同步查内存要能命中（不再每次进页面重新读文件、解码）
+    func testLocalCoverHitsMemory() async throws {
+        let dir = FileManager.default.temporaryDirectory.appendingPathComponent("il-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+        let loader = ImageLoader(diskDir: dir.appendingPathComponent("cache"))
+        let local = dir.appendingPathComponent("cover.png")
+        let img = UIGraphicsImageRenderer(size: CGSize(width: 64, height: 36)).image { c in
+            UIColor.red.setFill(); c.fill(CGRect(x: 0, y: 0, width: 64, height: 36))
+        }
+        try img.pngData()!.write(to: local)
+        XCTAssertNil(loader.cached("c/s/cover.jpg", maxPixel: 320, local: true))
+        let loaded = await loader.load("c/s/cover.jpg", maxPixel: 320, localFile: local)
+        XCTAssertNotNil(loaded)
+        XCTAssertNotNil(loader.cached("c/s/cover.jpg", maxPixel: 320, local: true))
+    }
+}

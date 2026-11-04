@@ -130,15 +130,19 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_BYTES_DOWNLOADED_SO_FAR)
                 val iTotal = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_TOTAL_SIZE_BYTES)
                 val iUri = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_LOCAL_URI)
+                // 交给系统时指定的目标地址：排队、还没开始下的那几集，上面的本地地址是空的，只有这一列有文件名
+                val iHint = c.getColumnIndex("hint")
                 while (c.moveToNext()) {
                     val sysId = c.getLong(iId)
                     // 下到 App 专属目录时系统给的是 file:// 地址；不是的话不拿它当文件路径，按我们交给系统时的文件名找
                     val uri = c.getString(iUri)?.let(Uri::parse)
                     val named = if (uri?.scheme == "file") uri.path?.let(::File) else null
-                    // 先按本次交给系统时记下的编号认；App 重启后按文件名认（刚交给系统时文件名可能还是空的，不能当成认不出）
-                    val id = idsBySys[sysId] ?: named?.name?.removeSuffix(".part")?.let { byKey[it] }
+                    val hinted = if (iHint >= 0) c.getString(iHint)?.let(Uri::parse)?.lastPathSegment else null
+                    val name = named?.name ?: hinted
+                    // 先按本次交给系统时记下的编号认；App 重启后按文件名认
+                    val id = idsBySys[sysId] ?: name?.removeSuffix(".part")?.let { byKey[it] }
                     if (id == null) {
-                        if (named != null) orphans.add(sysId); continue
+                        if (name != null) orphans.add(sysId); continue
                     }
                     val file = named ?: if (uri != null) File(dir(), fileKey(id) + ".part") else null
                     remember(id, sysId)

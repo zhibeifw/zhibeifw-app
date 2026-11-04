@@ -50,7 +50,12 @@ final class ImageLoader: @unchecked Sendable {
     private func memKey(_ src: String, _ px: Int) -> NSString { "\(src)#\(px)" as NSString }
     private func diskFile(_ src: String) -> URL { diskDir.appendingPathComponent(Self.diskName(src)) }
 
-    func cached(_ path: String, maxPixel: Int) -> UIImage? { memory.object(forKey: memKey(source(path, maxPixel), coverBucket(maxPixel))) }
+    /// 内存里这个尺寸的图；有本地封面时 load 按原图路径存，这里也先按它找
+    func cached(_ path: String, maxPixel: Int, local: Bool = false) -> UIImage? {
+        let px = coverBucket(maxPixel)
+        if local, let m = memory.object(forKey: memKey(path, px)) { return m }
+        return memory.object(forKey: memKey(source(path, maxPixel), px))
+    }
 
     /// 这张图在内存里已有的任一尺寸（取最大的）：正确尺寸还在解码时先用它显示。
     func anyCached(_ path: String) -> UIImage? {
@@ -217,7 +222,7 @@ struct CoverImage: View {
         // 没有封面路径但有本地封面（已下架、已下载的课）也要取
         guard !key.isEmpty, px > 0 else { return }
         lastPx = px
-        if let c = ImageLoader.shared.cached(key, maxPixel: px) { image = c; failed = false; return }
+        if let c = ImageLoader.shared.cached(key, maxPixel: px, local: localFile != nil) { image = c; failed = false; return }
         task?.cancel()
         let p = key, lf = localFile
         task = Task {

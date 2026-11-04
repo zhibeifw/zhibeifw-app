@@ -33,6 +33,7 @@ class DownloadManagerDeviceTest {
         var onEvent: ((DownloadEvent) -> Unit)? = null
         val started = ArrayList<String>()
         val stopped = ArrayList<String>()
+        val released = ArrayList<String>()
         override fun setHandler(h: (DownloadEvent) -> Unit) {
             onEvent = h
         }
@@ -45,7 +46,9 @@ class DownloadManagerDeviceTest {
             stopped += id
         }
 
-        override fun release(id: String) {}
+        override fun release(id: String) {
+            released += id
+        }
         override suspend fun activeIds(candidates: Collection<String>) = emptySet<String>()
     }
 
@@ -136,7 +139,7 @@ class DownloadManagerDeviceTest {
         assertEquals(1, batchFailed)
     }
 
-    /** 收尾前已经暂停：不要下完的文件，保持暂停，不误报存储空间不足 */
+    /** 收尾前已经暂停：不要下完的文件（让系统删掉），保持暂停，不误报存储空间不足 */
     @Test
     fun pausedBeforeFinishKeepsPaused() = onMain {
         dm.enqueue(listOf(item("a"))); settle()
@@ -146,6 +149,7 @@ class DownloadManagerDeviceTest {
         assertEquals(DlStatus.PAUSED, dm.items["a"]?.status)
         assertEquals(0, diskFull)
         assertFalse(files.absolute(files.finalRelative("a", "c/s/a.mp3")).exists())
+        assertEquals(listOf("a"), sys.released)
     }
 
     /** 对账清掉资料库里没有下载记录对应的音频 */
