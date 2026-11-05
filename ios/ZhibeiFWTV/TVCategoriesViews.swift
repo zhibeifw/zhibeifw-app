@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 分类：系统按钮（系统图标 + 分类名），选一个进这个分类的全部课程。
+/// 分类：系统按钮（系统图标 + 分类名，底色是分类的颜色），选一个进这个分类的全部课程。
 struct TVCategoriesView: View {
     @Environment(AppCore.self) private var core
     @State private var tiles: [CategoryTile] = []
@@ -13,6 +13,9 @@ struct TVCategoriesView: View {
                         Label(t.name, systemImage: categorySymbol(t))
                             .frame(maxWidth: .infinity, alignment: .leading)
                     }
+                    // 系统的“突出”按钮，底色用分类的颜色（和 iPhone 分类磁贴同一个颜色）
+                    .buttonStyle(.borderedProminent)
+                    .tint(resolveCategoryColor(t.color, id: t.id).color)
                 }
             }
             .padding(TVLayout.pageMargin)
