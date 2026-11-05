@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（首页、分类、资料库、搜索）。
+/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（首页、分类、资料库、搜索、关于）。
 struct TVRootView: View {
     @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
@@ -81,6 +81,8 @@ private struct TVMainView: View {
                 .tabItem { Text("资料库") }.tag(TVTab.library)
             NavigationStack(path: $m.searchPath) { TVSearchView().withRoutes() }
                 .tabItem { Text("搜索") }.tag(TVTab.search)
+            NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
+                .tabItem { Text("关于") }.tag(TVTab.about)
         }
     }
 }
@@ -94,8 +96,9 @@ extension View {
             case .category(let id): TVCategoryView(categoryId: id)
             case .recent: TVRecentView()
             case .favorites: TVFavoritesView()
-            case .about: TVAboutView()
             case .privacy: TVPrivacyView()
+            case .contact: TVContactView()
+            case .source: TVSourceView()
             }
         }
     }

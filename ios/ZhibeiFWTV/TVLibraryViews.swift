@@ -1,12 +1,11 @@
 import SwiftUI
 
-/// 资料库：最近播放、收藏、关于（iPhone 的“已下载”电视上没有；“关于”在 iPhone 是主页右上角，电视上放这里好找）。
+/// 资料库：最近播放、收藏（iPhone 的“已下载”电视上没有）。
 struct TVLibraryHubView: View {
     var body: some View {
         List {
             NavigationLink(value: TVRoute.recent) { Label("最近播放", systemImage: "clock") }
             NavigationLink(value: TVRoute.favorites) { Label("收藏", systemImage: "bookmark") }
-            NavigationLink(value: TVRoute.about) { Label("关于智悲佛网", systemImage: "info.circle") }
         }
         .frame(maxWidth: 900)
     }

@@ -1,6 +1,10 @@
 import SwiftUI
+import CoreImage.CIFilterBuiltins
 
-/// 关于：和 iPhone 同样的几项。电视上没有浏览器：隐私政策的全文打包在 App 里直接显示，源代码只显示网址。
+let CONTACT_EMAIL = "hello@zhibeifw.com"
+
+/// 关于（单独一个标签）：Logo、名字，下面一列：联系、隐私政策、源代码、清除缓存、刷新网络线路，最下面版权和版本。
+/// 电视上没有浏览器、也不能发邮件：联系进去显示电邮地址；隐私政策的全文打包在 App 里；源代码进去是二维码和网址。
 struct TVAboutView: View {
     @Environment(AppCore.self) private var core
     @State private var clearing = false
@@ -9,36 +13,32 @@ struct TVAboutView: View {
     @State private var routeResult: String?
 
     var body: some View {
-        HStack(alignment: .top, spacing: 100) {
-            VStack(spacing: 24) {
-                Image("Logo").resizable().scaledToFit().frame(width: 200).accessibilityLabel("智悲佛网 Logo")
-                Text("智悲佛网").font(.title2).fontWeight(.semibold)
-                Text("联系：hello@zhibeifw.com").font(.callout)
-                VStack(spacing: 20) {
-                    Button { clearCache() } label: {
-                        row("清除缓存", clearing ? "正在清除…" : clearResult)
-                    }
-                    Button { refreshRoutes() } label: {
-                        row("刷新网络线路", checking ? "正在检测…" : routeResult)
-                    }
-                }
-                .frame(width: 640)
-                .padding(.top, 20)
-                Spacer()
-                Text("智悲佛网 版权所有").font(.caption).foregroundStyle(.secondary)
-                Text("版本 " + AppInfo.version).font(.caption).foregroundStyle(.tertiary)
-            }
-            VStack(alignment: .leading, spacing: 40) {
+        List {
+            Section {
+                NavigationLink(value: TVRoute.contact) { row("联系", CONTACT_EMAIL) }
                 NavigationLink(value: TVRoute.privacy) { row("隐私政策", nil) }
-                    .frame(width: 640)
-                // 源代码只显示网址（电视上打不开网页）
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("源代码").font(.headline)
-                    Text(NetConfig.sourceURL.absoluteString).font(.callout).foregroundStyle(.secondary)
+                NavigationLink(value: TVRoute.source) { row("源代码", nil) }
+                Button { clearCache() } label: { row("清除缓存", clearing ? "正在清除…" : clearResult) }
+                Button { refreshRoutes() } label: { row("刷新网络线路", checking ? "正在检测…" : routeResult) }
+            } header: {
+                VStack(spacing: 20) {
+                    Image("Logo").resizable().scaledToFit().frame(width: 160).accessibilityLabel("智悲佛网 Logo")
+                    Text("智悲佛网").font(.title2).fontWeight(.semibold).foregroundStyle(.primary)
                 }
+                .frame(maxWidth: .infinity)
+                .padding(.bottom, 30)
+                .textCase(nil)
+            } footer: {
+                VStack(spacing: 8) {
+                    Text("智悲佛网 版权所有")
+                    Text("版本 " + AppInfo.version)
+                }
+                .font(.caption)
+                .frame(maxWidth: .infinity)
+                .padding(.top, 30)
             }
         }
-        .padding(TVLayout.pageMargin)
+        .frame(maxWidth: 1000)
     }
 
     private func row(_ title: String, _ value: String?) -> some View {
@@ -68,6 +68,48 @@ struct TVAboutView: View {
             routeResult = await core.refreshRoutes()
         }
     }
+}
+
+/// 联系：电邮地址（电视上不能发邮件，大字显示，抄下来用手机或电脑发）。
+struct TVContactView: View {
+    var body: some View {
+        VStack(spacing: 30) {
+            Image(systemName: "envelope").font(.system(size: 80)).foregroundStyle(.secondary)
+            Text("联系我们").font(.title3).foregroundStyle(.secondary)
+            Text(CONTACT_EMAIL).font(.title).fontWeight(.semibold)
+                .focusable()  // 页面上总要有一个能选中的，返回键才有地方落
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// 源代码：二维码（手机扫码打开）和网址。
+struct TVSourceView: View {
+    var body: some View {
+        VStack(spacing: 30) {
+            if let img = qrImage(NetConfig.sourceURL.absoluteString) {
+                Image(decorative: img, scale: 1)
+                    .interpolation(.none)  // 放大时方块保持清晰，不糊
+                    .resizable()
+                    .frame(width: 360, height: 360)
+                    .padding(28)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))  // 深色模式下也是白底黑码，手机才扫得出
+            }
+            Text("用手机扫码查看").font(.callout).foregroundStyle(.secondary)
+            Text(NetConfig.sourceURL.absoluteString).font(.title3)
+                .focusable()
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+/// 用系统的 CoreImage 生成二维码（不用第三方库）。
+private func qrImage(_ text: String) -> CGImage? {
+    let f = CIFilter.qrCodeGenerator()
+    f.message = Data(text.utf8)
+    f.correctionLevel = "M"
+    guard let out = f.outputImage else { return nil }
+    return CIContext().createCGImage(out, from: out.extent)
 }
 
 /// 隐私政策全文（打包在 App 里的 privacy.txt，和网站上的一致；改了网站上的文字要同步改这个文件）。

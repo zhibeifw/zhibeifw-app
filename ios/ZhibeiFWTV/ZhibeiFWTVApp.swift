@@ -21,14 +21,14 @@ struct ZhibeiFWTVApp: App {
     }
 }
 
-/// 电视上是顶部的四个标签，和 iPhone 一样：首页、分类、资料库、搜索。
-enum TVTab: Hashable { case home, categories, library, search }
+/// 电视上是顶部的标签：首页、分类、资料库、搜索（和 iPhone 一样），再加“关于”（iPhone 在主页右上角）。
+enum TVTab: Hashable { case home, categories, library, search, about }
 
 /// 页面地址（和 iPhone 的 Route 对应；没有“已下载”）。
 enum TVRoute: Hashable {
     case series(String)
     case category(String)
-    case recent, favorites, about, privacy
+    case recent, favorites, privacy, contact, source
 }
 
 /// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈、播放页）。
@@ -42,6 +42,7 @@ final class TVModel {
     var categoriesPath: [TVRoute] = []
     var libraryPath: [TVRoute] = []
     var searchPath: [TVRoute] = []
+    var aboutPath: [TVRoute] = []
 
     /// “前往课程”：收起播放页，在当前标签里进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
@@ -52,6 +53,9 @@ final class TVModel {
         case .categories: if categoriesPath.last != r { categoriesPath.append(r) }
         case .library: if libraryPath.last != r { libraryPath.append(r) }
         case .search: if searchPath.last != r { searchPath.append(r) }
+        case .about:  // 关于里没有课程：到首页里进
+            tab = .home
+            if homePath.last != r { homePath.append(r) }
         }
     }
 
