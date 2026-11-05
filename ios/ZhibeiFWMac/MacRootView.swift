@@ -126,6 +126,16 @@ private struct MacMainView: View {
             }
         }
         .animation(.easeInOut(duration: 0.3), value: model.playerOpen)
+        // 官网版有新版本：和 Android 官网版同样的文字
+        .alert(
+            "发现新版本 \(model.updates.dialog?.version ?? "")",
+            isPresented: Binding(get: { model.updates.dialog != nil }, set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } })
+        ) {
+            Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
+            Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
+        } message: {
+            Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
+        }
         // 播放页打开时藏起整个工具栏，播放页占满窗口；关闭用播放页左上角的圈 X（或 Esc）
         .toolbar(model.playerOpen ? .hidden : .visible, for: .windowToolbar)
     }

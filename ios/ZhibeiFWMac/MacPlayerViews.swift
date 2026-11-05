@@ -237,10 +237,13 @@ private struct MacPlayerControls: View {
 let CONTACT_EMAIL = "hello@zhibeifw.com"
 
 /// 关于智悲佛网（App 菜单第一项打开的窗口）：Logo、名字，下面：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
-/// Mac 上能打开网页、发邮件：隐私政策、源代码用浏览器打开，联系用邮件 App。
+/// Mac 上能打开网页、发邮件：隐私政策、源代码用浏览器打开，联系用邮件 App。官网版最后多一行“检查更新”（和 Android 官网版一样）。
 struct MacAboutView: View {
     @Environment(AppCore.self) private var core
+    @Environment(MacModel.self) private var model
     @Environment(\.openURL) private var openURL
+    @State private var checkingUpdate = false
+    @State private var updateResult: String?
     @State private var clearing = false
     @State private var checking = false
     @State private var clearResult: String?
@@ -261,6 +264,20 @@ struct MacAboutView: View {
                 LabeledContent("源代码") { Button("打开") { openURL(NetConfig.sourceURL) } }
                 LabeledContent("联系") {
                     Button(CONTACT_EMAIL) { if let u = URL(string: "mailto:\(CONTACT_EMAIL)") { openURL(u) } }
+                }
+                // 只有官网版有（App Store 版的更新交给 App Store）
+                if model.updates.channel == .site {
+                    LabeledContent("检查更新") {
+                        Button(checkingUpdate ? "正在检查…" : (updateResult ?? "检查")) {
+                            guard !checkingUpdate else { return }
+                            checkingUpdate = true
+                            Task {
+                                updateResult = await model.updates.check(manual: true)
+                                checkingUpdate = false
+                            }
+                        }
+                        .disabled(checkingUpdate)
+                    }
                 }
             }
             .formStyle(.grouped)

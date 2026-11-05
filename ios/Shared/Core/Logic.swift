@@ -331,6 +331,7 @@ func launchFreshWaitMs(online: Bool, elapsedMs: Double) -> Double { online ? max
 // MARK: - 更新检查
 
 let CHECK_INTERVAL_MS: Double = 24 * 3600 * 1000
+let REMIND_LATER_MS: Double = 7 * 24 * 3600 * 1000
 
 func shouldAutoCheck(lastCheckedAt: Double?, now: Double) -> Bool {
     guard let l = lastCheckedAt else { return true }
@@ -345,6 +346,19 @@ func decideUpdate(current: String, _ u: UpgradeFile, channel: UpdateChannel) -> 
     if vsMin == -1 { return .outdated(version: u.latestVersion, apkPath: u.apkPath) }
     if channel == .site && vsLatest == -1 { return .optional(version: u.latestVersion, apkPath: u.apkPath) }
     return .none
+}
+
+/// Mac 官网版：把 upgrade.json 的 "mac" 段当成一份升级信息，交给 decideUpdate（apkPath 放的是 dmg 的路径）。
+func macUpgradeFile(_ u: UpgradeFile) -> UpgradeFile? {
+    u.mac.map { UpgradeFile(latestVersion: $0.latestVersion, minVersion: $0.minVersion, apkPath: $0.dmgPath) }
+}
+
+/// “以后再说”：同一个版本 7 天内不再自动提醒（和 Android 官网版一样）。
+struct RemindLater: Equatable { var version: String; var at: Double }
+
+func suppressedByRemindLater(_ r: RemindLater?, version: String, now: Double) -> Bool {
+    guard let r else { return false }
+    return r.version == version && now >= r.at && now - r.at < REMIND_LATER_MS
 }
 
 // MARK: - 域名顺序

@@ -13,9 +13,15 @@ struct ZhibeiFWMacApp: App {
             MacRootView()
                 .environment(model)
                 .environment(model.core)
-                .task { await model.core.boot() }
+                .task {
+                    await model.core.boot()
+                    await model.updates.check(manual: false)
+                }
                 .onChange(of: scenePhase) { _, p in
-                    if p == .active { model.core.onForeground() }
+                    if p == .active {
+                        model.core.onForeground()
+                        Task { await model.updates.check(manual: false) }
+                    }
                     if p == .background { model.core.onBackground() }
                 }
         }
@@ -25,6 +31,7 @@ struct ZhibeiFWMacApp: App {
         Window("关于智悲佛网", id: "about") {
             MacAboutView()
                 .environment(model.core)
+                .environment(model)
         }
         .windowResizability(.contentSize)
         .defaultPosition(.center)
@@ -47,6 +54,8 @@ enum MacRoute: Hashable {
 @Observable
 final class MacModel {
     @ObservationIgnored let core: AppCore
+    /// 检查更新（官网版提示新版本，App Store 版只提示过旧）
+    let updates = MacUpdateChecker()
     var section: MacSection? = .home {
         didSet { if section != oldValue { path = [] } }
     }

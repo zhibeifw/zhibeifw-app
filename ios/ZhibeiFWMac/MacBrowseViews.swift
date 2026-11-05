@@ -22,6 +22,21 @@ struct MacHomeView: View {
         let home = core.home
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: 32) {
+                if model.updates.outdated && !model.updates.outdatedDismissed {
+                    // 低于最低版本：和 iPhone、Android 同样的提示
+                    HStack {
+                        Label(
+                            model.updates.channel == .site
+                                ? "此版本过旧，已无法获得最新的内容更新，请到官网更新"
+                                : "此版本过旧，已无法获得最新的内容更新，请到 App Store 更新",
+                            systemImage: "exclamationmark.triangle")
+                        Spacer()
+                        Button("关闭") { model.updates.outdatedDismissed = true }
+                    }
+                    .padding(12)
+                    .background(RoundedRectangle(cornerRadius: 8).fill(C.backgroundSecondary))
+                    .padding(.horizontal, MacLayout.pageMargin)
+                }
                 if core.syncFailed {
                     Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
                         .padding(.horizontal, MacLayout.pageMargin)

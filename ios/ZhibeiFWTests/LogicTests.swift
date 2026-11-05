@@ -135,6 +135,24 @@ final class ValidateTests: XCTestCase {
         XCTAssertNil(parseUpgrade(#"{"latestVersion":"1.0.0","minVersion":"1.1.0","apkPath":"releases/a.apk"}"#))
         XCTAssertNil(parseUpgrade(#"{"latestVersion":"1.0.0","minVersion":"1.0.0","apkPath":"other/a.apk"}"#))
         XCTAssertNil(parseUpgrade(#"{"latestVersion":"v1","minVersion":"1.0.0","apkPath":"releases/a.apk"}"#))
+        // Mac 段：合规就读出来；没有或不合规只丢这一段，Android 那几项照常
+        let base = #""latestVersion":"1.10.0","minVersion":"1.9.0","apkPath":"releases/a.apk""#
+        XCTAssertEqual(
+            parseUpgrade("{\(base),\"mac\":{\"latestVersion\":\"1.4.0\",\"minVersion\":\"1.2.0\",\"dmgPath\":\"releases/m.dmg\"}}")?.mac,
+            MacUpgrade(latestVersion: "1.4.0", minVersion: "1.2.0", dmgPath: "releases/m.dmg"))
+        XCTAssertNil(parseUpgrade("{\(base)}")?.mac)
+        XCTAssertNotNil(parseUpgrade("{\(base)}"))
+        for bad in [
+            #"{"latestVersion":"1.0.0","minVersion":"1.1.0","dmgPath":"releases/m.dmg"}"#,  // 最低版本比最新高
+            #"{"latestVersion":"1.1.0","minVersion":"1.0.0","dmgPath":"other/m.zip"}"#,  // 不在 releases/
+            #"{"latestVersion":"1.1.0","minVersion":"1.0.0","dmgPath":"releases/m.zip"}"#,  // 不是 dmg
+            #"{"latestVersion":"1.1.0","minVersion":"1.0.0","dmgPath":"https://x.com/releases/m.dmg"}"#,  // 不是相对路径
+            #""releases/m.dmg""#,  // 不是对象
+        ] {
+            let u = parseUpgrade("{\(base),\"mac\":\(bad)}")
+            XCTAssertNotNil(u, bad)
+            XCTAssertNil(u?.mac, bad)
+        }
     }
     func testCategoryStyle() {
         XCTAssertEqual(resolveCategoryColor("blue", id: "x"), Tok.ContentPalette.colors[1])
@@ -195,6 +213,20 @@ final class InteractionTests: XCTestCase {
         XCTAssertEqual(decideUpdate(current: "bad", u, channel: .site), .none)
         XCTAssertTrue(shouldAutoCheck(lastCheckedAt: nil, now: 0))
         XCTAssertFalse(shouldAutoCheck(lastCheckedAt: 0, now: CHECK_INTERVAL_MS - 1))
+        // Mac 官网版用 "mac" 段判断；没有这一段就不提示
+        let withMac = UpgradeFile(
+            latestVersion: "1.10.0", minVersion: "1.2.0", apkPath: "releases/a.apk",
+            mac: MacUpgrade(latestVersion: "1.4.0", minVersion: "1.3.0", dmgPath: "releases/m.dmg"))
+        XCTAssertEqual(decideUpdate(current: "1.3.5", macUpgradeFile(withMac)!, channel: .site), .optional(version: "1.4.0", apkPath: "releases/m.dmg"))
+        XCTAssertEqual(decideUpdate(current: "1.2.9", macUpgradeFile(withMac)!, channel: .site), .outdated(version: "1.4.0", apkPath: "releases/m.dmg"))
+        XCTAssertNil(macUpgradeFile(u))
+        // 以后再说：同一版本 7 天内不提醒；新版本、过了 7 天、时钟往回拨都照常提醒
+        let r = RemindLater(version: "1.4.0", at: 1000)
+        XCTAssertTrue(suppressedByRemindLater(r, version: "1.4.0", now: 1000 + REMIND_LATER_MS - 1))
+        XCTAssertFalse(suppressedByRemindLater(r, version: "1.4.0", now: 1000 + REMIND_LATER_MS))
+        XCTAssertFalse(suppressedByRemindLater(r, version: "1.5.0", now: 2000))
+        XCTAssertFalse(suppressedByRemindLater(r, version: "1.4.0", now: 999))
+        XCTAssertFalse(suppressedByRemindLater(nil, version: "1.4.0", now: 2000))
     }
     func testSyncPolicy() {
         XCTAssertTrue(shouldSyncOnForeground(now: 60_000, lastSyncAt: 0, syncing: false))

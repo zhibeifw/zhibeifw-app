@@ -208,13 +208,31 @@ extension String {
 
 // MARK: - upgrade.json
 
-struct UpgradeFile: Equatable, Codable { var latestVersion: String; var minVersion: String; var apkPath: String }
+struct UpgradeFile: Equatable, Codable {
+    var latestVersion: String; var minVersion: String; var apkPath: String
+    /// Mac 官网版的那一段（Mac 和 Android 不一定同时发版，所以单独写）；没有或不合规就是 nil，不影响上面几项
+    var mac: MacUpgrade? = nil
+}
+
+/// upgrade.json 里的 "mac": { latestVersion, minVersion, dmgPath }。dmgPath 和 Android 的 apkPath 同样规则（相对路径、在 releases/ 下），另要求是 .dmg。
+struct MacUpgrade: Equatable, Codable { var latestVersion: String; var minVersion: String; var dmgPath: String }
 
 func parseUpgrade(_ data: Data) -> UpgradeFile? {
     guard let o = parseJson(data, .upgrade) as? [String: Any] else { return nil }
     guard let cmp = compareVersions(o["minVersion"], o["latestVersion"]), cmp != 1 else { return nil }
     guard isValidRelativePath(o["apkPath"]), let apk = o["apkPath"] as? String, apk.hasPrefix("releases/") else { return nil }
-    return UpgradeFile(latestVersion: o["latestVersion"] as! String, minVersion: o["minVersion"] as! String, apkPath: apk)
+    return UpgradeFile(
+        latestVersion: o["latestVersion"] as! String, minVersion: o["minVersion"] as! String, apkPath: apk,
+        mac: parseMacUpgrade(o["mac"]))
+}
+
+/// "mac" 这一段：和上面同样的规则（最低版本不高于最新版本、安装包在 releases/ 下），再要求是 .dmg。
+private func parseMacUpgrade(_ v: Any?) -> MacUpgrade? {
+    guard let m = v as? [String: Any] else { return nil }
+    guard let cmp = compareVersions(m["minVersion"], m["latestVersion"]), cmp != 1 else { return nil }
+    guard isValidRelativePath(m["dmgPath"]), let dmg = m["dmgPath"] as? String, dmg.hasPrefix("releases/"), dmg.hasSuffix(".dmg")
+    else { return nil }
+    return MacUpgrade(latestVersion: m["latestVersion"] as! String, minVersion: m["minVersion"] as! String, dmgPath: dmg)
 }
 
 func parseUpgrade(_ text: String) -> UpgradeFile? { parseUpgrade(Data(text.utf8)) }
