@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- Mac 版的 Info.plist（其余键由 Xcode 按 INFOPLIST_KEY_* 生成）。 -->
+<plist version="1.0">
+<dict>
+	<key>ZBFWCloudContainer</key>
+	<string>iCloud.com.zhibeifw.app</string>
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>zh-Hans</string>
+</dict>
+</plist>

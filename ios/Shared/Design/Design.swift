@@ -1,5 +1,9 @@
 import SwiftUI
+#if os(macOS)
+import AppKit
+#else
 import UIKit
+#endif
 
 /// 一个颜色令牌：浅色、深色两个值（ARGB），跟随系统深浅模式。
 struct ZColor: Sendable, Hashable {
@@ -9,6 +13,23 @@ struct ZColor: Sendable, Hashable {
     init(light: UInt32, dark: UInt32) { self.light = light; self.dark = dark }
     init(both: UInt32) { self.light = both; self.dark = both }
 
+    #if os(macOS)
+    var nsColor: NSColor {
+        let l = light, d = dark
+        return NSColor(name: nil) { a in
+            a.bestMatch(from: [.aqua, .darkAqua]) == .darkAqua ? NSColor(argb: d) : NSColor(argb: l)
+        }
+    }
+    var color: Color { Color(nsColor: nsColor) }
+
+    /// 打开“增强对比度”时换成 hc（HIG：支持增强对比度）。
+    func color(highContrast hc: ZColor) -> Color {
+        let n = nsColor, h = hc.nsColor
+        return Color(nsColor: NSColor(name: nil) { _ in
+            NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast ? h : n
+        })
+    }
+    #else
     var uiColor: UIColor {
         let l = light, d = dark
         return UIColor { $0.userInterfaceStyle == .dark ? UIColor(argb: d) : UIColor(argb: l) }
@@ -20,8 +41,18 @@ struct ZColor: Sendable, Hashable {
         let n = uiColor, h = hc.uiColor
         return Color(uiColor: UIColor { t in (t.accessibilityContrast == .high ? h : n).resolvedColor(with: t) })
     }
+    #endif
 }
 
+#if os(macOS)
+extension NSColor {
+    convenience init(argb: UInt32) {
+        self.init(
+            srgbRed: CGFloat((argb >> 16) & 0xFF) / 255, green: CGFloat((argb >> 8) & 0xFF) / 255,
+            blue: CGFloat(argb & 0xFF) / 255, alpha: CGFloat((argb >> 24) & 0xFF) / 255)
+    }
+}
+#else
 extension UIColor {
     convenience init(argb: UInt32) {
         self.init(
@@ -29,6 +60,7 @@ extension UIColor {
             blue: CGFloat(argb & 0xFF) / 255, alpha: CGFloat((argb >> 24) & 0xFF) / 255)
     }
 }
+#endif
 
 /// 简写：界面代码里用 `C.labelPrimary`。
 enum C {
@@ -37,11 +69,18 @@ enum C {
     // tvOS 没有系统背景色（systemBackground 等），用令牌里的同值
     static var background: Color { Tok.Color.background.color }
     static var backgroundSecondary: Color { Tok.Color.backgroundSecondary.color }
+    #elseif os(macOS)
+    static var background: Color { Color(nsColor: .windowBackgroundColor) }
+    static var backgroundSecondary: Color { Color(nsColor: .controlBackgroundColor) }
     #else
     static var background: Color { Color(uiColor: .systemBackground) }
     static var backgroundSecondary: Color { Color(uiColor: .secondarySystemBackground) }
     #endif
+    #if os(macOS)
+    static var labelPrimary: Color { Color(nsColor: .labelColor) }
+    #else
     static var labelPrimary: Color { Color(uiColor: .label) }
+    #endif
     // 比系统默认更深的几项：平时用我们的值，增强对比度时更深
     private static var hc: Tok.Color.HighContrast.Type { Tok.Color.HighContrast.self }
     static var labelSecondary: Color { Tok.Color.labelSecondary.color(highContrast: hc.labelSecondary) }
@@ -68,6 +107,7 @@ struct ZTextStyle: Sendable, Hashable {
         default: return .bold
         }
     }
+    #if !os(macOS)
     /// 这个字号对应的系统文字样式（HIG 字号阶梯），决定随系统字号放大的曲线。
     var textStyle: UIFont.TextStyle {
         switch size {
@@ -96,8 +136,26 @@ struct ZTextStyle: Sendable, Hashable {
         default: return .bold
         }
     }
+    #endif
 }
 
+#if os(macOS)
+/// Mac 没有系统字体大小（动态字体），固定为 1。
+func fontScale(_ size: DynamicTypeSize) -> CGFloat { 1 }
+
+private struct ZFontModifier: ViewModifier {
+    let style: ZTextStyle
+    let maxScale: CGFloat?
+
+    func body(content: Content) -> some View {
+        let natural = NSFont.systemFont(ofSize: style.size).boundingRectForFont.height
+        return
+            content
+            .font(.system(size: style.size, weight: style.fontWeight))
+            .lineSpacing(max(0, style.lineHeight - natural))
+    }
+}
+#else
 /// 系统字号缩放系数（相对于“默认”档）。和 Android 的 fontScale 对应。
 func fontScale(_ size: DynamicTypeSize) -> CGFloat {
     let traits = UITraitCollection(preferredContentSizeCategory: UIContentSizeCategory(size))
@@ -125,6 +183,7 @@ private struct ZFontModifier: ViewModifier {
             .padding(.vertical, max(0, lineHeight - natural) / 2)
     }
 }
+#endif
 
 extension View {
     /// 用字号令牌设字体；maxScale 给固定尺寸的外壳（悬浮导航）封顶。

@@ -1,6 +1,10 @@
 import AVFoundation
 import MediaPlayer
+#if os(macOS)
+import AppKit
+#else
 import UIKit
+#endif
 import Observation
 
 // 播放控制器。播放状态以系统播放器为准：
@@ -93,9 +97,11 @@ final class PlayerController {
     // MARK: 系统回调
 
     private func configureSession() {
+        let nc = NotificationCenter.default
+        // Mac 没有音频会话（AVAudioSession）：拔耳机、来电打断这些由系统自己处理
+        #if !os(macOS)
         let s = AVAudioSession.sharedInstance()
         try? s.setCategory(.playback, mode: .spokenAudio, policy: .longFormAudio)
-        let nc = NotificationCenter.default
         nc.addObserver(forName: AVAudioSession.routeChangeNotification, object: nil, queue: .main) { [weak self] n in
             // 拔耳机自动暂停（oldDeviceUnavailable）。系统本身也会暂停，这里确保并存下位置。
             guard
@@ -118,6 +124,7 @@ final class PlayerController {
                 if opts.contains(.shouldResume) { self.resumeAfterInterruption() }
             }
         }
+        #endif
         nc.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] n in
             MainActor.assumeIsolated {
                 guard let self, (n.object as? AVPlayerItem) === self.player.currentItem else { return }

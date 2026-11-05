@@ -1,5 +1,4 @@
 import SwiftUI
-import UIKit
 import ImageIO
 import CryptoKit
 
@@ -10,7 +9,7 @@ import CryptoKit
 final class ImageLoader: @unchecked Sendable {
     static let shared = ImageLoader()
 
-    private let memory = NSCache<NSString, UIImage>()
+    private let memory = NSCache<NSString, PlatformImage>()
     let diskDir: URL
     private let session: URLSession
     private var inflight: [String: Task<Fetch, Never>] = [:]
@@ -51,20 +50,20 @@ final class ImageLoader: @unchecked Sendable {
     private func diskFile(_ src: String) -> URL { diskDir.appendingPathComponent(Self.diskName(src)) }
 
     /// 内存里这个尺寸的图；有本地封面时 load 按原图路径存，这里也先按它找
-    func cached(_ path: String, maxPixel: Int, local: Bool = false) -> UIImage? {
+    func cached(_ path: String, maxPixel: Int, local: Bool = false) -> PlatformImage? {
         let px = coverBucket(maxPixel)
         if local, let m = memory.object(forKey: memKey(path, px)) { return m }
         return memory.object(forKey: memKey(source(path, maxPixel), px))
     }
 
     /// 这张图在内存里已有的任一尺寸（取最大的）：正确尺寸还在解码时先用它显示。
-    func anyCached(_ path: String) -> UIImage? {
+    func anyCached(_ path: String) -> PlatformImage? {
         guard let k = lock.withLock({ largest[path]?.key }) else { return nil }
         return memory.object(forKey: k)
     }
 
     /// 取图：内存 → 本地文件（资料库离线封面）→ 磁盘 → 网络。
-    func load(_ path: String, maxPixel requested: Int, localFile: URL? = nil) async -> UIImage? {
+    func load(_ path: String, maxPixel requested: Int, localFile: URL? = nil) async -> PlatformImage? {
         let px = coverBucket(requested)
         if let lf = localFile, FileManager.default.fileExists(atPath: lf.path) {
             let key = memKey(path, px)
@@ -155,21 +154,21 @@ final class ImageLoader: @unchecked Sendable {
         }
     }
 
-    private func store(_ img: UIImage, _ key: NSString, _ path: String) {
+    private func store(_ img: PlatformImage, _ key: NSString, _ path: String) {
         let cost = Int(img.size.width * img.size.height * img.scale * img.scale * 4)
         memory.setObject(img, forKey: key, cost: cost)
         let w = Int(max(img.size.width, img.size.height) * img.scale)
         lock.withLock { if w > (largest[path]?.width ?? 0) { largest[path] = (key, w) } }
     }
 
-    static func downsample(_ url: URL, maxPixel: Int) -> UIImage? {
+    static func downsample(_ url: URL, maxPixel: Int) -> PlatformImage? {
         guard let src = CGImageSourceCreateWithURL(url as CFURL, [kCGImageSourceShouldCache: false] as CFDictionary) else { return nil }
         let opts: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceShouldCacheImmediately: true,
             kCGImageSourceCreateThumbnailWithTransform: true, kCGImageSourceThumbnailMaxPixelSize: maxPixel,
         ]
         guard let cg = CGImageSourceCreateThumbnailAtIndex(src, 0, opts as CFDictionary) else { return nil }
-        return UIImage(cgImage: cg)
+        return PlatformImage(cgImage: cg)
     }
 
     /// 关于页“清除缓存”：清内存和磁盘两层（不碰已下载课程另存的封面）。
@@ -195,7 +194,7 @@ struct CoverImage: View {
     let colorId: String
     var radius: CGFloat
     var localFile: URL? = nil
-    @State private var image: UIImage?
+    @State private var image: PlatformImage?
     @State private var failed = false
     @Environment(\.displayScale) private var scale
     /// 取图和缓存用的键。已下架的课目录里没有封面路径，但下载时存过本地封面：用“local:课程 ID”当键，
@@ -211,7 +210,7 @@ struct CoverImage: View {
         Rectangle().fill(placeholder)
             // 图片铺满容器、跟着容器走（不用上一帧量到的尺寸，动画中不会错位露出色块）
             .overlay {
-                if let shown { Image(uiImage: shown).resizable().scaledToFill().transition(.opacity) }
+                if let shown { Image(platformImage: shown).resizable().scaledToFill().transition(.opacity) }
             }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .onGeometryChange(for: Int.self) {
