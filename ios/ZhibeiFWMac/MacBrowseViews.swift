@@ -241,12 +241,13 @@ struct MacSeriesView: View {
                     VStack(alignment: .leading, spacing: 28) {
                         headerBlock(h)
                         VStack(alignment: .leading, spacing: 0) {
-                            Text("全部课程").font(.title2).fontWeight(.semibold).padding(.bottom, 8)
-                            Divider()
+                            Text("全部课程").font(.title2).fontWeight(.semibold).padding(.bottom, 4)
+                            // 分隔线只画在两集之间（标题下面、最后一集下面不画），和 iPhone 课程页一样
+                            let list = oldestFirst ? episodes : episodes.reversed()
                             LazyVStack(spacing: 0) {
-                                ForEach(oldestFirst ? episodes : episodes.reversed()) { e in
+                                ForEach(Array(list.enumerated()), id: \.element.id) { i, e in
+                                    if i > 0 { Divider() }
                                     MacEpisodeRow(episode: e, ctx: .series(seriesId))
-                                    Divider()
                                 }
                             }
                         }
@@ -404,10 +405,20 @@ struct MacRecentView: View {
             if rows.isEmpty {
                 Text("暂无收听记录").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
-                List {
-                    Section("\(rows.count) 条记录") {
-                        ForEach(rows) { r in row(r) }
+                // 和课程页一样：整页限宽居中，“N 条记录”下面不画线，分隔线只画在两条记录之间
+                ScrollView(.vertical) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("\(rows.count) 条记录").foregroundStyle(.secondary)
+                        LazyVStack(spacing: 0) {
+                            ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
+                                if i > 0 { Divider() }
+                                row(r)
+                            }
+                        }
                     }
+                    .frame(maxWidth: MacLayout.seriesMaxWidth)
+                    .padding(MacLayout.pageMargin)
+                    .frame(maxWidth: .infinity)
                 }
             }
         }
@@ -443,7 +454,7 @@ struct MacRecentView: View {
                 Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
                     .foregroundStyle(.secondary).monospacedDigit()
             }
-            .padding(.vertical, 4)
+            .padding(.vertical, 10)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
