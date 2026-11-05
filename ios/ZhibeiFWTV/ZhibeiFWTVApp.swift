@@ -1,20 +1,43 @@
 import SwiftUI
+import Observation
 
-/// Apple TV 版入口。界面还没做：这一版只用来确认共用代码（ios/Shared）能在 tvOS 上编译、运行。
+/// Apple TV 版入口。共用的状态与动作在 AppCore（ios/Shared/App）；这里只多一个“播放页开着没有”。
 @main
 struct ZhibeiFWTVApp: App {
+    @State private var model = TVModel()
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
-        WindowGroup { PlaceholderView() }
+        WindowGroup {
+            TVRootView()
+                .environment(model)
+                .environment(model.core)
+                .task { await model.core.boot() }
+                .onChange(of: scenePhase) { _, p in
+                    if p == .active { model.core.onForeground() }
+                    if p == .background { model.core.onBackground() }
+                }
+        }
     }
 }
 
-private struct PlaceholderView: View {
-    var body: some View {
-        VStack(spacing: 24) {
-            Text("智悲佛网").font(.largeTitle).foregroundStyle(C.labelPrimary)
-            Text("Apple TV 版开发中").font(.title3).foregroundStyle(C.labelSecondary)
+/// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态。
+@MainActor
+@Observable
+final class TVModel {
+    @ObservationIgnored let core: AppCore
+    var playerOpen = false
+
+    init() {
+        core = AppCore()
+        core.presentPlayer = { [weak self] in
+            guard let self, self.core.player.current != nil else { return }
+            self.playerOpen = true
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(C.background)
+        // 电视上卡片都用 640 小图（1080p 一倍、4K 两倍屏都够清楚）；每行只取前几张
+        core.prefetchHomeCovers = { home in
+            let cards = home.ongoing + home.featured + home.categories.flatMap { $0.series.prefix(5) }
+            ImageLoader.shared.prefetch(cards.map { (path: $0.coverPath, requested: COVER_THUMB_WIDTHS.last!) })
+        }
     }
 }
