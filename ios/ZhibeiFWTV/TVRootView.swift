@@ -68,14 +68,19 @@ private struct TVInitView: View {
 }
 
 private struct TVMainView: View {
+    @Environment(TVModel.self) private var model
+
     var body: some View {
-        TabView {
-            NavigationStack { TVHomeView().withSeriesDestination() }
-                .tabItem { Text("首页") }
-            NavigationStack { TVRecentView().withSeriesDestination() }
-                .tabItem { Text("最近") }
-            NavigationStack { TVFavoritesView().withSeriesDestination() }
-                .tabItem { Text("收藏") }
+        @Bindable var m = model
+        TabView(selection: $m.tab) {
+            NavigationStack(path: $m.homePath) { TVHomeView().withSeriesDestination() }
+                .tabItem { Text("首页") }.tag(TVTab.home)
+            NavigationStack(path: $m.recentPath) { TVRecentView().withSeriesDestination() }
+                .tabItem { Text("最近") }.tag(TVTab.recent)
+            NavigationStack(path: $m.favoritesPath) { TVFavoritesView().withSeriesDestination() }
+                .tabItem { Text("收藏") }.tag(TVTab.favorites)
+            TVAboutView()
+                .tabItem { Text("关于") }.tag(TVTab.about)
         }
     }
 }

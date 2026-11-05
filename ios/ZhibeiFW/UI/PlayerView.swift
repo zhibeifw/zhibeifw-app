@@ -267,7 +267,6 @@ struct PlayerView: View {
 }
 
 /// 倍速菜单里的文字：“1×（正常）”“1.5×”。
-func rateMenuTitle(_ r: Double) -> String { r == 1 ? "1×（正常）" : String(format: "%g×", r) }
 
 /// 播放进度：外观是系统滑块（UISlider），整条都能拖。
 /// ：iOS 26 起用系统的“无把手”媒体进度样式（UISlider.Style.thumbless，和“播客”一样只有一条线）；

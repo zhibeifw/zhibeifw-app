@@ -21,12 +21,32 @@ struct ZhibeiFWTVApp: App {
     }
 }
 
-/// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态。
+enum TVTab: Hashable { case home, recent, favorites, about }
+
+/// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈、播放页）。
 @MainActor
 @Observable
 final class TVModel {
     @ObservationIgnored let core: AppCore
     var playerOpen = false
+    var tab: TVTab = .home
+    var homePath: [SeriesLink] = []
+    var recentPath: [SeriesLink] = []
+    var favoritesPath: [SeriesLink] = []
+
+    /// “前往课程”：收起播放页，在当前标签里进这门课；最上面已经是这门课就不再进一层。
+    func goToSeries(_ seriesId: String) {
+        playerOpen = false
+        let link = SeriesLink(id: seriesId)
+        switch tab {
+        case .about:  // 关于页没有页面栈：到首页里进
+            tab = .home
+            if homePath.last != link { homePath.append(link) }
+        case .home: if homePath.last != link { homePath.append(link) }
+        case .recent: if recentPath.last != link { recentPath.append(link) }
+        case .favorites: if favoritesPath.last != link { favoritesPath.append(link) }
+        }
+    }
 
     init() {
         core = AppCore()

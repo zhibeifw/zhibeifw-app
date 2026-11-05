@@ -62,14 +62,20 @@ struct TVCardRow: View {
 struct TVSeriesCard: View {
     let card: SeriesCard
     let width: CGFloat
+    /// 收藏页：长按确认键出“取消收藏”
+    var onRemoveFavorite: (() -> Void)? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            NavigationLink(value: SeriesLink(id: card.id)) {
-                CoverImage(path: card.coverPath, colorId: card.id, radius: TVLayout.coverRadius)
-                    .frame(width: width, height: TVLayout.coverHeight(width))
+            if let onRemoveFavorite {
+                link.contextMenu {
+                    Button(role: .destructive, action: onRemoveFavorite) {
+                        Label("取消收藏", systemImage: "bookmark.slash")
+                    }
+                }
+            } else {
+                link
             }
-            .buttonStyle(.card)
             VStack(alignment: .leading, spacing: 4) {
                 // 和 iPhone 一致：编辑精选用精选标题，新课程下面写“更新至 最后一集”
                 Text(card.featureTitle ?? card.title).font(.callout).lineLimit(2)
@@ -79,5 +85,13 @@ struct TVSeriesCard: View {
             }
         }
         .frame(width: width, alignment: .leading)
+    }
+
+    private var link: some View {
+        NavigationLink(value: SeriesLink(id: card.id)) {
+            CoverImage(path: card.coverPath, colorId: card.id, radius: TVLayout.coverRadius)
+                .frame(width: width, height: TVLayout.coverHeight(width))
+        }
+        .buttonStyle(.card)
     }
 }

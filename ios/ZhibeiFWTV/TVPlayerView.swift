@@ -22,7 +22,12 @@ struct TVPlayerView: View {
                         HStack {
                             Text(clock(p.position))
                             Spacer()
-                            Text(p.duration > 0 ? remainingClock(p.position, p.duration) : "")
+                            // 开了睡眠定时：右边显示定时（和 iPhone 一样），否则是剩余时间
+                            switch p.sleep {
+                            case .end: Text(sleepLabel(nil))
+                            case .timer: Text(sleepLabel(p.sleepLeft ?? 0))
+                            case .off: Text(p.duration > 0 ? remainingClock(p.position, p.duration) : "")
+                            }
                         }
                         .font(.callout).monospacedDigit().foregroundStyle(.secondary)
                         HStack(spacing: 40) {
@@ -37,6 +42,7 @@ struct TVPlayerView: View {
                             }
                         }
                         .font(.title2)
+                        TVPlayerMenus(player: p, now: c)
                     }
                 }
                 .frame(maxWidth: 820, alignment: .leading)
@@ -62,11 +68,67 @@ struct TVPlayerView: View {
         }
     }
 
-    private func errorText(_ e: PlayerError) -> String {
+    fileprivate func errorText(_ e: PlayerError) -> String {
         switch e {
         case .cannotPlay: "暂时无法播放，请检查网络后重试"
         case .damaged: "这一集的文件已损坏"
         case .gone: "这一集已下架"
         }
+    }
+}
+
+/// 播放页下面一排菜单：倍速、睡眠定时、更多（标记已听完、收藏课程、前往课程）。文字和 iPhone 的一样。
+private struct TVPlayerMenus: View {
+    @Environment(AppCore.self) private var core
+    @Environment(TVModel.self) private var model
+    let player: PlayerController
+    let now: NowPlaying
+    @State private var favorite = false
+    @State private var completed = false
+
+    var body: some View {
+        HStack(spacing: 40) {
+            Menu {
+                ForEach(PLAYBACK_RATES, id: \.self) { r in
+                    Button { player.setRate(r) } label: { checkLabel(rateMenuTitle(r), player.rate == r) }
+                }
+            } label: {
+                Text(String(format: "%g×", player.rate))
+            }
+            Menu {
+                ForEach(SLEEP_CHOICES) { ch in
+                    Button { player.setSleep(sleepSetting(ch)) } label: { checkLabel(ch.title, player.sleep.choiceId == ch.id) }
+                }
+            } label: {
+                Image(systemName: player.sleep == .off ? "moon" : "moon.fill")
+            }
+            Menu {
+                Button {
+                    core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
+                } label: {
+                    Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
+                }
+                Button {
+                    core.toggleFavorite(now.seriesId, title: now.info.seriesTitle, coverPath: now.info.coverPath)
+                } label: {
+                    Label(favorite ? "取消收藏课程" : "收藏课程", systemImage: favorite ? "bookmark.fill" : "bookmark")
+                }
+                Button { model.goToSeries(now.seriesId) } label: {
+                    Label("前往课程", systemImage: "arrow.forward.circle")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+            }
+        }
+        // 收藏、已听完变了（或换了一集）就重读；不在每次进度刷新时读库
+        .task(id: "\(now.episodeId)|\(core.progressVersion)|\(core.favoritesVersion)") {
+            favorite = core.store.isFavorite(now.seriesId)
+            completed = core.store.loadProgress(now.episodeId)?.completed ?? false
+        }
+    }
+
+    /// 单选菜单里的一项：选中的前面打勾。
+    @ViewBuilder private func checkLabel(_ title: String, _ checked: Bool) -> some View {
+        if checked { Label(title, systemImage: "checkmark") } else { Text(title) }
     }
 }

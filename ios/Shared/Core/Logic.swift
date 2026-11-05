@@ -182,6 +182,7 @@ func isWholeFileResponse(status: Int, contentRange: String?) -> Bool {
 // MARK: - 播放
 
 let PLAYBACK_RATES: [Double] = Tok.RatePicker.rates.map(Double.init)
+func rateMenuTitle(_ r: Double) -> String { r == 1 ? "1×（正常）" : String(format: "%g×", r) }
 let SLEEP_MINUTES = [60, 45, 30, 15, 10, 5]
 
 /// 睡眠定时用的时钟：开机以来的秒数（CLOCK_MONOTONIC，含休眠，不受改系统时间影响）。
@@ -209,6 +210,13 @@ let SLEEP_CHOICES: [SleepChoice] =
     [SleepChoice(id: "end", title: "单集结束时", minutes: nil)]
     + SLEEP_MINUTES.map { SleepChoice(id: "m\($0)", title: $0 == 60 ? "1 小时" : "\($0) 分钟", minutes: $0) }
     + [SleepChoice(id: "off", title: "关闭", minutes: nil)]
+
+/// 选了某个睡眠定时选项后的设置（“单集结束时”、几分钟后、关闭）。
+func sleepSetting(_ ch: SleepChoice, now: Double = sleepClock()) -> SleepSetting {
+    if ch.id == "end" { return .end }
+    if let m = ch.minutes { return .timer(deadline: now + Double(m) * 60, minutes: m) }
+    return .off
+}
 
 enum PlayContext: Equatable {
     case series(String), library(String), single

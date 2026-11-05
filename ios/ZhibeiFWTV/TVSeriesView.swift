@@ -64,6 +64,26 @@ struct TVEpisodeRow: View {
                 Text(progressText(prog, knownDuration: episode.epDuration)).font(.callout).foregroundStyle(.secondary)
             }
         }
+        // 长按确认键：和 iPhone 的“•••”菜单同样的文字
+        .contextMenu {
+            MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
+        }
+    }
+}
+
+/// “标记为已听完 / 标记为未听完”。
+struct MarkCompletedButton: View {
+    @Environment(AppCore.self) private var core
+    let episodeId: String
+    let seriesId: String
+    let completed: Bool
+
+    var body: some View {
+        Button {
+            core.markCompleted(episodeId, seriesId: seriesId, completed: !completed)
+        } label: {
+            Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
+        }
     }
 }
 
