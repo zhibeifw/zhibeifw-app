@@ -5,8 +5,15 @@ struct TVSeriesView: View {
     @Environment(AppCore.self) private var core
     let seriesId: String
     @State private var header: SeriesHeader?
-    @State private var episodes: [EpisodeRow] = []
-    @State private var loaded = false
+    @State private var episodes: [EpisodeRow]
+    @State private var loaded = true
+
+    /// 进页面时就读好（同分类页：第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
+    init(seriesId: String, store: Store) {
+        self.seriesId = seriesId
+        _header = State(initialValue: try? store.loadSeriesHeader(seriesId))
+        _episodes = State(initialValue: (try? store.loadEpisodes(seriesId)) ?? [])
+    }
 
     var body: some View {
         HStack(alignment: .top, spacing: 80) {
@@ -27,7 +34,7 @@ struct TVSeriesView: View {
                 .frame(width: 560, alignment: .leading)
                 List(episodes) { e in TVEpisodeRow(episode: e, ctx: .series(seriesId)) }
             } else if loaded {
-                Text("这门课已下架").frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("这门课已下架").focusable().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .padding(.horizontal, TVLayout.pageMargin)

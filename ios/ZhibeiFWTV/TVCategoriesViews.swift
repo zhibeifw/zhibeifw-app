@@ -40,18 +40,29 @@ struct TVCategoriesView: View {
 struct TVCategoryView: View {
     @Environment(AppCore.self) private var core
     let categoryId: String
-    @State private var rows: [SeriesCard] = []
-    @State private var done = false
-    @State private var loaded = false
-    @State private var title = ""
-    private let pageSize = 40
+    @State private var rows: [SeriesCard]
+    @State private var done: Bool
+    @State private var loaded = true
+    @State private var title: String
+    private static let pageSize = 40
+    private var pageSize: Int { Self.pageSize }
+
+    /// 进页面时就把第一页读好（本机数据库，很快）：第一帧就有能选中的卡片。
+    /// 不然页面刚推进来时没有能选中的东西，这时按返回键，系统会当成退出 App。
+    init(categoryId: String, store: Store) {
+        self.categoryId = categoryId
+        let first = (try? store.loadCategorySeries(categoryId, limit: Self.pageSize, offset: 0)) ?? []
+        _rows = State(initialValue: first)
+        _done = State(initialValue: first.count < Self.pageSize)
+        _title = State(initialValue: store.categoryName(categoryId) ?? categoryId)
+    }
 
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 40) {
                 Text(title).font(.title2).fontWeight(.semibold)
                 if loaded && rows.isEmpty {
-                    Text("暂无课程").foregroundStyle(.secondary)
+                    Text("暂无课程").foregroundStyle(.secondary).focusable()
                 }
                 LazyVGrid(
                     columns: Array(repeating: GridItem(.fixed(TVLayout.smallCardWidth), spacing: TVLayout.cardGap), count: 4),

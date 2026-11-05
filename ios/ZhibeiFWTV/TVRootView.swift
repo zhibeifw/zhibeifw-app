@@ -90,16 +90,29 @@ private struct TVMainView: View {
 extension View {
     /// 各标签页面栈里能进的页面。
     func withRoutes() -> some View {
-        navigationDestination(for: TVRoute.self) { r in
-            switch r {
-            case .series(let id): TVSeriesView(seriesId: id)
-            case .category(let id): TVCategoryView(categoryId: id)
-            case .recent: TVRecentView()
-            case .favorites: TVFavoritesView()
-            case .privacy: TVLinkView(title: "隐私政策", url: NetConfig.privacyURL)
-            case .contact: TVContactView()
-            case .source: TVLinkView(title: "源代码", url: NetConfig.sourceURL)
-            }
+        navigationDestination(for: TVRoute.self) { TVRouteView(route: $0) }
+    }
+}
+
+/// 页面栈里的一页。按返回键时自己退一层（不交给系统判断：焦点一时落空时，系统会把返回键当成退出 App）。
+private struct TVRouteView: View {
+    @Environment(AppCore.self) private var core
+    @Environment(TVModel.self) private var model
+    let route: TVRoute
+
+    var body: some View {
+        page.onExitCommand { model.popCurrent() }
+    }
+
+    @ViewBuilder private var page: some View {
+        switch route {
+        case .series(let id): TVSeriesView(seriesId: id, store: core.store)
+        case .category(let id): TVCategoryView(categoryId: id, store: core.store)
+        case .recent: TVRecentView(store: core.store)
+        case .favorites: TVFavoritesView(store: core.store)
+        case .privacy: TVLinkView(title: "隐私政策", url: NetConfig.privacyURL)
+        case .contact: TVContactView()
+        case .source: TVLinkView(title: "源代码", url: NetConfig.sourceURL)
         }
     }
 }

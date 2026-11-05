@@ -15,12 +15,15 @@ struct TVLibraryHubView: View {
 struct TVRecentView: View {
     @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
-    @State private var rows: [RecentRow] = []
+    @State private var rows: [RecentRow]
+
+    /// 进页面时就读好（第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
+    init(store: Store) { _rows = State(initialValue: (try? store.loadRecent(limit: 200)) ?? []) }
 
     var body: some View {
         Group {
             if rows.isEmpty {
-                Text("暂无收听记录").foregroundStyle(.secondary)
+                Text("暂无收听记录").foregroundStyle(.secondary).focusable()
             } else {
                 List {
                     Section {
@@ -89,12 +92,14 @@ struct TVRecentView: View {
 /// 收藏：选一门课进课程页；长按：取消收藏。
 struct TVFavoritesView: View {
     @Environment(AppCore.self) private var core
-    @State private var rows: [FavoriteRow] = []
+    @State private var rows: [FavoriteRow]
+
+    init(store: Store) { _rows = State(initialValue: (try? store.loadFavorites()) ?? []) }
 
     var body: some View {
         Group {
             if rows.isEmpty {
-                Text("还没有收藏的课程").foregroundStyle(.secondary)
+                Text("还没有收藏的课程").foregroundStyle(.secondary).focusable()
             } else {
                 ScrollView(.vertical) {
                     LazyVGrid(
