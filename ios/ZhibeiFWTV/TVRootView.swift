@@ -1,12 +1,10 @@
 import SwiftUI
 
-/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（主页、分类、资料库、搜索、关于）。
+/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（搜索、主页、分类、资料库、正在播放、关于）。
 struct TVRootView: View {
     @Environment(AppCore.self) private var core
-    @Environment(TVModel.self) private var model
 
     var body: some View {
-        @Bindable var m = model
         Group {
             switch core.phase {
             case .launching:
@@ -23,7 +21,6 @@ struct TVRootView: View {
                 TVMainView()
             }
         }
-        .fullScreenCover(isPresented: $m.playerOpen) { TVPlayerView() }
         .alert(
             core.alert?.title ?? "",
             isPresented: Binding(get: { core.alert != nil }, set: { if !$0 { core.alert = nil } }),
@@ -91,7 +88,7 @@ private struct TVMainView: View {
             Tab("资料库", systemImage: "square.stack", value: TVTab.library) {
                 NavigationStack(path: $m.libraryPath) { TVLibraryHubView().withRoutes() }
             }
-            Tab("正在播放", systemImage: "waveform", value: TVTab.nowPlaying) { TVPlayerView(inTab: true) }
+            Tab("正在播放", systemImage: "waveform", value: TVTab.nowPlaying) { TVPlayerView() }
             Tab(value: TVTab.about) {
                 NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
             } label: {

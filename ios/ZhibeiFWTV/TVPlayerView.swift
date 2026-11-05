@@ -1,15 +1,13 @@
 import SwiftUI
 
-/// 全屏播放页：照 iPhone 横屏的播放页做（左边封面，右边控制区），按电视放大。
+/// 播放页（“正在播放”标签的内容；选一集开始播放时切到这个标签）：照 iPhone 横屏的播放页做（左边封面，右边控制区），按电视放大。
 /// 右边从上到下：集名、“课程名 ›”（前往课程）和“•••”更多；进度条；时间（左已播，右剩余 / 睡眠定时）；
 /// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。全部是系统组件和系统图标（SF Symbols）。
 /// 进度条是自己做的（tvOS 没有系统滑块）：可以选中，选中后按左右键后退 15 秒、前进 30 秒，按住连续跳。这是唯一一处自己画的。
-/// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
-/// 同一个页面也是“正在播放”标签的内容（inTab）：在标签里时返回键由系统把焦点移到标签栏。
+/// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统把焦点移到标签栏，声音照常播。
+/// 背景用系统默认的（和其他页面一样）。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
-    @Environment(\.dismiss) private var dismiss
-    var inTab = false
 
     var body: some View {
         if let p = core.player, let c = p.current {
@@ -20,8 +18,6 @@ struct TVPlayerView: View {
                     .frame(width: 720)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // 在标签里用系统默认背景；全屏弹出时 tvOS 默认透明（会透出下面的列表），才铺一层底色
-            .background { if !inTab { C.background.ignoresSafeArea() } }
             // 睡眠定时的倒计时每秒刷新一次（和 iPhone 一样）
             .task {
                 while !Task.isCancelled {
@@ -29,16 +25,13 @@ struct TVPlayerView: View {
                     p.refreshSleepDisplay()
                 }
             }
-        } else if inTab {
+        } else {
             // 标签一直在（规范：内容暂时没有也不藏标签，说明为什么是空的）；提示文字能选中，返回键才有地方落
             VStack(spacing: 16) {
                 Text("还没有在播放的内容").focusable()
                 Text("在课程里选一集开始收听").font(.callout).foregroundStyle(.secondary)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            // 播放器没有当前一集了：没什么可显示的，收起
-            Color.clear.onAppear { dismiss() }
         }
     }
 }

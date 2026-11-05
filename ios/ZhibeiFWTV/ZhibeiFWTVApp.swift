@@ -1,7 +1,7 @@
 import SwiftUI
 import Observation
 
-/// Apple TV 版入口。共用的状态与动作在 AppCore（ios/Shared/App）；这里只多一个“播放页开着没有”。
+/// Apple TV 版入口。共用的状态与动作在 AppCore（ios/Shared/App）；电视自己的界面状态在 TVModel。
 @main
 struct ZhibeiFWTVApp: App {
     @State private var model = TVModel()
@@ -32,12 +32,11 @@ enum TVRoute: Hashable {
     case recent, favorites, privacy, contact, source
 }
 
-/// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈、播放页）。
+/// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈）。
 @MainActor
 @Observable
 final class TVModel {
     @ObservationIgnored let core: AppCore
-    var playerOpen = false
     var tab: TVTab = .home {
         didSet { if tab != .nowPlaying { browseTab = tab } }
     }
@@ -49,9 +48,8 @@ final class TVModel {
     var searchPath: [TVRoute] = []
     var aboutPath: [TVRoute] = []
 
-    /// “前往课程”：收起播放页，在当前标签里进这门课；最上面已经是这门课就不再进一层。
+    /// “前往课程”：从“正在播放”回到原来的标签，在里面进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
-        playerOpen = false
         let r = TVRoute.series(seriesId)
         if tab == .nowPlaying { tab = browseTab }
         switch tab {
@@ -67,9 +65,10 @@ final class TVModel {
 
     init() {
         core = AppCore()
+        // 选一集开始播放：切到“正在播放”标签（不另弹全屏播放页，和系统“音乐”App 一样）
         core.presentPlayer = { [weak self] in
             guard let self, self.core.player.current != nil else { return }
-            self.playerOpen = true
+            self.tab = .nowPlaying
         }
         // 电视上卡片都用 640 小图（1080p 一倍、4K 两倍屏都够清楚）；每行只取前几张
         core.prefetchHomeCovers = { home in
