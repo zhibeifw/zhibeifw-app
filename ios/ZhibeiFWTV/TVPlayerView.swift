@@ -98,37 +98,38 @@ private struct TVPlayerControls: View {
     }
 
     // 倍速 | 后退 15 | 播放暂停 | 前进 30 | 睡眠定时（和 iPhone 同样的顺序）
+    // 全部是系统的带底按钮（和右上角的“•••”一样）：图标按钮圆形，倍速是文字、用胶囊形。
+    // 不用无边框样式：纯文字的无边框按钮在 tvOS 上选中时看不出来，一行里混用两种样式又不统一
     private var controlRow: some View {
         HStack {
-            // 纯文字的无边框按钮在 tvOS 上选中时几乎看不出来（只有图片会放大、高亮）：倍速单独用胶囊按钮
             Button { dialog = .rate } label: {
                 Text(String(format: "%g×", p.rate)).font(.headline).monospacedDigit().frame(minWidth: 64)
             }
-            .buttonStyle(.bordered)
             .buttonBorderShape(.capsule)
             .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
             Spacer()
             Button { p.seek(by: -SEEK_BACK_SECONDS) } label: {
-                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))").font(.system(size: 56))
+                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))").font(.system(size: 36))
             }
-                .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
+            .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
             Spacer()
             Button { p.toggle() } label: {
-                Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.system(size: 72))
+                Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.system(size: 48))
             }
-                .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
+            .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
             Spacer()
             Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: {
-                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))").font(.system(size: 56))
+                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))").font(.system(size: 36))
             }
-                .accessibilityLabel("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
+            .accessibilityLabel("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
             Spacer()
             Button { dialog = .sleep } label: {
-                Image(systemName: p.sleep == .off ? "moon" : "moon.fill").font(.system(size: 40))
+                Image(systemName: p.sleep == .off ? "moon" : "moon.fill").font(.system(size: 30))
             }
             .accessibilityLabel("睡眠定时")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.circle)
     }
 
     /// “•••”：标记已听完、收藏课程、前往课程（和 iPhone 一样；没有下载），按下后弹选项单
