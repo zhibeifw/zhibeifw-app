@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// 课程页：左边封面、课程名、简介、收藏、排序；右边各集列表。选一集开始播放并打开播放页。
-/// 列表默认最旧的在上面（第 1 课在最上面），“排序”可以换成最新的在上面；只影响显示，自动接下一集始终按课程顺序。
+/// 列表默认最旧的在上面（第 1 课在最上面），按一下排序按钮换成最新的在上面，再按一下换回；只影响显示，自动接下一集始终按课程顺序。
 struct TVSeriesView: View {
     @Environment(AppCore.self) private var core
     let seriesId: String
@@ -10,7 +10,6 @@ struct TVSeriesView: View {
     @State private var loaded = true
     /// 默认最旧到最新（第 1 课在最上面，和 iPhone 一样）；只在这一页有效，不记住
     @State private var oldestFirst = true
-    @State private var sortDialog = false
 
     /// 进页面时就读好（同分类页：第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
     init(seriesId: String, store: Store) {
@@ -28,16 +27,18 @@ struct TVSeriesView: View {
                     Text(h.title).font(.title2).fontWeight(.semibold).lineLimit(3)
                     Text(seriesInfoText(category: false, count: episodes.count, status: h.status))
                         .font(.callout).foregroundStyle(.secondary)
-                    // 收藏、排序并排一行。和播放页的“课程名 ›”一样：系统灰底按钮、胶囊形；书签图标和 iPhone 一样（收藏后是实心）
+                    // 收藏、排序并排一行。和播放页的“课程名 ›”一样：系统灰底按钮、胶囊形；书签图标和 iPhone 一样（收藏后是实心）。
+                    // 两个按钮一个逻辑：按一下就切换，按钮上显示现在的状态，不弹选项单
                     HStack(spacing: 24) {
                         Button {
                             core.toggleFavorite(h.id, title: h.title, coverPath: h.coverPath)
                         } label: {
                             Label(h.favorited ? "已收藏" : "收藏", systemImage: h.favorited ? "bookmark.fill" : "bookmark")
                         }
-                        Button { sortDialog = true } label: {
-                            Label("排序", systemImage: "arrow.up.arrow.down")
+                        Button { oldestFirst.toggle() } label: {
+                            Label(oldestFirst ? "从旧到新" : "从新到旧", systemImage: oldestFirst ? "arrow.down" : "arrow.up")
                         }
+                        .accessibilityLabel(oldestFirst ? "排序：从旧到新" : "排序：从新到旧")
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
@@ -52,12 +53,6 @@ struct TVSeriesView: View {
             }
         }
         .padding(.horizontal, TVLayout.pageMargin)
-        // 排序：系统选项单，文字和 iPhone 的排序菜单一样
-        .confirmationDialog("排序", isPresented: $sortDialog, titleVisibility: .visible) {
-            Button((oldestFirst ? "" : "✓ ") + "按最新到最旧排序") { oldestFirst = false }
-            Button((oldestFirst ? "✓ " : "") + "按最旧到最新排序") { oldestFirst = true }
-            Button("取消", role: .cancel) {}
-        }
         // 目录、进度、收藏变了就重读
         .task(id: [core.catalogVersion, core.progressVersion, core.favoritesVersion]) { reload() }
     }
