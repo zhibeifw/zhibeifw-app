@@ -1,0 +1,16 @@
+#!/bin/sh
+# 提交说明检查：作者必须是“智悲佛网 <dev@zhibeifw.com>”，提交说明里不能有署名行。
+# 安装：sh tools/install-hooks.sh
+msg="$1"
+
+author=$(git var GIT_AUTHOR_IDENT | sed 's/ [0-9]* [-+][0-9]*$//')
+if [ "$author" != "智悲佛网 <dev@zhibeifw.com>" ]; then
+  echo "提交作者是 $author，要用“智悲佛网 <dev@zhibeifw.com>”：" >&2
+  echo "  git config user.name 智悲佛网 && git config user.email dev@zhibeifw.com" >&2
+  exit 1
+fi
+
+if grep -qiE '^(co-authored-by:|claude-session:)|noreply@anthropic\.com|generated with \[?claude' "$msg"; then
+  echo "提交说明里有署名行（Co-Authored-By、Claude-Session 等），删掉再提交。" >&2
+  exit 1
+fi
