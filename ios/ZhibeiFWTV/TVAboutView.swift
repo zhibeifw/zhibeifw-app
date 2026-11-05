@@ -1,7 +1,6 @@
 import SwiftUI
-import CoreImage.CIFilterBuiltins
 
-/// 关于：和 iPhone 同样的几项。电视上没有浏览器，隐私政策、源代码给二维码，用手机扫码打开。
+/// 关于：和 iPhone 同样的几项。电视上没有浏览器：隐私政策的全文打包在 App 里直接显示，源代码只显示网址。
 struct TVAboutView: View {
     @Environment(AppCore.self) private var core
     @State private var clearing = false
@@ -29,9 +28,14 @@ struct TVAboutView: View {
                 Text("智悲佛网 版权所有").font(.caption).foregroundStyle(.secondary)
                 Text("版本 " + AppInfo.version).font(.caption).foregroundStyle(.tertiary)
             }
-            HStack(spacing: 60) {
-                QRCard(title: "隐私政策", url: NetConfig.privacyURL)
-                QRCard(title: "源代码", url: NetConfig.sourceURL)
+            VStack(alignment: .leading, spacing: 40) {
+                NavigationLink(value: TVRoute.privacy) { row("隐私政策", nil) }
+                    .frame(width: 640)
+                // 源代码只显示网址（电视上打不开网页）
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("源代码").font(.headline)
+                    Text(NetConfig.sourceURL.absoluteString).font(.callout).foregroundStyle(.secondary)
+                }
             }
         }
         .padding(TVLayout.pageMargin)
@@ -66,33 +70,29 @@ struct TVAboutView: View {
     }
 }
 
-/// 一个网址的二维码 + 标题 + 网址文字。
-private struct QRCard: View {
-    let title: String
-    let url: URL
+/// 隐私政策全文（打包在 App 里的 privacy.txt，和网站上的一致；改了网站上的文字要同步改这个文件）。
+/// 遥控器只能在能选中的东西之间移动：按段落拆开、每段都能选中，上下键一段段往下读。
+struct TVPrivacyView: View {
+    private let paragraphs: [String] = {
+        guard let url = Bundle.main.url(forResource: "privacy", withExtension: "txt"),
+            let text = try? String(contentsOf: url, encoding: .utf8)
+        else { return [] }
+        return text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
+    }()
 
     var body: some View {
-        VStack(spacing: 20) {
-            if let img = qrImage(url.absoluteString) {
-                Image(decorative: img, scale: 1)
-                    .interpolation(.none)  // 放大时保持方块清晰，不糊
-                    .resizable()
-                    .frame(width: 300, height: 300)
-                    .padding(24)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))  // 深色模式下也是白底黑码，手机才扫得出
+        ScrollView(.vertical) {
+            VStack(alignment: .leading, spacing: 24) {
+                Text("隐私政策").font(.title2).fontWeight(.semibold)
+                if paragraphs.isEmpty {
+                    Text("隐私政策：\(NetConfig.privacyURL.absoluteString)").focusable()
+                }
+                ForEach(paragraphs.indices, id: \.self) { i in
+                    Text(paragraphs[i]).font(.callout).focusable()
+                }
             }
-            Text(title).font(.headline)
-            Text("用手机扫码查看").font(.caption).foregroundStyle(.secondary)
-            Text(url.absoluteString).font(.caption2).foregroundStyle(.tertiary)
+            .frame(maxWidth: 1400, alignment: .leading)
+            .padding(TVLayout.pageMargin)
         }
     }
-}
-
-/// 用系统的 CoreImage 生成二维码（不用第三方库）。
-private func qrImage(_ text: String) -> CGImage? {
-    let f = CIFilter.qrCodeGenerator()
-    f.message = Data(text.utf8)
-    f.correctionLevel = "M"
-    guard let out = f.outputImage else { return nil }
-    return CIContext().createCGImage(out, from: out.extent)
 }

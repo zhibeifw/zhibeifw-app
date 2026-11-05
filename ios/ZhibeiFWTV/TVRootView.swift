@@ -95,6 +95,7 @@ extension View {
             case .recent: TVRecentView()
             case .favorites: TVFavoritesView()
             case .about: TVAboutView()
+            case .privacy: TVPrivacyView()
             }
         }
     }

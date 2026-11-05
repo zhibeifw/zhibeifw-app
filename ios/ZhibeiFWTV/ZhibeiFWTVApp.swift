@@ -28,7 +28,7 @@ enum TVTab: Hashable { case home, categories, library, search }
 enum TVRoute: Hashable {
     case series(String)
     case category(String)
-    case recent, favorites, about
+    case recent, favorites, about, privacy
 }
 
 /// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈、播放页）。
