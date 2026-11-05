@@ -103,9 +103,12 @@ private struct TVPlayerControls: View {
     // 倍速 | 后退 15 | 播放暂停 | 前进 30 | 睡眠定时（和 iPhone 同样的顺序）
     private var controlRow: some View {
         HStack {
+            // 纯文字的无边框按钮在 tvOS 上选中时几乎看不出来（只有图片会放大、高亮）：倍速单独用胶囊按钮
             Button { dialog = .rate } label: {
-                Text(String(format: "%g×", p.rate)).font(.headline).foregroundStyle(C.labelSecondary).frame(minWidth: 72)
+                Text(String(format: "%g×", p.rate)).font(.headline).monospacedDigit().frame(minWidth: 64)
             }
+            .buttonStyle(.bordered)
+            .buttonBorderShape(.capsule)
             .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
             Spacer()
             Button { p.seek(by: -SEEK_BACK_SECONDS) } label: { SeekIcon(forward: false, size: 64) }
