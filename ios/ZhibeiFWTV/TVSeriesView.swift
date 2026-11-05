@@ -1,12 +1,16 @@
 import SwiftUI
 
-/// 课程页：左边封面、课程名、简介、收藏；右边各集列表。选一集开始播放并打开播放页。
+/// 课程页：左边封面、课程名、简介、收藏、排序；右边各集列表。选一集开始播放并打开播放页。
+/// 列表默认最新的在上面（和 iPhone 一样），“排序”可以换成最旧的在上面；只影响显示，自动接下一集始终按课程顺序。
 struct TVSeriesView: View {
     @Environment(AppCore.self) private var core
     let seriesId: String
     @State private var header: SeriesHeader?
     @State private var episodes: [EpisodeRow]
     @State private var loaded = true
+    /// 和 iPhone 一样：默认最新到最旧；只在这一页有效，不记住
+    @State private var oldestFirst = false
+    @State private var sortDialog = false
 
     /// 进页面时就读好（同分类页：第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
     init(seriesId: String, store: Store) {
@@ -32,17 +36,28 @@ struct TVSeriesView: View {
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
+                    Button { sortDialog = true } label: {
+                        Label("排序", systemImage: "arrow.up.arrow.down")
+                    }
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                     if let d = h.description, !d.isEmpty {
                         Text(d).font(.callout).foregroundStyle(.secondary).lineLimit(8)
                     }
                 }
                 .frame(width: 560, alignment: .leading)
-                List(episodes) { e in TVEpisodeRow(episode: e, ctx: .series(seriesId)) }
+                List(oldestFirst ? episodes : episodes.reversed()) { e in TVEpisodeRow(episode: e, ctx: .series(seriesId)) }
             } else if loaded {
                 Text("这门课已下架").focusable().frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .padding(.horizontal, TVLayout.pageMargin)
+        // 排序：系统选项单，文字和 iPhone 的排序菜单一样
+        .confirmationDialog("排序", isPresented: $sortDialog, titleVisibility: .visible) {
+            Button((oldestFirst ? "" : "✓ ") + "按最新到最旧排序") { oldestFirst = false }
+            Button((oldestFirst ? "✓ " : "") + "按最旧到最新排序") { oldestFirst = true }
+            Button("取消", role: .cancel) {}
+        }
         // 目录、进度、收藏变了就重读
         .task(id: [core.catalogVersion, core.progressVersion, core.favoritesVersion]) { reload() }
     }
