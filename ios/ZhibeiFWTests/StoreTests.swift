@@ -103,6 +103,25 @@ final class StoreTests: XCTestCase {
         XCTAssertEqual(try store.searchSeries("满").rows.map(\.id), ["大圆满前行"])
     }
 
+    /// 拼音搜索（苹果两端才有，Android 还没有）。
+    func testPinyinSearch() throws {
+        try store.replaceIndex(
+            index([("金刚经讲记", "般若", "completed", []), ("心经", "般若", "completed", []), ("大圆满前行", "实修", "completed", [])]))
+        XCTAssertEqual(try store.searchSeries("jgj").rows.map(\.id), ["金刚经讲记"])
+        XCTAssertEqual(try store.searchSeries("JGJ").rows.map(\.id), ["金刚经讲记"])  // 大小写都行
+        XCTAssertEqual(try store.searchSeries("dymqx").rows.map(\.id), ["大圆满前行"])
+        XCTAssertEqual(try store.searchSeries("xinjing").rows.map(\.id), ["心经"])
+        XCTAssertEqual(try store.searchSeries("xin jing").rows.map(\.id), ["心经"])  // 空格不算
+        // 全拼：开头的排在包含的前面
+        XCTAssertEqual(try store.searchSeries("jing").rows.map(\.id), ["金刚经讲记", "心经"])
+        XCTAssertTrue(try store.searchSeries("q").rows.isEmpty)  // 一个字母不按拼音找
+        XCTAssertTrue(try store.searchSeries("zzz").rows.isEmpty)
+        // 目录换了，拼音缓存要跟着换
+        try store.replaceIndex(index([("入菩萨行论", "中观", "completed", [])]))
+        XCTAssertTrue(try store.searchSeries("jgj").rows.isEmpty)
+        XCTAssertEqual(try store.searchSeries("rpsx").rows.map(\.id), ["入菩萨行论"])
+    }
+
     func testRecentRules() throws {
         try store.replaceIndex(index([("课A", "中观", "completed", ["一", "二"])]))
         try store.recordPlayback(episodeId: "课A_1", seriesId: "课A", position: 10, duration: 600, at: 1)

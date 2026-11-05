@@ -76,6 +76,11 @@ final class Store: @unchecked Sendable {
     let db: SQLiteDB
     init(db: SQLiteDB) { self.db = db }
 
+    /// 拼音搜索用：每门课的拼音（按目录顺序）。第一次拼音搜索时算，目录换了作废。搜索在后台线程，加锁。
+    private struct PinyinEntry { let card: SeriesCard; let initials: String; let full: String }
+    private var pinyinCache: [PinyinEntry]?
+    private let pinyinLock = NSLock()
+
     private func now() -> Int64 { Int64(Date().timeIntervalSince1970 * 1000) }
 
     // MARK: 目录写入
@@ -99,6 +104,8 @@ final class Store: @unchecked Sendable {
 
     /// 用 index.json 替换整个目录（一个事务），只写变了的课。
     func replaceIndex(_ index: IndexFile) throws {
+        // 写完（事务提交或失败）以后再作废拼音缓存：写的过程中来的拼音搜索不会把旧目录又缓存回去
+        defer { pinyinLock.withLock { pinyinCache = nil } }
         try db.transaction {
             let old = try db.all("SELECT id, series_sig, episodes_sig FROM catalog_series")
             var oldRow: [String: (String?, String?)] = [:]
@@ -343,9 +350,46 @@ final class Store: @unchecked Sendable {
         try db.all("SELECT id FROM catalog_episode WHERE series_id = ? ORDER BY pos", [seriesId]).map { $0.str("id") }
     }
 
-    /// 搜索：先整句，搜不到就从开头 2 个字起逐个加长。instr()，不用 LIKE。
     struct SearchResult: Equatable { var rows: [SeriesCard]; var matched: String; var fallback: Bool }
+
+    /// 搜索：按课程名找；输入全是英文字母时再按拼音找（首字母或全拼，比如 jgj、jingang 都能找到“金刚经”），
+    /// 课程名本身匹配的排在前面。
     func searchSeries(_ input: String) throws -> SearchResult {
+        let byTitle = try searchByTitle(input)
+        guard let pq = pinyinQuery(input) else { return byTitle }
+        // 课程名“逐字缩短”的部分匹配对拼音没有意义：拼音能找到时不用它
+        let titleRows = byTitle.fallback ? [] : byTitle.rows
+        var seen = Set(titleRows.map(\.id))
+        let rows = titleRows + (try pinyinMatches(pq)).filter { seen.insert($0.id).inserted }
+        if rows.isEmpty { return byTitle }
+        return SearchResult(rows: Array(rows.prefix(500)), matched: normalizeText(input), fallback: false)
+    }
+
+    /// 拼音匹配：首字母开头 > 首字母包含 > 全拼开头 > 全拼包含；同一档按目录顺序。
+    private func pinyinMatches(_ q: String) throws -> [SeriesCard] {
+        let entries: [PinyinEntry] = try pinyinLock.withLock {
+            if let c = pinyinCache { return c }
+            let c = try db.all("SELECT id, title, cover_path, status FROM catalog_series ORDER BY pos").map { r -> PinyinEntry in
+                let c = card(r)
+                let k = pinyinKeys(c.title)
+                return PinyinEntry(card: c, initials: k.initials, full: k.full)
+            }
+            pinyinCache = c
+            return c
+        }
+        func rank(_ e: PinyinEntry) -> Int? {
+            if e.initials.hasPrefix(q) { return 0 }
+            if e.initials.contains(q) { return 1 }
+            if e.full.hasPrefix(q) { return 2 }
+            if e.full.contains(q) { return 3 }
+            return nil
+        }
+        let hits = entries.enumerated().compactMap { i, e in rank(e).map { (rank: $0, pos: i, card: e.card) } }
+        return hits.sorted { ($0.rank, $0.pos) < ($1.rank, $1.pos) }.prefix(500).map { $0.card }
+    }
+
+    /// 按课程名搜：先整句，搜不到就从开头 2 个字起逐个加长。instr()，不用 LIKE。
+    private func searchByTitle(_ input: String) throws -> SearchResult {
         let empty = SearchResult(rows: [], matched: "", fallback: false)
         let q = Array(Array(normalizeText(input).unicodeScalars).prefix(MAX_QUERY_LENGTH))
         func str(_ a: ArraySlice<Unicode.Scalar>) -> String {

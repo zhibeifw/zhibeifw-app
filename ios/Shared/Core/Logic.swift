@@ -85,6 +85,37 @@ func normalizeText(_ s: String) -> String {
 
 let MAX_QUERY_LENGTH = 30
 
+// MARK: - 拼音搜索（苹果两端；Android 还没有）
+
+/// 课程名的拼音：首字母和全拼（都是小写、不带空格）。“金刚经” → ("jgj", "jingangjing")。
+/// 汉字逐字用系统的汉字转拼音（Foundation 的 mandarinToLatin，再去声调）；英文字母、数字原样保留；空格、标点跳过。
+/// 多音字按系统的默认读音，个别会不准（比如“行”“长”）。
+func pinyinKeys(_ title: String) -> (initials: String, full: String) {
+    var initials = "", full = ""
+    for ch in normalizeText(title) {
+        if ch.isASCII {
+            if ch.isLetter || ch.isNumber { initials.append(ch); full.append(ch) }
+            continue
+        }
+        let s = String(ch)
+        guard let latin = s.applyingTransform(.mandarinToLatin, reverse: false)?.applyingTransform(.stripDiacritics, reverse: false),
+            latin != s
+        else { continue }  // 转不出拼音的（不是汉字）跳过
+        let letters = latin.lowercased().filter { $0.isASCII && $0.isLetter }
+        guard let first = letters.first else { continue }
+        initials.append(first)
+        full += letters
+    }
+    return (initials, full)
+}
+
+/// 输入是不是拼音：去掉空格后全是英文字母、至少 2 个。是的话返回小写、去空格的字母串。
+func pinyinQuery(_ input: String) -> String? {
+    let q = String(normalizeText(input).filter { $0 != " " })
+    guard q.count >= 2, q.allSatisfy({ $0.isASCII && $0.isLetter }) else { return nil }
+    return q
+}
+
 // MARK: - 封面占位色、分类方块
 
 private func fnv(_ id: String, salt: UInt32 = 0) -> UInt32 {

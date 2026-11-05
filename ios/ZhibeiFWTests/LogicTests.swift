@@ -13,6 +13,24 @@ final class VersionTests: XCTestCase {
     }
 }
 
+/// 拼音（苹果两端才有，Android 还没有这批用例）。
+final class PinyinTests: XCTestCase {
+    func testKeys() {
+        XCTAssertEqual(pinyinKeys("金刚经").initials, "jgj")
+        XCTAssertEqual(pinyinKeys("金刚经").full, "jingangjing")
+        XCTAssertEqual(pinyinKeys("心经 2024 版").initials, "xj2024b")  // 数字、英文原样，空格跳过
+        XCTAssertEqual(pinyinKeys("《心经》").initials, "xj")  // 标点跳过
+        XCTAssertEqual(pinyinKeys("ABC").full, "abc")
+    }
+    func testQuery() {
+        XCTAssertEqual(pinyinQuery("JGJ"), "jgj")
+        XCTAssertEqual(pinyinQuery("xin jing"), "xinjing")
+        XCTAssertNil(pinyinQuery("j"))
+        XCTAssertNil(pinyinQuery("心经"))
+        XCTAssertNil(pinyinQuery("jgj2"))
+    }
+}
+
 final class FormatTests: XCTestCase {
     func testClock() {
         XCTAssertEqual(clock(.nan), "00:00")

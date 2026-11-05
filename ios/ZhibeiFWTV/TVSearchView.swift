@@ -12,7 +12,7 @@ struct TVSearchView: View {
             VStack(alignment: .leading, spacing: 30) {
                 if result == nil {
                     // 没搜之前：和 iPhone 一样的提示
-                    Text("输入课程名搜索").foregroundStyle(.secondary)
+                    Text("输入课程名或拼音首字母搜索，比如 jgj 找“金刚经”").foregroundStyle(.secondary)
                 }
                 if let r = result {
                     if r.rows.isEmpty {
@@ -32,7 +32,7 @@ struct TVSearchView: View {
             }
             .padding(TVLayout.pageMargin)
         }
-        .searchable(text: $query, prompt: "课程名")
+        .searchable(text: $query, prompt: "课程名或拼音首字母")
         .onChange(of: query) { _, v in
             if v.count > MAX_QUERY_LENGTH { query = String(v.prefix(MAX_QUERY_LENGTH)) }
         }
