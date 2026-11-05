@@ -42,6 +42,18 @@ struct TVPlayerView: View {
                 .frame(maxWidth: 820, alignment: .leading)
             }
             .padding(TVLayout.pageMargin)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            // tvOS 全屏弹出的页面默认是透明的（后面的课程页会透出来），要自己铺满背景：
+            // 不透明的底色上，铺一层放大、模糊、调淡的封面（和系统“音乐”“播客”的播放页一样）
+            .background {
+                ZStack {
+                    C.background
+                    CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 0)
+                        .blur(radius: 80)
+                        .opacity(0.35)
+                }
+                .ignoresSafeArea()
+            }
             // 遥控器的播放/暂停键走系统的远程控制命令（PlayerController 里已注册），这里不再处理，免得按一下切两次
             .onExitCommand { dismiss() }
         } else {
