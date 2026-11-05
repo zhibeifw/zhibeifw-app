@@ -91,6 +91,9 @@ private struct TVMainView: View {
                 NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
             }
         }
+        // 焦点在顶部标签栏上时按返回键：当前标签里进了页面就退一层（不然系统会直接退出 App）；
+        // 在最外层就不接（nil），交给系统退出到 Apple TV 桌面——tvOS 规定最外层的返回键要能退出
+        .onExitCommand(perform: model.canPop ? { model.popCurrent() } : nil)
     }
 }
 
