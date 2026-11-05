@@ -2,8 +2,8 @@ import SwiftUI
 
 /// 全屏播放页：照 iPhone 横屏的播放页做（左边封面，右边控制区），按电视放大。
 /// 右边从上到下：集名、“课程名 ›”（前往课程）和“•••”更多；进度条；时间（左已播，右剩余 / 睡眠定时）；
-/// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。图标用和 iPhone 一样的共用图标。
-/// 电视上没有手指拖动：进度条可以选中，选中后按左右键后退 15 秒、前进 30 秒。
+/// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。全部是系统组件和系统图标（SF Symbols）。
+/// 进度条是系统的 ProgressView，只显示进度（tvOS 没有系统滑块）；快退快进用下面的按钮。
 /// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
@@ -53,13 +53,13 @@ private struct TVPlayerControls: View {
             // 集名、“课程名 ›”；右边“•••”
             HStack(alignment: .center, spacing: 24) {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(now.info.episodeTitle).font(.title2).fontWeight(.bold).foregroundStyle(C.labelPrimary).lineLimit(2)
+                    Text(now.info.episodeTitle).font(.title2).fontWeight(.bold).lineLimit(2)
                     Button { model.goToSeries(now.seriesId) } label: {
                         HStack(spacing: 6) {
                             Text(now.info.seriesTitle).lineLimit(1)
-                            ZIcon(name: "chevron-forward", size: 22, color: C.labelSecondary)
+                            Image(systemName: "chevron.right")
                         }
-                        .font(.callout).foregroundStyle(C.labelSecondary)
+                        .font(.callout).foregroundStyle(.secondary)
                     }
                     .buttonStyle(.borderless)
                 }
@@ -70,13 +70,13 @@ private struct TVPlayerControls: View {
                 Text(errorText(err)).foregroundStyle(C.danger).padding(.top, 40)
                 if err == .cannotPlay { Button("重试") { p.retry() }.padding(.top, 20) }
             } else {
-                TVProgressBar(player: p).padding(.top, 48)
+                ProgressView(value: progressRatio(p.position, p.duration)).padding(.top, 48)
                 HStack {
                     Text(clock(p.position))
                     Spacer()
                     Text(rightLabel)
                 }
-                .font(.callout).monospacedDigit().foregroundStyle(C.labelSecondary)
+                .font(.callout).monospacedDigit().foregroundStyle(.secondary)
                 .padding(.top, 14)
                 controlRow.padding(.top, 56)
             }
@@ -110,17 +110,23 @@ private struct TVPlayerControls: View {
             .buttonBorderShape(.capsule)
             .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
             Spacer()
-            Button { p.seek(by: -SEEK_BACK_SECONDS) } label: { SeekIcon(forward: false, size: 64) }
+            Button { p.seek(by: -SEEK_BACK_SECONDS) } label: {
+                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))").font(.system(size: 56))
+            }
                 .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
             Spacer()
-            Button { p.toggle() } label: { ZIcon(name: p.looksPlaying ? "pause" : "play", size: 84) }
+            Button { p.toggle() } label: {
+                Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.system(size: 72))
+            }
                 .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
             Spacer()
-            Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: { SeekIcon(forward: true, size: 64) }
+            Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: {
+                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))").font(.system(size: 56))
+            }
                 .accessibilityLabel("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
             Spacer()
             Button { dialog = .sleep } label: {
-                ZIcon(name: "moon", size: 40, color: p.sleep == .off ? C.labelTertiary : C.labelPrimary).frame(minWidth: 72)
+                Image(systemName: p.sleep == .off ? "moon" : "moon.fill").font(.system(size: 40))
             }
             .accessibilityLabel("睡眠定时")
         }
@@ -130,12 +136,10 @@ private struct TVPlayerControls: View {
     /// “•••”：标记已听完、收藏课程、前往课程（和 iPhone 一样；没有下载），按下后弹选项单
     private var moreMenu: some View {
         Button { dialog = .more } label: {
-            ZStack {
-                Circle().fill(C.backgroundSecondary).frame(width: 72, height: 72)
-                ZIcon(name: "ellipsis-horizontal", size: 36, color: C.labelPrimary)
-            }
+            Image(systemName: "ellipsis")
         }
-        .buttonStyle(.borderless)
+        .buttonStyle(.bordered)
+        .buttonBorderShape(.circle)
         .accessibilityLabel("更多操作")
     }
 
@@ -180,34 +184,5 @@ private struct TVPlayerControls: View {
         case .damaged: "这一集的文件已损坏"
         case .gone: "这一集已下架"
         }
-    }
-}
-
-/// 进度条：颜色和 iPhone 一样（progressFill / progressTrack）。可以选中：选中时变粗，左右键后退 15 秒、前进 30 秒。
-private struct TVProgressBar: View {
-    let player: PlayerController
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        let ratio = progressRatio(player.position, player.duration)
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Tok.Color.progressTrack.color)
-                Capsule().fill(Tok.Color.progressFill.color).frame(width: max(0, g.size.width * ratio))
-            }
-        }
-        .frame(height: focused ? 14 : 8)
-        .animation(.easeOut(duration: 0.15), value: focused)
-        .padding(.vertical, 12)
-        .focusable()
-        .focused($focused)
-        .onMoveCommand { dir in
-            switch dir {
-            case .left: player.seek(by: -SEEK_BACK_SECONDS)
-            case .right: player.seek(by: SEEK_FORWARD_SECONDS)
-            default: break
-            }
-        }
-        .accessibilityLabel("播放进度")
     }
 }

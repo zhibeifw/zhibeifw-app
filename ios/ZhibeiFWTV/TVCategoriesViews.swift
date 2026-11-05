@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 分类：彩色磁贴（颜色、图标和 iPhone 一样），选一个进这个分类的全部课程。
+/// 分类：系统按钮（系统图标 + 分类名），选一个进这个分类的全部课程。
 struct TVCategoriesView: View {
     @Environment(AppCore.self) private var core
     @State private var tiles: [CategoryTile] = []
@@ -10,29 +10,19 @@ struct TVCategoriesView: View {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: TVLayout.cardGap), count: 4), spacing: TVLayout.cardGap) {
                 ForEach(tiles) { t in
                     NavigationLink(value: TVRoute.category(t.id)) {
-                        ZStack {
-                            resolveCategoryColor(t.color, id: t.id).color
-                            VStack {
-                                HStack {
-                                    Spacer()
-                                    ZIcon(name: resolveCategoryIcon(t.icon, id: t.id), size: 56, color: C.onColor.opacity(0.85))
-                                }
-                                Spacer()
-                                HStack {
-                                    Text(t.name).font(.title3).fontWeight(.semibold).foregroundStyle(C.onColor).lineLimit(1)
-                                    Spacer()
-                                }
-                            }
-                            .padding(28)
-                        }
-                        .frame(height: 200)
+                        Label(t.name, systemImage: categorySymbol(t))
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     }
-                    .buttonStyle(.card)
                 }
             }
             .padding(TVLayout.pageMargin)
         }
         .task(id: core.catalogVersion) { tiles = (try? core.store.loadCategories()) ?? [] }
+    }
+
+    /// 分类图标对应的系统图标（SF Symbols，和 iPhone 同一张对照表）；只有我们自绘、没有系统图标的，用系统的“书”。
+    private func categorySymbol(_ t: CategoryTile) -> String {
+        SymbolName.all[resolveCategoryIcon(t.icon, id: t.id)] ?? "book"
     }
 }
 

@@ -51,7 +51,10 @@ struct TVCardRow: View {
             Group {
                 if let more {
                     NavigationLink(value: more) {
-                        Label(title, systemImage: "chevron.right").labelStyle(TitleThenIcon())
+                        HStack(spacing: 12) {
+                            Text(title)
+                            Image(systemName: "chevron.right").font(.callout).foregroundStyle(.secondary)
+                        }
                     }
                     .buttonStyle(.borderless)
                 } else {
@@ -106,15 +109,5 @@ struct TVSeriesCard: View {
                 .frame(width: width, height: TVLayout.coverHeight(width))
         }
         .buttonStyle(.card)
-    }
-}
-
-/// 文字在前、箭头在后（“分类名 ›”）。
-struct TitleThenIcon: LabelStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        HStack(spacing: 12) {
-            configuration.title
-            configuration.icon.font(.callout).foregroundStyle(.secondary)
-        }
     }
 }
