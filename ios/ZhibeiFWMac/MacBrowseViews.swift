@@ -34,7 +34,7 @@ struct MacHomeView: View {
                 }
                 ForEach(home.categories) { c in
                     MacCardRow(title: c.name, cards: c.series, width: MacLayout.smallCardWidth) {
-                        model.section = .category(c.id)
+                        model.openCategory(c.id)
                     }
                 }
             }
@@ -108,6 +108,60 @@ struct MacSeriesCard: View {
                 Button(role: .destructive, action: onRemoveFavorite) { Label("取消收藏", systemImage: "bookmark.slash") }
             }
         }
+    }
+}
+
+/// 分类：彩色方块磁贴（和 iPhone 分类页一样：分类颜色的底，图标在右上角，分类名在左下角；尺寸用同一套设计令牌），
+/// 点一个进这个分类的全部课程。窗口越宽一行排得越多。鼠标移上去稍微变亮。
+struct MacCategoriesView: View {
+    @Environment(AppCore.self) private var core
+    @State private var tiles: [CategoryTile] = []
+
+    var body: some View {
+        ScrollView(.vertical) {
+            LazyVGrid(
+                columns: [GridItem(.adaptive(minimum: 180, maximum: 280), spacing: Tok.Component.Tile.gap)],
+                spacing: Tok.Component.Tile.gap
+            ) {
+                ForEach(tiles) { t in MacCategoryTile(tile: t) }
+            }
+            .padding(MacLayout.pageMargin)
+        }
+        .navigationTitle("分类")
+        .task(id: core.catalogVersion) { tiles = (try? core.store.loadCategories()) ?? [] }
+    }
+}
+
+private struct MacCategoryTile: View {
+    let tile: CategoryTile
+    @State private var hovering = false
+    private typealias T = Tok.Component.Tile
+
+    var body: some View {
+        NavigationLink(value: MacRoute.category(tile.id)) {
+            ZStack {
+                RoundedRectangle(cornerRadius: Tok.Radius.tile, style: .continuous)
+                    .fill(resolveCategoryColor(tile.color, id: tile.id).color)
+                VStack {
+                    HStack {
+                        Spacer()
+                        ZIcon(name: resolveCategoryIcon(tile.icon, id: tile.id), size: T.iconSize, color: C.onColor.opacity(T.iconOpacity))
+                    }
+                    Spacer()
+                    HStack {
+                        Text(tile.name).zFont(Tok.Font.Style.tileText).foregroundStyle(C.onColor).lineLimit(1)
+                        Spacer()
+                    }
+                }
+                .padding(T.padding)
+            }
+            .frame(height: T.height)
+            .brightness(hovering ? 0.05 : 0)
+            .contentShape(RoundedRectangle(cornerRadius: Tok.Radius.tile, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .accessibilityLabel("\(tile.name)，查看全部课程")
     }
 }
 
@@ -209,7 +263,7 @@ struct MacSeriesView: View {
                 // “中观 › · 共 42 节课 · 更新中”：分类名可以点，进侧边栏里的这个分类（和 iPhone 一样）
                 HStack(spacing: 0) {
                     if let cn = h.categoryName {
-                        Button { model.section = .category(h.categoryId) } label: {
+                        Button { model.openCategory(h.categoryId) } label: {
                             HStack(spacing: 2) {
                                 Text(cn).fontWeight(.medium)
                                 Image(systemName: "chevron.right").font(.caption)

@@ -44,35 +44,56 @@ struct MacNowPlayingBar: View {
     }
 }
 
-/// 播放页（从工具栏的集名打开）：左边封面，右边集名、“课程名 ›”、“•••”，进度条（系统滑块），时间，
-/// 控制行：倍速、后退 15、播放暂停、前进 30、睡眠定时。全部是系统组件。按 Esc 或“完成”收起，声音照常播。
+/// 播放页（点工具栏的集名或按 ⇧⌘P 打开，铺满整个窗口）：左边封面，右边集名、“课程名 ›”、“•••”，进度条（系统滑块），时间，
+/// 控制行：倍速、后退 15、播放暂停、前进 30、睡眠定时。全部是系统组件。窗口变大时整体等比放大，窗口很窄时改成上下排。
+/// 打开时窗口工具栏藏起来，播放页占满整个窗口；左上角圈 X（红黄绿按钮下面）或 Esc 关闭，声音照常播。
 struct MacPlayerView: View {
     @Environment(AppCore.self) private var core
-    @Environment(\.dismiss) private var dismiss
+    @Environment(MacModel.self) private var model
 
     var body: some View {
-        Group {
-            if let p = core.player, let c = p.current {
-                HStack(alignment: .center, spacing: 32) {
-                    CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 12)
-                        .frame(width: 400, height: MacLayout.coverHeight(400))
-                    MacPlayerControls(player: p, now: c)
-                        .frame(width: 380)
-                }
-                .padding(32)
-                // 睡眠定时的倒计时每秒刷新一次（和 iPhone 一样）
-                .task {
-                    while !Task.isCancelled {
-                        try? await Task.sleep(nanoseconds: 1_000_000_000)
-                        p.refreshSleepDisplay()
+        GeometryReader { g in
+            ZStack(alignment: .topLeading) {
+                C.background.ignoresSafeArea()
+                Group {
+                    if let p = core.player, let c = p.current {
+                        let wide = g.size.width >= 900
+                        let coverW = wide ? min(g.size.width * 0.42, 720) : min(g.size.width - 80, 560)
+                        let controlsW = wide ? min(g.size.width * 0.34, 520) : coverW
+                        let layout = wide ? AnyLayout(HStackLayout(alignment: .center, spacing: 48)) : AnyLayout(VStackLayout(spacing: 28))
+                        layout {
+                            CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 14)
+                                .frame(width: coverW, height: MacLayout.coverHeight(coverW))
+                                .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
+                            MacPlayerControls(player: p, now: c)
+                                .frame(width: controlsW)
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // 睡眠定时的倒计时每秒刷新一次（和 iPhone 一样）
+                        .task {
+                            while !Task.isCancelled {
+                                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                                p.refreshSleepDisplay()
+                            }
+                        }
+                    } else {
+                        Text("还没有在播放的内容").foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
                 }
-            } else {
-                Text("还没有在播放的内容").foregroundStyle(.secondary).padding(60)
+                Button { model.playerOpen = false } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 26))
+                        .symbolRenderingMode(.hierarchical)
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .keyboardShortcut(.cancelAction)  // Esc
+                .help("关闭播放页 (Esc)")
+                .accessibilityLabel("关闭播放页")
+                .padding(.leading, 20)
+                .padding(.top, 12)
             }
-        }
-        .toolbar {
-            ToolbarItem(placement: .confirmationAction) { Button("完成") { dismiss() } }
         }
     }
 }
@@ -90,10 +111,10 @@ private struct MacPlayerControls: View {
     private var p: PlayerController { player }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 18) {
+        VStack(alignment: .leading, spacing: 22) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text(now.info.episodeTitle).font(.title2).fontWeight(.semibold).lineLimit(2)
+                    Text(now.info.episodeTitle).font(.largeTitle).fontWeight(.bold).lineLimit(2)
                     Button { model.goToSeries(now.seriesId) } label: {
                         HStack(spacing: 4) {
                             Text(now.info.seriesTitle).lineLimit(1)

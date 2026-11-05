@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Mac 的根视图：启动、首次准备内容、出错；准备好以后是系统的侧边栏布局（左边侧边栏，右边内容），
-/// 工具栏中间是播放控制。和 Mac 上的“播客”“音乐”一样，全部用系统组件。
+/// 工具栏中间是播放控制。和 Mac 上的“播客”“音乐”一样，全部用系统组件。播放页打开时铺满整个窗口（和 iPhone、Apple TV 一样）。
 struct MacRootView: View {
     @Environment(AppCore.self) private var core
 
@@ -71,22 +71,18 @@ private struct MacInitView: View {
 private struct MacMainView: View {
     @Environment(AppCore.self) private var core
     @Environment(MacModel.self) private var model
-    @State private var categories: [CategoryTile] = []
 
     var body: some View {
         @Bindable var m = model
+        ZStack {
         NavigationSplitView {
-            // 侧边栏：主页；分类（每个分类一行，和“音乐”的歌单一样直接列在侧边栏）；资料库：最近播放、收藏
+            // 侧边栏：主页、分类；资料库：最近播放、收藏。分类只放一个入口（14 个分类全列出来太长）
             List(selection: $m.section) {
                 Label("主页", systemImage: "house").tag(MacSection.home)
+                Label("分类", systemImage: "square.grid.2x2").tag(MacSection.categories)
                 Section("资料库") {
                     Label("最近播放", systemImage: "clock").tag(MacSection.recent)
                     Label("收藏", systemImage: "bookmark").tag(MacSection.favorites)
-                }
-                Section("分类") {
-                    ForEach(categories) { t in
-                        Label(t.name, systemImage: categorySymbol(t)).tag(MacSection.category(t.id))
-                    }
                 }
             }
             .navigationSplitViewColumnWidth(min: 180, ideal: 210, max: 280)
@@ -99,7 +95,7 @@ private struct MacMainView: View {
                     } else {
                         switch model.section ?? .home {
                         case .home: MacHomeView()
-                        case .category(let id): MacCategoryView(categoryId: id)
+                        case .categories: MacCategoriesView()
                         case .recent: MacRecentView()
                         case .favorites: MacFavoritesView()
                         }
@@ -108,6 +104,7 @@ private struct MacMainView: View {
                 .navigationDestination(for: MacRoute.self) { r in
                     switch r {
                     case .series(let id): MacSeriesView(seriesId: id)
+                    case .category(let id): MacCategoryView(categoryId: id)
                     }
                 }
             }
@@ -115,17 +112,21 @@ private struct MacMainView: View {
         .searchable(text: $m.query, placement: .sidebar, prompt: "课程名或拼音首字母")
         .onChange(of: model.query) { _, v in
             if v.count > MAX_QUERY_LENGTH { model.query = String(v.prefix(MAX_QUERY_LENGTH)) }
-            model.path = []
+            // 打字时回到搜索结果；清空时不动（“前往课程”“进分类”会先清空搜索词，再进页面）
+            if !v.isEmpty { model.path = [] }
         }
         .toolbar {
             ToolbarItem(placement: .principal) { MacNowPlayingBar() }
         }
-        .sheet(isPresented: $m.playerOpen) { MacPlayerView() }
-        .task(id: core.catalogVersion) { categories = (try? core.store.loadCategories()) ?? [] }
-    }
-
-    /// 分类图标对应的系统图标（SF Symbols，和 iPhone、Apple TV 同一张对照表）。
-    private func categorySymbol(_ t: CategoryTile) -> String {
-        SymbolName.all[resolveCategoryIcon(t.icon, id: t.id)] ?? "book"
+            // 播放页：从下往上铺满窗口，盖住侧边栏和内容区；收起后回到原来的页面，声音照常播
+            if model.playerOpen {
+                MacPlayerView()
+                    .transition(.move(edge: .bottom))
+                    .zIndex(1)
+            }
+        }
+        .animation(.easeInOut(duration: 0.3), value: model.playerOpen)
+        // 播放页打开时藏起整个工具栏，播放页占满窗口；关闭用播放页左上角的圈 X（或 Esc）
+        .toolbar(model.playerOpen ? .hidden : .visible, for: .windowToolbar)
     }
 }

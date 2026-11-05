@@ -31,16 +31,15 @@ struct ZhibeiFWMacApp: App {
     }
 }
 
-/// 侧边栏的一项。
+/// 侧边栏的一项：主页、分类、最近播放、收藏（分类只有一个入口，点进去是分类磁贴，和 iPhone、Apple TV 一样）。
 enum MacSection: Hashable {
-    case home
-    case category(String)
-    case recent, favorites
+    case home, categories, recent, favorites
 }
 
 /// 内容区页面栈里能进的页面。
 enum MacRoute: Hashable {
     case series(String)
+    case category(String)
 }
 
 /// Mac 版的 App 模型：AppCore 加上 Mac 自己的界面状态（侧边栏选中项、页面栈、搜索词、播放页）。
@@ -54,6 +53,13 @@ final class MacModel {
     var path: [MacRoute] = []
     var query = ""
     var playerOpen = false
+
+    /// 进一个分类的全部课程（主页分类行的标题、课程页的分类名）：切到侧边栏的“分类”，再进这个分类。
+    func openCategory(_ categoryId: String) {
+        query = ""
+        section = .categories
+        path = [.category(categoryId)]
+    }
 
     /// “前往课程”：收起播放页，在当前内容区里进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
