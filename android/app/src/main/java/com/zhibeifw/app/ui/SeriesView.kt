@@ -65,7 +65,8 @@ fun SeriesView(model: AppModel, seriesId: String) {
     var header by remember { mutableStateOf<SeriesHeader?>(null) }
     var episodes by remember { mutableStateOf<List<EpisodeRow>>(emptyList()) }
     var state by remember { mutableStateOf(LoadState.LOADING) }
-    var oldestFirst by remember { mutableStateOf(false) }
+    // 默认最旧到最新（第 1 课在最上面），和 iOS、Apple TV 一样
+    var oldestFirst by remember { mutableStateOf(true) }
     val list = rememberLazyListState()
     val W = windowWidth()
     val m = Layout.pageMargin(W)
@@ -108,11 +109,11 @@ fun SeriesView(model: AppModel, seriesId: String) {
                     )
                 )
             }) { open ->
-                // Material 3 切换图标按钮：默认是普通图标，非默认（最旧到最新）时加浅色圆底（FilledTonalIconButton）
+                // Material 3 切换图标按钮：默认（最旧到最新）是普通图标，非默认（最新到最旧）时加浅色圆底（FilledTonalIconButton）
                 val desc = Modifier.semantics {
-                    contentDescription = if (oldestFirst) "排序，当前按最旧到最新" else "排序"
+                    contentDescription = if (oldestFirst) "排序" else "排序，当前按最新到最旧"
                 }
-                if (oldestFirst) FilledTonalIconButton(
+                if (!oldestFirst) FilledTonalIconButton(
                     onClick = open,
                     modifier = desc
                 ) { ZIcon("swap-vertical", Tok.PageHeader.iconSize.d, C.labelPrimary()) }
