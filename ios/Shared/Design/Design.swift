@@ -71,7 +71,11 @@ struct ZTextStyle: Sendable, Hashable {
     /// 这个字号对应的系统文字样式（HIG 字号阶梯），决定随系统字号放大的曲线。
     var textStyle: UIFont.TextStyle {
         switch size {
+        #if os(tvOS)
+        case 30...: return .title1  // tvOS 没有 largeTitle，最大是 title1
+        #else
         case 30...: return .largeTitle  // 34
+        #endif
         case 26..<30: return .title1  // 28
         case 21..<26: return .title2  // 22、24
         case 18..<21: return .title3  // 18、19、20
