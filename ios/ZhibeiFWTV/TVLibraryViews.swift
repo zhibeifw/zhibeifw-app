@@ -25,15 +25,17 @@ struct TVRecentView: View {
             if rows.isEmpty {
                 Text("暂无收听记录").foregroundStyle(.secondary).focusable()
             } else {
-                List {
-                    Section {
+                // 标题和“清空”单独一行放在列表上面（放进列表的分组标题里，按钮选中时放大会和第一条重叠）
+                VStack(alignment: .leading, spacing: 20) {
+                    HStack(alignment: .firstTextBaseline, spacing: 24) {
+                        Text("最近播放").font(.title2).fontWeight(.semibold)
+                        Text("\(rows.count) 条记录").font(.callout).foregroundStyle(.secondary)
+                        Spacer()
+                        Button("清空", action: confirmClear)
+                    }
+                    .padding(.horizontal, TVLayout.pageMargin)
+                    List {
                         ForEach(rows) { r in row(r) }
-                    } header: {
-                        HStack {
-                            Text("\(rows.count) 条记录")
-                            Spacer()
-                            Button("清空", action: confirmClear)
-                        }
                     }
                 }
             }
