@@ -3,7 +3,7 @@ import SwiftUI
 /// 全屏播放页：照 iPhone 横屏的播放页做（左边封面，右边控制区），按电视放大。
 /// 右边从上到下：集名、“课程名 ›”（前往课程）和“•••”更多；进度条；时间（左已播，右剩余 / 睡眠定时）；
 /// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。全部是系统组件和系统图标（SF Symbols）。
-/// 进度条是自己做的（tvOS 没有系统滑块）：可以选中，选中后按左右键后退 15 秒、前进 30 秒。这是唯一一处自己画的。
+/// 进度条是自己做的（tvOS 没有系统滑块）：可以选中，选中后按左右键后退 15 秒、前进 30 秒，按住连续跳。这是唯一一处自己画的。
 /// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
@@ -190,10 +190,14 @@ private struct TVPlayerControls: View {
 }
 
 /// 进度条：tvOS 没有系统滑块，这是电视版唯一一处自己画的组件。颜色和 iPhone 的进度条一样（progressFill / progressTrack）。
-/// 可以选中：选中时变粗，左右键后退 15 秒、前进 30 秒。
+/// 可以选中：选中时变粗。左右键后退 15 秒、前进 30 秒；按住不放：先跳一次，0.5 秒后每 0.3 秒再跳一次，松开就停。
 private struct TVProgressBar: View {
     let player: PlayerController
     @FocusState private var focused: Bool
+    /// 按住时连续跳的任务；松开（或失去焦点）时取消
+    @State private var holding: Task<Void, Never>?
+    /// 上一次由按键事件处理的时刻：同一下按键再来的方向命令不再跳（免得跳两次）
+    @State private var keyHandledAt = Date.distantPast
 
     var body: some View {
         let ratio = progressRatio(player.position, player.duration)
@@ -208,13 +212,49 @@ private struct TVProgressBar: View {
         .padding(.vertical, 12)
         .focusable()
         .focused($focused)
+        // 按下、按住、松开：能分清的话（键盘方向键一定能），按住连续跳
+        .onKeyPress(keys: [.leftArrow, .rightArrow], phases: [.down, .repeat, .up]) { press in
+            let forward = press.key == .rightArrow
+            keyHandledAt = Date()
+            switch press.phase {
+            case .down: startHolding(forward)
+            case .up: stopHolding()
+            default: break  // 系统的按键重复不用：连续跳由自己的节奏控制
+            }
+            return .handled
+        }
+        // 遥控器的按压如果不经过上面的按键事件：至少按一下跳一次
         .onMoveCommand { dir in
+            guard Date().timeIntervalSince(keyHandledAt) > 0.5 else { return }
             switch dir {
-            case .left: player.seek(by: -SEEK_BACK_SECONDS)
-            case .right: player.seek(by: SEEK_FORWARD_SECONDS)
+            case .left: step(false)
+            case .right: step(true)
             default: break
             }
         }
+        .onChange(of: focused) { _, f in if !f { stopHolding() } }
+        .onDisappear { stopHolding() }
         .accessibilityLabel("播放进度")
+    }
+
+    private func step(_ forward: Bool) {
+        player.seek(by: forward ? SEEK_FORWARD_SECONDS : -SEEK_BACK_SECONDS)
+    }
+
+    private func startHolding(_ forward: Bool) {
+        holding?.cancel()
+        step(forward)
+        holding = Task {
+            try? await Task.sleep(nanoseconds: 500_000_000)
+            while !Task.isCancelled {
+                step(forward)
+                try? await Task.sleep(nanoseconds: 300_000_000)
+            }
+        }
+    }
+
+    private func stopHolding() {
+        holding?.cancel()
+        holding = nil
     }
 }
