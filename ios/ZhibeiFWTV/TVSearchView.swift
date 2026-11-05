@@ -10,6 +10,10 @@ struct TVSearchView: View {
     var body: some View {
         ScrollView(.vertical) {
             VStack(alignment: .leading, spacing: 30) {
+                if result == nil {
+                    // 没搜之前：和 iPhone 一样的提示
+                    Text("输入课程名搜索").foregroundStyle(.secondary)
+                }
                 if let r = result {
                     if r.rows.isEmpty {
                         Text("未找到相关内容").foregroundStyle(.secondary)

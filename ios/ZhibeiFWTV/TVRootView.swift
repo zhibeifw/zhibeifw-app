@@ -72,17 +72,23 @@ private struct TVMainView: View {
 
     var body: some View {
         @Bindable var m = model
+        // tvOS 18 的 Tab 写法；“搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘
         TabView(selection: $m.tab) {
-            NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
-                .tabItem { Text("首页") }.tag(TVTab.home)
-            NavigationStack(path: $m.categoriesPath) { TVCategoriesView().withRoutes() }
-                .tabItem { Text("分类") }.tag(TVTab.categories)
-            NavigationStack(path: $m.libraryPath) { TVLibraryHubView().withRoutes() }
-                .tabItem { Text("资料库") }.tag(TVTab.library)
-            NavigationStack(path: $m.searchPath) { TVSearchView().withRoutes() }
-                .tabItem { Text("搜索") }.tag(TVTab.search)
-            NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
-                .tabItem { Text("关于") }.tag(TVTab.about)
+            Tab("首页", value: TVTab.home) {
+                NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
+            }
+            Tab("分类", value: TVTab.categories) {
+                NavigationStack(path: $m.categoriesPath) { TVCategoriesView().withRoutes() }
+            }
+            Tab("资料库", value: TVTab.library) {
+                NavigationStack(path: $m.libraryPath) { TVLibraryHubView().withRoutes() }
+            }
+            Tab("搜索", systemImage: "magnifyingglass", value: TVTab.search, role: .search) {
+                NavigationStack(path: $m.searchPath) { TVSearchView().withRoutes() }
+            }
+            Tab("关于", value: TVTab.about) {
+                NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
+            }
         }
     }
 }
