@@ -8,14 +8,12 @@ import SwiftUI
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.colorScheme) private var scheme
 
     var body: some View {
         if let p = core.player, let c = p.current {
             HStack(alignment: .center, spacing: 100) {
                 CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 24)
                     .frame(width: 880, height: TVLayout.coverHeight(880))
-                    .shadow(color: scheme == .dark ? .clear : .black.opacity(0.18), radius: 20, y: 10)
                 TVPlayerControls(player: p, now: c)
                     .frame(width: 720)
             }

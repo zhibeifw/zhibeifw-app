@@ -98,7 +98,7 @@ struct TVLinkView: View {
                     .resizable()
                     .frame(width: 360, height: 360)
                     .padding(28)
-                    .background(Color.white, in: RoundedRectangle(cornerRadius: 16))  // 深色模式下也是白底黑码，手机才扫得出
+                    .background(Color.white)  // 二维码要白底黑码、四周留白边，深色模式下手机才扫得出（功能需要，不是装饰）
             }
             Text("用手机扫码查看").font(.callout).foregroundStyle(.secondary)
             Text(url.absoluteString).font(.title3)
