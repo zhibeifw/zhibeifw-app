@@ -1,15 +1,15 @@
 import SwiftUI
 
 /// 课程页：左边封面、课程名、简介、收藏、排序；右边各集列表。选一集开始播放并打开播放页。
-/// 列表默认最新的在上面（和 iPhone 一样），“排序”可以换成最旧的在上面；只影响显示，自动接下一集始终按课程顺序。
+/// 列表默认最旧的在上面（第 1 课在最上面），“排序”可以换成最新的在上面；只影响显示，自动接下一集始终按课程顺序。
 struct TVSeriesView: View {
     @Environment(AppCore.self) private var core
     let seriesId: String
     @State private var header: SeriesHeader?
     @State private var episodes: [EpisodeRow]
     @State private var loaded = true
-    /// 和 iPhone 一样：默认最新到最旧；只在这一页有效，不记住
-    @State private var oldestFirst = false
+    /// 默认最旧到最新（第 1 课在最上面；iPhone 默认是最新到最旧）；只在这一页有效，不记住
+    @State private var oldestFirst = true
     @State private var sortDialog = false
 
     /// 进页面时就读好（同分类页：第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
