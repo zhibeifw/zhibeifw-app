@@ -25,23 +25,21 @@ struct TVRecentView: View {
             if rows.isEmpty {
                 Text("暂无收听记录").foregroundStyle(.secondary).focusable()
             } else {
-                // “清空”也在列表里（单独一组，放在记录上面、靠右）：选中时放大由系统的列表留空间，不会和记录重叠。
-                // 放在列表外面不行：tvOS 列表行选中时会放大、浮出列表的边界，压到外面的东西
-                List {
-                    // 第一行：左边“N 条记录”，右边“清空”（这一行本身不能选，只有按钮能选；没有行背景）
-                    Section {
-                        HStack {
-                            Text("\(rows.count) 条记录").foregroundStyle(.secondary)
-                            Spacer()
-                            Button(role: .destructive, action: confirmClear) {
-                                Label("清空", systemImage: "trash")
-                            }
+                // 上面一行：左边“N 条记录”，右边“清空”按钮。放在列表外面：放进列表的一行里，选中时会整行高亮。
+                // 列表内容顶部留出空白：记录选中时会放大、浮出列表边界，留了空白才不会压到上面的按钮
+                VStack(spacing: 0) {
+                    HStack {
+                        Text("\(rows.count) 条记录").foregroundStyle(.secondary)
+                        Spacer()
+                        Button(role: .destructive, action: confirmClear) {
+                            Label("清空", systemImage: "trash")
                         }
-                        .listRowBackground(Color.clear)
                     }
-                    Section {
+                    .padding(.horizontal, TVLayout.pageMargin)
+                    List {
                         ForEach(rows) { r in row(r) }
                     }
+                    .contentMargins(.top, 60, for: .scrollContent)
                 }
             }
         }
