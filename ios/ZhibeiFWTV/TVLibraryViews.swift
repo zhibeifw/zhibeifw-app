@@ -25,21 +25,23 @@ struct TVRecentView: View {
             if rows.isEmpty {
                 Text("暂无收听记录").foregroundStyle(.secondary).focusable()
             } else {
-                // 标题和“清空”单独一行放在列表上面（放进列表的分组标题里，按钮选中时放大会和第一条重叠）
-                VStack(alignment: .leading, spacing: 20) {
-                    HStack(alignment: .firstTextBaseline, spacing: 24) {
-                        Text("最近播放").font(.title2).fontWeight(.semibold)
-                        Text("\(rows.count) 条记录").font(.callout).foregroundStyle(.secondary)
-                        Spacer()
-                        Button("清空", action: confirmClear)
+                // “清空”也是列表里的一行（单独一组，放在记录上面）：选中时放大由系统的列表留空间，不会和记录重叠。
+                // 放在列表外面不行：tvOS 列表行选中时会放大、浮出列表的边界，压到外面的东西
+                List {
+                    Section {
+                        Button(role: .destructive, action: confirmClear) {
+                            Label("清空最近播放", systemImage: "trash")
+                        }
                     }
-                    .padding(.horizontal, TVLayout.pageMargin)
-                    List {
+                    Section {
                         ForEach(rows) { r in row(r) }
+                    } header: {
+                        Text("\(rows.count) 条记录")
                     }
                 }
             }
         }
+        .navigationTitle("最近播放")
         .task(id: [core.catalogVersion, core.progressVersion]) {
             rows = (try? core.store.loadRecent(limit: 200)) ?? []
         }
@@ -120,6 +122,7 @@ struct TVFavoritesView: View {
                 }
             }
         }
+        .navigationTitle("收藏")
         .task(id: [core.catalogVersion, core.favoritesVersion]) {
             rows = (try? core.store.loadFavorites()) ?? []
         }
