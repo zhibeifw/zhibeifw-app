@@ -1,134 +1,198 @@
+import AVKit
 import SwiftUI
 
-/// 全屏播放页：封面、集名、进度，下面是后退 15 秒 / 播放暂停 / 前进 30 秒。
-/// 遥控器：播放/暂停键随时可用（系统远程控制命令）；返回键收起播放页，声音照常播。
+/// 全屏播放页：系统的播放界面（AVKit 的 AVPlayerViewController）。
+/// 进度条、播放暂停、触控板拖动、左右键快退快进、向下轻扫的信息面板都是系统的；
+/// 音频没有画面，画面中间自己画：模糊的封面底、大封面、课程名和集名（苹果推荐的做法：画在 contentOverlayView 里）。
+/// 进度条上方的菜单：倍速、睡眠定时、更多（标记已听完、收藏课程、前往课程），文字和 iPhone 一样。
+/// 播放器本身还是 PlayerController 的那个 AVPlayer：在系统界面里暂停、拖动，PlayerController 照样记进度。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
+    @Environment(TVModel.self) private var model
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         if let p = core.player, let c = p.current {
-            HStack(alignment: .center, spacing: 100) {
-                CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 20)
-                    .frame(width: 800, height: TVLayout.coverHeight(800))
-                VStack(alignment: .leading, spacing: 28) {
-                    Text(c.info.seriesTitle).font(.title3).foregroundStyle(.secondary).lineLimit(2)
-                    Text(c.info.episodeTitle).font(.title2).fontWeight(.semibold).lineLimit(3)
-                    if let err = p.error {
-                        Text(errorText(err)).foregroundStyle(C.danger)
-                        if err == .cannotPlay { Button("重试") { p.retry() } }
-                    } else {
-                        ProgressView(value: progressRatio(p.position, p.duration))
-                        HStack {
-                            Text(clock(p.position))
-                            Spacer()
-                            // 开了睡眠定时：右边显示定时（和 iPhone 一样），否则是剩余时间
-                            switch p.sleep {
-                            case .end: Text(sleepLabel(nil))
-                            case .timer: Text(sleepLabel(p.sleepLeft ?? 0))
-                            case .off: Text(p.duration > 0 ? remainingClock(p.position, p.duration) : "")
-                            }
-                        }
-                        .font(.callout).monospacedDigit().foregroundStyle(.secondary)
-                        HStack(spacing: 40) {
-                            Button { p.seek(by: -SEEK_BACK_SECONDS) } label: {
-                                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))")
-                            }
-                            Button { p.toggle() } label: {
-                                Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill")
-                            }
-                            Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: {
-                                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))")
-                            }
-                        }
-                        .font(.title2)
-                        TVPlayerMenus(player: p, now: c)
-                    }
-                }
-                .frame(maxWidth: 820, alignment: .leading)
-            }
-            .padding(TVLayout.pageMargin)
-            .frame(maxWidth: .infinity, maxHeight: .infinity)
-            // tvOS 全屏弹出的页面默认是透明的（后面的课程页会透出来），要自己铺满背景：
-            // 不透明的底色上，铺一层放大、模糊、调淡的封面（和系统“音乐”“播客”的播放页一样）
-            .background {
-                ZStack {
-                    C.background
-                    CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 0)
-                        .blur(radius: 80)
-                        .opacity(0.35)
-                }
+            // 菜单里的勾选状态、收藏、已听完：变了才重建菜单（读这几个值，SwiftUI 才会在它们变时更新）
+            let facts = MenuFacts(
+                rate: p.rate, sleepId: p.sleep.choiceId, favorite: favorite(c), completed: completed(c), error: p.error)
+            SystemPlayer(player: p, now: c, facts: facts, core: core, model: model)
                 .ignoresSafeArea()
-            }
-            // 遥控器的播放/暂停键走系统的远程控制命令（PlayerController 里已注册），这里不再处理，免得按一下切两次
-            .onExitCommand { dismiss() }
         } else {
             // 播放器停了（比如这一集被标为已听完）：没什么可显示的，收起
             Color.clear.onAppear { dismiss() }
         }
     }
 
-    fileprivate func errorText(_ e: PlayerError) -> String {
+    private func favorite(_ c: NowPlaying) -> Bool {
+        _ = core.favoritesVersion
+        return core.store.isFavorite(c.seriesId)
+    }
+
+    private func completed(_ c: NowPlaying) -> Bool {
+        _ = core.progressVersion
+        return core.store.loadProgress(c.episodeId)?.completed ?? false
+    }
+}
+
+private struct MenuFacts: Equatable {
+    var rate: Double
+    var sleepId: String
+    var favorite: Bool
+    var completed: Bool
+    var error: PlayerError?
+}
+
+private struct SystemPlayer: UIViewControllerRepresentable {
+    let player: PlayerController
+    let now: NowPlaying
+    let facts: MenuFacts
+    let core: AppCore
+    let model: TVModel
+
+    final class Coordinator {
+        var host: UIHostingController<AnyView>?
+        var metadataFor: (episodeId: String, item: ObjectIdentifier)?
+        var facts: MenuFacts?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
+    func makeUIViewController(context: Context) -> AVPlayerViewController {
+        let vc = AVPlayerViewController()
+        vc.player = player.player
+        // 锁屏、控制中心的“正在播放”信息和遥控命令由 PlayerController 管，系统播放界面别再写一份
+        vc.updatesNowPlayingInfoCenter = false
+        // 倍速用我们自己的菜单（会记住倍速、换集也保持），不显示系统自带的倍速菜单
+        vc.speeds = []
+        // 画面中间：封面和标题，铺在系统控件下面
+        let host = UIHostingController(rootView: AnyView(EmptyView()))
+        host.view.backgroundColor = .clear
+        vc.addChild(host)
+        if let overlay = vc.contentOverlayView {
+            host.view.translatesAutoresizingMaskIntoConstraints = false
+            overlay.addSubview(host.view)
+            NSLayoutConstraint.activate([
+                host.view.leadingAnchor.constraint(equalTo: overlay.leadingAnchor),
+                host.view.trailingAnchor.constraint(equalTo: overlay.trailingAnchor),
+                host.view.topAnchor.constraint(equalTo: overlay.topAnchor),
+                host.view.bottomAnchor.constraint(equalTo: overlay.bottomAnchor),
+            ])
+        }
+        host.didMove(toParent: vc)
+        context.coordinator.host = host
+        update(vc, context.coordinator)
+        return vc
+    }
+
+    func updateUIViewController(_ vc: AVPlayerViewController, context: Context) {
+        update(vc, context.coordinator)
+    }
+
+    private func update(_ vc: AVPlayerViewController, _ co: Coordinator) {
+        co.host?.rootView = AnyView(
+            TVNowPlayingArt(now: now, error: facts.error).environment(core))
+        if co.facts != facts {
+            co.facts = facts
+            vc.transportBarCustomMenuItems = menus()
+        }
+        // 信息面板（向下轻扫）：集名、课程名、封面。换了一集（或重新加载了音频）才重写
+        if let item = player.player.currentItem,
+            co.metadataFor?.episodeId != now.episodeId || co.metadataFor?.item != ObjectIdentifier(item)
+        {
+            co.metadataFor = (now.episodeId, ObjectIdentifier(item))
+            item.externalMetadata = metadata()
+        }
+    }
+
+    private func menus() -> [UIMenuElement] {
+        let rates = UIMenu(
+            title: "播放速度", image: UIImage(systemName: "speedometer"),
+            children: PLAYBACK_RATES.map { r in
+                UIAction(title: rateMenuTitle(r), state: facts.rate == r ? .on : .off) { _ in player.setRate(r) }
+            })
+        let sleep = UIMenu(
+            title: "睡眠定时", image: UIImage(systemName: facts.sleepId == "off" ? "moon" : "moon.fill"),
+            children: SLEEP_CHOICES.map { ch in
+                UIAction(title: ch.title, state: facts.sleepId == ch.id ? .on : .off) { _ in player.setSleep(sleepSetting(ch)) }
+            })
+        let seriesId = now.seriesId, episodeId = now.episodeId, info = now.info
+        let done = facts.completed, fav = facts.favorite
+        let more = UIMenu(
+            title: "更多", image: UIImage(systemName: "ellipsis"),
+            children: [
+                UIAction(title: done ? "标记为未听完" : "标记为已听完", image: UIImage(systemName: "checkmark.circle")) { _ in
+                    core.markCompleted(episodeId, seriesId: seriesId, completed: !done)
+                },
+                UIAction(title: fav ? "取消收藏课程" : "收藏课程", image: UIImage(systemName: fav ? "bookmark.fill" : "bookmark")) { _ in
+                    core.toggleFavorite(seriesId, title: info.seriesTitle, coverPath: info.coverPath)
+                },
+                UIAction(title: "前往课程", image: UIImage(systemName: "arrow.forward.circle")) { _ in
+                    model.goToSeries(seriesId)
+                },
+            ])
+        // 加载失败：系统的播放键不会重新加载音频，放一个“重试”（画面中间的按钮选不到：焦点在系统控件上）
+        if facts.error == .cannotPlay {
+            let retry = UIAction(title: "重试", image: UIImage(systemName: "arrow.clockwise")) { _ in player.retry() }
+            return [retry, rates, sleep, more]
+        }
+        return [rates, sleep, more]
+    }
+
+    private func metadata() -> [AVMetadataItem] {
+        func item(_ id: AVMetadataIdentifier, _ value: NSCopying & NSObjectProtocol) -> AVMetadataItem {
+            let m = AVMutableMetadataItem()
+            m.identifier = id
+            m.value = value
+            m.extendedLanguageTag = "und"
+            return m
+        }
+        var items = [
+            item(.commonIdentifierTitle, now.info.episodeTitle as NSString),
+            item(.iTunesMetadataTrackSubTitle, now.info.seriesTitle as NSString),
+        ]
+        if let img = ImageLoader.shared.anyCached(now.info.coverPath), let data = img.jpegData(compressionQuality: 0.8) {
+            items.append(item(.commonIdentifierArtwork, data as NSData))
+        }
+        return items
+    }
+}
+
+/// 画面中间：模糊、调淡的封面铺底，上面是大封面、课程名、集名；出错时显示原因（在系统控件下面）。
+private struct TVNowPlayingArt: View {
+    let now: NowPlaying
+    let error: PlayerError?
+
+    var body: some View {
+        ZStack {
+            C.background
+            CoverImage(path: now.info.coverPath, colorId: now.seriesId, radius: 0)
+                .blur(radius: 80)
+                .opacity(0.35)
+            VStack(spacing: 40) {
+                CoverImage(path: now.info.coverPath, colorId: now.seriesId, radius: 20)
+                    .frame(width: 800, height: TVLayout.coverHeight(800))
+                VStack(spacing: 12) {
+                    Text(now.info.episodeTitle).font(.title2).fontWeight(.semibold).lineLimit(2)
+                    Text(now.info.seriesTitle).font(.title3).foregroundStyle(.secondary).lineLimit(1)
+                }
+                .multilineTextAlignment(.center)
+                .frame(maxWidth: 1200)
+                if let error {
+                    // 重试在进度条上方的菜单里
+                    Text(errorText(error)).foregroundStyle(C.danger)
+                }
+            }
+            .padding(.bottom, 160)  // 给下面系统的进度条留出地方
+        }
+        .ignoresSafeArea()
+    }
+
+    private func errorText(_ e: PlayerError) -> String {
         switch e {
         case .cannotPlay: "暂时无法播放，请检查网络后重试"
         case .damaged: "这一集的文件已损坏"
         case .gone: "这一集已下架"
         }
-    }
-}
-
-/// 播放页下面一排菜单：倍速、睡眠定时、更多（标记已听完、收藏课程、前往课程）。文字和 iPhone 的一样。
-private struct TVPlayerMenus: View {
-    @Environment(AppCore.self) private var core
-    @Environment(TVModel.self) private var model
-    let player: PlayerController
-    let now: NowPlaying
-    @State private var favorite = false
-    @State private var completed = false
-
-    var body: some View {
-        HStack(spacing: 40) {
-            Menu {
-                ForEach(PLAYBACK_RATES, id: \.self) { r in
-                    Button { player.setRate(r) } label: { checkLabel(rateMenuTitle(r), player.rate == r) }
-                }
-            } label: {
-                Text(String(format: "%g×", player.rate))
-            }
-            Menu {
-                ForEach(SLEEP_CHOICES) { ch in
-                    Button { player.setSleep(sleepSetting(ch)) } label: { checkLabel(ch.title, player.sleep.choiceId == ch.id) }
-                }
-            } label: {
-                Image(systemName: player.sleep == .off ? "moon" : "moon.fill")
-            }
-            Menu {
-                Button {
-                    core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
-                } label: {
-                    Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
-                }
-                Button {
-                    core.toggleFavorite(now.seriesId, title: now.info.seriesTitle, coverPath: now.info.coverPath)
-                } label: {
-                    Label(favorite ? "取消收藏课程" : "收藏课程", systemImage: favorite ? "bookmark.fill" : "bookmark")
-                }
-                Button { model.goToSeries(now.seriesId) } label: {
-                    Label("前往课程", systemImage: "arrow.forward.circle")
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-            }
-        }
-        // 收藏、已听完变了（或换了一集）就重读；不在每次进度刷新时读库
-        .task(id: "\(now.episodeId)|\(core.progressVersion)|\(core.favoritesVersion)") {
-            favorite = core.store.isFavorite(now.seriesId)
-            completed = core.store.loadProgress(now.episodeId)?.completed ?? false
-        }
-    }
-
-    /// 单选菜单里的一项：选中的前面打勾。
-    @ViewBuilder private func checkLabel(_ title: String, _ checked: Bool) -> some View {
-        if checked { Label(title, systemImage: "checkmark") } else { Text(title) }
     }
 }
