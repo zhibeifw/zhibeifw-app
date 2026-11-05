@@ -76,6 +76,13 @@ final class Store: @unchecked Sendable {
     let db: SQLiteDB
     init(db: SQLiteDB) { self.db = db }
 
+    // MARK: iCloud 同步的接口（苹果两端）
+
+    enum UserChange { case progress([String]), favorite(String) }
+    /// 用户数据在本机变了（播放进度、已听完、最近里删除 / 清空、收藏 / 取消收藏）：iCloud 同步据此排队上传。
+    /// 应用 iCloud 下来的改动（applyProgressRecord / applyFavoriteRecord）不走这里，免得又传回去。
+    var onUserChange: ((UserChange) -> Void)?
+
     /// 拼音搜索用：每门课的拼音（按目录顺序）。第一次拼音搜索时算，目录换了作废。搜索在后台线程，加锁。
     private struct PinyinEntry { let card: SeriesCard; let initials: String; let full: String }
     private var pinyinCache: [PinyinEntry]?
@@ -444,6 +451,7 @@ final class Store: @unchecked Sendable {
               episode_title = CASE WHEN excluded.episode_title <> '' THEN excluded.episode_title ELSE user_progress.episode_title END,
               cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_progress.cover_path END
             """, [episodeId, seriesId, pos, max(0, duration), completed, t, t, seriesTitle, episodeTitle, coverPath])
+        onUserChange?(.progress([episodeId]))
         return completed
     }
 
@@ -464,10 +472,18 @@ final class Store: @unchecked Sendable {
               episode_title = CASE WHEN excluded.episode_title <> '' THEN excluded.episode_title ELSE user_progress.episode_title END,
               cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_progress.cover_path END
             """, [episodeId, seriesId, completed, now(), seriesTitle, episodeTitle, coverPath])
+        onUserChange?(.progress([episodeId]))
     }
 
-    func hideFromRecent(_ episodeId: String) throws { try db.run("UPDATE user_progress SET hidden = 1 WHERE episode_id = ?", [episodeId]) }
-    func clearRecent() throws { try db.run("UPDATE user_progress SET hidden = 1 WHERE hidden = 0") }
+    func hideFromRecent(_ episodeId: String) throws {
+        try db.run("UPDATE user_progress SET hidden = 1 WHERE episode_id = ?", [episodeId])
+        onUserChange?(.progress([episodeId]))
+    }
+    func clearRecent() throws {
+        let ids = onUserChange == nil ? [] : try db.all("SELECT episode_id FROM user_progress WHERE hidden = 0").map { $0.str("episode_id") }
+        try db.run("UPDATE user_progress SET hidden = 1 WHERE hidden = 0")
+        if !ids.isEmpty { onUserChange?(.progress(ids)) }
+    }
 
     func addFavorite(_ seriesId: String, title: String = "", coverPath: String = "", at: Int64? = nil) throws {
         try db.run(
@@ -477,8 +493,62 @@ final class Store: @unchecked Sendable {
               series_title = CASE WHEN excluded.series_title <> '' THEN excluded.series_title ELSE user_favorite.series_title END,
               cover_path = CASE WHEN excluded.cover_path <> '' THEN excluded.cover_path ELSE user_favorite.cover_path END
             """, [seriesId, at ?? now(), title, coverPath])
+        onUserChange?(.favorite(seriesId))
     }
-    func removeFavorite(_ seriesId: String) throws { try db.run("DELETE FROM user_favorite WHERE series_id = ?", [seriesId]) }
+    func removeFavorite(_ seriesId: String) throws {
+        try db.run("DELETE FROM user_favorite WHERE series_id = ?", [seriesId])
+        onUserChange?(.favorite(seriesId))
+    }
+    /// 一集的完整进度记录（iCloud 同步上传用）。
+    struct ProgressRecord: Equatable {
+        var episodeId: String; var seriesId: String; var position: Double; var duration: Double
+        var completed: Bool; var hidden: Bool; var lastPlayed: Int64; var updated: Int64
+        var seriesTitle: String; var episodeTitle: String; var coverPath: String
+    }
+    func progressRecord(_ episodeId: String) -> ProgressRecord? {
+        guard let r = (try? db.first("SELECT * FROM user_progress WHERE episode_id = ?", [episodeId])) ?? nil else { return nil }
+        return ProgressRecord(
+            episodeId: r.str("episode_id"), seriesId: r.str("series_id"), position: r.double("position"), duration: r.double("duration"),
+            completed: r.bool("completed"), hidden: r.bool("hidden"), lastPlayed: r.int("last_played"), updated: r.int("updated"),
+            seriesTitle: r.str("series_title"), episodeTitle: r.str("episode_title"), coverPath: r.str("cover_path"))
+    }
+    /// iCloud 下来的进度：整条覆盖本机这一集（不通知 onUserChange）。
+    func applyProgressRecord(_ p: ProgressRecord) throws {
+        try db.run(
+            """
+            INSERT INTO user_progress (episode_id, series_id, position, duration, completed, hidden, last_played, updated, series_title, episode_title, cover_path)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(episode_id) DO UPDATE SET
+              series_id = excluded.series_id, position = excluded.position, duration = excluded.duration, completed = excluded.completed,
+              hidden = excluded.hidden, last_played = excluded.last_played, updated = excluded.updated,
+              series_title = excluded.series_title, episode_title = excluded.episode_title, cover_path = excluded.cover_path
+            """,
+            [p.episodeId, p.seriesId, max(0, p.position), max(0, p.duration), p.completed, p.hidden, p.lastPlayed, p.updated,
+             p.seriesTitle, p.episodeTitle, p.coverPath])
+    }
+    /// 一门课的收藏记录：present = false 表示没收藏（取消收藏也传“没收藏”，另一台设备才知道是取消了）。
+    struct FavoriteRecord: Equatable { var seriesId: String; var present: Bool; var added: Int64; var seriesTitle: String; var coverPath: String }
+    func favoriteRecord(_ seriesId: String) -> FavoriteRecord {
+        guard let r = (try? db.first("SELECT * FROM user_favorite WHERE series_id = ?", [seriesId])) ?? nil else {
+            return FavoriteRecord(seriesId: seriesId, present: false, added: 0, seriesTitle: "", coverPath: "")
+        }
+        return FavoriteRecord(
+            seriesId: seriesId, present: true, added: r.int("added"), seriesTitle: r.str("series_title"), coverPath: r.str("cover_path"))
+    }
+    /// iCloud 下来的收藏：收藏或取消收藏（不通知 onUserChange）。
+    func applyFavoriteRecord(_ f: FavoriteRecord) throws {
+        if f.present {
+            try db.run(
+                "INSERT OR REPLACE INTO user_favorite (series_id, added, series_title, cover_path) VALUES (?, ?, ?, ?)",
+                [f.seriesId, f.added, f.seriesTitle, f.coverPath])
+        } else {
+            try db.run("DELETE FROM user_favorite WHERE series_id = ?", [f.seriesId])
+        }
+    }
+    /// 第一次登录 iCloud 时把本机已有的都传上去：所有有进度的集、所有收藏的课。
+    func allProgressEpisodeIds() -> [String] { ((try? db.all("SELECT episode_id FROM user_progress")) ?? []).map { $0.str("episode_id") } }
+    func allFavoriteSeriesIds() -> [String] { ((try? db.all("SELECT series_id FROM user_favorite")) ?? []).map { $0.str("series_id") } }
+
     func isFavorite(_ seriesId: String) -> Bool {
         ((try? db.first("SELECT 1 AS x FROM user_favorite WHERE series_id = ?", [seriesId])) ?? nil) != nil
     }

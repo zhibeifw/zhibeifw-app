@@ -6,7 +6,10 @@
 	<key>UIBackgroundModes</key>
 	<array>
 		<string>audio</string>
+		<string>remote-notification</string>
 	</array>
+	<key>ZBFWCloudContainer</key>
+	<string>iCloud.com.zhibeifw.app</string>
 	<key>UILaunchScreen</key>
 	<dict>
 		<key>UIColorName</key>

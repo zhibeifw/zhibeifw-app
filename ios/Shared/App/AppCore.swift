@@ -1,5 +1,6 @@
 import SwiftUI
 import Observation
+import UIKit
 
 enum Phase: Equatable {
     case launching
@@ -33,6 +34,8 @@ final class AppCore {
     @ObservationIgnored let files = AppFiles()
     @ObservationIgnored private(set) var store: Store!
     private(set) var player: PlayerController!
+    /// iCloud 同步：只有带了 iCloud 权限的构建才有（Info.plist 里有 ZBFWCloudContainer）
+    @ObservationIgnored private var cloud: CloudSync?
 
     var phase: Phase = .launching
     var home = HomeData()
@@ -96,6 +99,7 @@ final class AppCore {
         player = PlayerController(store: store, files: files)
         player.onProgressSaved = { [weak self] in self?.progressVersion += 1 }
         Network.shared.onOriginChange = { OriginWatcher.shared.bump() }
+        startCloudSync()
         await onStoreReady?()
 
         if store.isInitialized {
@@ -128,6 +132,21 @@ final class AppCore {
             guard let self, case .initializing(_, true) = self.phase else { return }
             Task { await self.runInitialization() }
         }
+    }
+
+    /// iCloud 同步：Info.plist 里写了容器（和权限文件里的一致）才启动；没有就只存本机。
+    /// 不带权限就去连 iCloud，系统会直接让 App 崩溃，所以以这个键为准，不硬连。
+    private func startCloudSync() {
+        guard let id = Bundle.main.object(forInfoDictionaryKey: "ZBFWCloudContainer") as? String, !id.isEmpty else { return }
+        let c = CloudSync(store: store, containerIdentifier: id)
+        c.onRemoteChange = { [weak self] progress, favorites in
+            guard let self else { return }
+            if progress { self.progressVersion += 1 }
+            if favorites { self.favoritesVersion += 1 }
+        }
+        cloud = c
+        // 别的设备改了，iCloud 用静默推送通知这台设备来取（同步引擎自己处理推送）
+        UIApplication.shared.registerForRemoteNotifications()
     }
 
     /// 正在首次初始化：网络恢复和“重试”同时来时只跑一轮
