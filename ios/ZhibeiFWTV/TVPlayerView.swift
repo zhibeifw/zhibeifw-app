@@ -3,7 +3,7 @@ import SwiftUI
 /// 全屏播放页：照 iPhone 横屏的播放页做（左边封面，右边控制区），按电视放大。
 /// 右边从上到下：集名、“课程名 ›”（前往课程）和“•••”更多；进度条；时间（左已播，右剩余 / 睡眠定时）；
 /// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。全部是系统组件和系统图标（SF Symbols）。
-/// 进度条是系统的 ProgressView，只显示进度（tvOS 没有系统滑块）；快退快进用下面的按钮。
+/// 进度条是自己做的（tvOS 没有系统滑块）：可以选中，选中后按左右键后退 15 秒、前进 30 秒。这是唯一一处自己画的。
 /// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
@@ -70,7 +70,7 @@ private struct TVPlayerControls: View {
                 Text(errorText(err)).foregroundStyle(C.danger).padding(.top, 40)
                 if err == .cannotPlay { Button("重试") { p.retry() }.padding(.top, 20) }
             } else {
-                ProgressView(value: progressRatio(p.position, p.duration)).padding(.top, 48)
+                TVProgressBar(player: p).padding(.top, 48)
                 HStack {
                     Text(clock(p.position))
                     Spacer()
@@ -186,5 +186,35 @@ private struct TVPlayerControls: View {
         case .damaged: "这一集的文件已损坏"
         case .gone: "这一集已下架"
         }
+    }
+}
+
+/// 进度条：tvOS 没有系统滑块，这是电视版唯一一处自己画的组件。颜色和 iPhone 的进度条一样（progressFill / progressTrack）。
+/// 可以选中：选中时变粗，左右键后退 15 秒、前进 30 秒。
+private struct TVProgressBar: View {
+    let player: PlayerController
+    @FocusState private var focused: Bool
+
+    var body: some View {
+        let ratio = progressRatio(player.position, player.duration)
+        GeometryReader { g in
+            ZStack(alignment: .leading) {
+                Capsule().fill(Tok.Color.progressTrack.color)
+                Capsule().fill(Tok.Color.progressFill.color).frame(width: max(0, g.size.width * ratio))
+            }
+        }
+        .frame(height: focused ? 14 : 8)
+        .animation(.easeOut(duration: 0.15), value: focused)
+        .padding(.vertical, 12)
+        .focusable()
+        .focused($focused)
+        .onMoveCommand { dir in
+            switch dir {
+            case .left: player.seek(by: -SEEK_BACK_SECONDS)
+            case .right: player.seek(by: SEEK_FORWARD_SECONDS)
+            default: break
+            }
+        }
+        .accessibilityLabel("播放进度")
     }
 }
