@@ -22,7 +22,8 @@ struct ZhibeiFWTVApp: App {
 }
 
 /// 电视上是顶部的标签：主页、分类、资料库、搜索（和 iPhone 一样），再加“关于”（iPhone 在主页右上角）。
-enum TVTab: Hashable { case home, categories, library, search, about }
+/// 有在播的一集时最左边多一个“正在播放”（和系统“音乐”App 一样），代替 iPhone 的播放胶囊。
+enum TVTab: Hashable { case nowPlaying, home, categories, library, search, about }
 
 /// 页面地址（和 iPhone 的 Route 对应；没有“已下载”）。
 enum TVRoute: Hashable {
@@ -37,7 +38,11 @@ enum TVRoute: Hashable {
 final class TVModel {
     @ObservationIgnored let core: AppCore
     var playerOpen = false
-    var tab: TVTab = .home
+    var tab: TVTab = .home {
+        didSet { if tab != .nowPlaying { browseTab = tab } }
+    }
+    /// 最近一次停留的普通标签（不是“正在播放”）：从“正在播放”前往课程、或播放停了标签消失时回到这里
+    private(set) var browseTab: TVTab = .home
     var homePath: [TVRoute] = []
     var categoriesPath: [TVRoute] = []
     var libraryPath: [TVRoute] = []
@@ -48,8 +53,9 @@ final class TVModel {
     func goToSeries(_ seriesId: String) {
         playerOpen = false
         let r = TVRoute.series(seriesId)
+        if tab == .nowPlaying { tab = browseTab }
         switch tab {
-        case .home: if homePath.last != r { homePath.append(r) }
+        case .nowPlaying, .home: if homePath.last != r { homePath.append(r) }
         case .categories: if categoriesPath.last != r { categoriesPath.append(r) }
         case .library: if libraryPath.last != r { libraryPath.append(r) }
         case .search: if searchPath.last != r { searchPath.append(r) }
@@ -57,6 +63,11 @@ final class TVModel {
             tab = .home
             if homePath.last != r { homePath.append(r) }
         }
+    }
+
+    /// 播放停了，“正在播放”标签随之消失：正停在这个标签上就回到原来的标签。
+    func nowPlayingEnded() {
+        if tab == .nowPlaying { tab = browseTab }
     }
 
     init() {

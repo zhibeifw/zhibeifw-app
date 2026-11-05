@@ -5,6 +5,7 @@ import SwiftUI
 /// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。全部是系统组件和系统图标（SF Symbols）。
 /// 进度条是自己做的（tvOS 没有系统滑块）：可以选中，选中后按左右键后退 15 秒、前进 30 秒，按住连续跳。这是唯一一处自己画的。
 /// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
+/// 同一个页面也是“正在播放”标签的内容：在标签里时返回键由系统把焦点移到标签栏。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
     @Environment(\.dismiss) private var dismiss
@@ -27,7 +28,7 @@ struct TVPlayerView: View {
                 }
             }
         } else {
-            // 播放器停了（比如这一集被标为已听完）：没什么可显示的，收起
+            // 播放器停了（比如这一集被标为已听完）：没什么可显示的，收起（在标签里时由 TVMainView 换回原来的标签）
             Color.clear.onAppear { dismiss() }
         }
     }

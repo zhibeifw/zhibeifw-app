@@ -68,13 +68,19 @@ private struct TVInitView: View {
 }
 
 private struct TVMainView: View {
+    @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
 
     var body: some View {
         @Bindable var m = model
+        let playing = core.player?.current != nil
         // tvOS 18 的 Tab 写法，图标和 iPhone 底部标签栏一样（“关于”用 iPhone 主页右上角的 info.circle）；
-        // “搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘
+        // “搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘。
+        // “正在播放”只在有在播的一集时出现，放在最左边（和系统“音乐”App 一样），内容就是播放页
         TabView(selection: $m.tab) {
+            if playing {
+                Tab("正在播放", systemImage: "waveform", value: TVTab.nowPlaying) { TVPlayerView() }
+            }
             Tab("主页", systemImage: "house", value: TVTab.home) {
                 NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
             }
@@ -91,6 +97,7 @@ private struct TVMainView: View {
                 NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
             }
         }
+        .onChange(of: playing) { _, now in if !now { model.nowPlayingEnded() } }
     }
 }
 
