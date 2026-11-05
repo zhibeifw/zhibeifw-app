@@ -8,7 +8,7 @@ struct TVSeriesView: View {
     @State private var header: SeriesHeader?
     @State private var episodes: [EpisodeRow]
     @State private var loaded = true
-    /// 默认最旧到最新（第 1 课在最上面；iPhone 默认是最新到最旧）；只在这一页有效，不记住
+    /// 默认最旧到最新（第 1 课在最上面，和 iPhone 一样）；只在这一页有效，不记住
     @State private var oldestFirst = true
     @State private var sortDialog = false
 

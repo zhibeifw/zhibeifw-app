@@ -9,7 +9,8 @@ struct SeriesView: View {
     @State private var header: SeriesHeader?
     @State private var episodes: [EpisodeRow] = []
     @State private var state: LoadState = .loading
-    @State private var oldestFirst = false
+    /// 默认最旧到最新（第 1 课在最上面），和 Apple TV 一样
+    @State private var oldestFirst = true
 
     enum LoadState { case loading, ready, gone }
 
@@ -20,7 +21,7 @@ struct SeriesView: View {
             trailing: {
                 // HIG / SF Symbols：同一图标的空心 / 实心变体表示默认 / 非默认（同“邮件”的筛选按钮）
                 NativeMenu(items: sortItems) {
-                    Image(systemName: oldestFirst ? "arrow.up.arrow.down.circle.fill" : "arrow.up.arrow.down.circle")
+                    Image(systemName: oldestFirst ? "arrow.up.arrow.down.circle" : "arrow.up.arrow.down.circle.fill")
                 }
                 .accessibilityLabel("排序")
             }
