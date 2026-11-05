@@ -21,8 +21,8 @@ struct ZhibeiFWTVApp: App {
     }
 }
 
-/// 电视上是顶部的标签：主页、分类、资料库、搜索（和 iPhone 一样），再加“关于”（iPhone 在主页右上角）。
-/// 有在播的一集时最左边多一个“正在播放”（和系统“音乐”App 一样），代替 iPhone 的播放胶囊。
+/// 电视上是顶部的标签：主页、分类、资料库（和 iPhone 一样）、“正在播放”（代替 iPhone 的播放胶囊），
+/// 最后是只有图标的搜索和“关于”（iPhone 的关于在主页右上角）。
 enum TVTab: Hashable { case nowPlaying, home, categories, library, search, about }
 
 /// 页面地址（和 iPhone 的 Route 对应；没有“已下载”）。
@@ -41,7 +41,7 @@ final class TVModel {
     var tab: TVTab = .home {
         didSet { if tab != .nowPlaying { browseTab = tab } }
     }
-    /// 最近一次停留的普通标签（不是“正在播放”）：从“正在播放”前往课程、或播放停了标签消失时回到这里
+    /// 最近一次停留的普通标签（不是“正在播放”）：从“正在播放”前往课程时回到这里
     private(set) var browseTab: TVTab = .home
     var homePath: [TVRoute] = []
     var categoriesPath: [TVRoute] = []
@@ -63,11 +63,6 @@ final class TVModel {
             tab = .home
             if homePath.last != r { homePath.append(r) }
         }
-    }
-
-    /// 播放停了，“正在播放”标签随之消失：正停在这个标签上就回到原来的标签。
-    func nowPlayingEnded() {
-        if tab == .nowPlaying { tab = browseTab }
     }
 
     init() {

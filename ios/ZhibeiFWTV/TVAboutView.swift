@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 let CONTACT_EMAIL = "hello@zhibeifw.com"
 
-/// 关于（单独一个标签）：Logo、名字，下面一列：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
+/// 关于（标签栏最右边只有 i 图标的标签）：Logo、名字，下面一列：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
 /// 电视上没有浏览器、也不能发邮件：联系进去显示电邮地址；隐私政策、源代码进去是二维码和网址。
 struct TVAboutView: View {
     @Environment(AppCore.self) private var core
