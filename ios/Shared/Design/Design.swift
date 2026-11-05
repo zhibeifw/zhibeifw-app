@@ -33,8 +33,14 @@ extension UIColor {
 /// 简写：界面代码里用 `C.labelPrimary`。
 enum C {
     // 和系统语义色的值相同的直接用系统的（系统自带深色、增强对比度版本）
+    #if os(tvOS)
+    // tvOS 没有系统背景色（systemBackground 等），用令牌里的同值
+    static var background: Color { Tok.Color.background.color }
+    static var backgroundSecondary: Color { Tok.Color.backgroundSecondary.color }
+    #else
     static var background: Color { Color(uiColor: .systemBackground) }
     static var backgroundSecondary: Color { Color(uiColor: .secondarySystemBackground) }
+    #endif
     static var labelPrimary: Color { Color(uiColor: .label) }
     // 比系统默认更深的几项：平时用我们的值，增强对比度时更深
     private static var hc: Tok.Color.HighContrast.Type { Tok.Color.HighContrast.self }

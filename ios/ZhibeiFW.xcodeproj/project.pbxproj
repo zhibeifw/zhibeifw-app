@@ -21,16 +21,21 @@
 		A1000000000000000000F002 /* ZhibeiFWTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = ZhibeiFWTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000F003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A1000000000000000000F004 /* Version.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; name = Version.xcconfig; path = ../Version.xcconfig; sourceTree = SOURCE_ROOT; };
+		A1000000000000000000F005 /* ZhibeiFWTV.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZhibeiFWTV.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000F006 /* TVInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = TVInfo.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A1000000000000000000S001 /* ZhibeiFW */ = {isa = PBXFileSystemSynchronizedRootGroup; path = ZhibeiFW; sourceTree = "<group>"; };
 		A1000000000000000000S002 /* ZhibeiFWTests */ = {isa = PBXFileSystemSynchronizedRootGroup; path = ZhibeiFWTests; sourceTree = "<group>"; };
+		A1000000000000000000S003 /* Shared */ = {isa = PBXFileSystemSynchronizedRootGroup; path = Shared; sourceTree = "<group>"; };
+		A1000000000000000000S004 /* ZhibeiFWTV */ = {isa = PBXFileSystemSynchronizedRootGroup; path = ZhibeiFWTV; sourceTree = "<group>"; };
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		A1000000000000000000B001 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A1000000000000000000B011 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A1000000000000000000B021 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -38,7 +43,9 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000G003 /* Config */,
+				A1000000000000000000S003 /* Shared */,
 				A1000000000000000000S001 /* ZhibeiFW */,
+				A1000000000000000000S004 /* ZhibeiFWTV */,
 				A1000000000000000000S002 /* ZhibeiFWTests */,
 				A1000000000000000000G002 /* Products */,
 			);
@@ -49,6 +56,7 @@
 			children = (
 				A1000000000000000000F001 /* ZhibeiFW.app */,
 				A1000000000000000000F002 /* ZhibeiFWTests.xctest */,
+				A1000000000000000000F005 /* ZhibeiFWTV.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -57,6 +65,7 @@
 			isa = PBXGroup;
 			children = (
 				A1000000000000000000F003 /* Info.plist */,
+				A1000000000000000000F006 /* TVInfo.plist */,
 				A1000000000000000000F004 /* Version.xcconfig */,
 			);
 			path = Config;
@@ -76,6 +85,7 @@
 			buildRules = ();
 			dependencies = ();
 			fileSystemSynchronizedGroups = (
+				A1000000000000000000S003 /* Shared */,
 				A1000000000000000000S001 /* ZhibeiFW */,
 			);
 			name = ZhibeiFW;
@@ -103,6 +113,25 @@
 			productReference = A1000000000000000000F002 /* ZhibeiFWTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		A1000000000000000000T003 /* ZhibeiFWTV */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000L004;
+			buildPhases = (
+				A1000000000000000000B022 /* Sources */,
+				A1000000000000000000B021 /* Frameworks */,
+				A1000000000000000000B023 /* Resources */,
+			);
+			buildRules = ();
+			dependencies = ();
+			fileSystemSynchronizedGroups = (
+				A1000000000000000000S003 /* Shared */,
+				A1000000000000000000S004 /* ZhibeiFWTV */,
+			);
+			name = ZhibeiFWTV;
+			productName = ZhibeiFWTV;
+			productReference = A1000000000000000000F005 /* ZhibeiFWTV.app */;
+			productType = "com.apple.product-type.application";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -115,6 +144,7 @@
 				TargetAttributes = {
 					A1000000000000000000T001 = { CreatedOnToolsVersion = 27.0; };
 					A1000000000000000000T002 = { CreatedOnToolsVersion = 27.0; TestTargetID = A1000000000000000000T001; };
+					A1000000000000000000T003 = { CreatedOnToolsVersion = 27.0; };
 				};
 			};
 			buildConfigurationList = A1000000000000000000L001;
@@ -133,6 +163,7 @@
 			targets = (
 				A1000000000000000000T001 /* ZhibeiFW */,
 				A1000000000000000000T002 /* ZhibeiFWTests */,
+				A1000000000000000000T003 /* ZhibeiFWTV */,
 			);
 		};
 /* End PBXProject section */
@@ -140,11 +171,13 @@
 /* Begin PBXResourcesBuildPhase section */
 		A1000000000000000000B003 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A1000000000000000000B013 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A1000000000000000000B023 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		A1000000000000000000B002 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 		A1000000000000000000B012 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A1000000000000000000B022 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -279,12 +312,60 @@
 			};
 			name = Release;
 		};
+		A1000000000000000000X007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000F004 /* Version.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = W8EHGAVKHV;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/TVInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app.dev;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Debug;
+		};
+		A1000000000000000000X008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000F004 /* Version.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = W8EHGAVKHV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/TVInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = appletvos;
+				SUPPORTED_PLATFORMS = "appletvos appletvsimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				TARGETED_DEVICE_FAMILY = 3;
+				TVOS_DEPLOYMENT_TARGET = 18.0;
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
 		A1000000000000000000L001 = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000X001, A1000000000000000000X002); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		A1000000000000000000L002 = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000X003, A1000000000000000000X004); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 		A1000000000000000000L003 = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000X005, A1000000000000000000X006); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A1000000000000000000L004 = {isa = XCConfigurationList; buildConfigurations = (A1000000000000000000X007, A1000000000000000000X008); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
 /* End XCConfigurationList section */
 	};
 	rootObject = A1000000000000000000P001 /* Project object */;

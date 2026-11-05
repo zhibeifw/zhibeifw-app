@@ -7,8 +7,15 @@ struct AppFiles: Sendable {
 
     init(documents: URL? = nil, caches: URL? = nil) {
         let fm = FileManager.default
+        let cachesDir = fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        #if os(tvOS)
+        // tvOS 不给 App 持久的本地存储，只能写缓存目录（系统空间紧张、App 没运行时可能整个清掉）。
+        // 数据库也放这里：课程目录被清了重新从服务器拉；进度、收藏以 iCloud 为准（接入同步后）。
+        self.documents = documents ?? cachesDir.appendingPathComponent("AppData", isDirectory: true)
+        #else
         self.documents = documents ?? fm.urls(for: .documentDirectory, in: .userDomainMask)[0]
-        self.caches = caches ?? fm.urls(for: .cachesDirectory, in: .userDomainMask)[0]
+        #endif
+        self.caches = caches ?? cachesDir
     }
 
     var dbDir: URL { documents.appendingPathComponent("SQLite", isDirectory: true) }

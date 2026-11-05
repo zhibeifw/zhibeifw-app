@@ -4,7 +4,7 @@
     python3 tools/gen_design.py
 
 生成（图标另读 doc/icon-map.json 与 icons-material/）：
-  ios/ZhibeiFW/Design/Generated/Tokens.swift、Icons.swift
+  ios/Shared/Design/Generated/Tokens.swift、Icons.swift
   android/app/src/main/java/com/zhibeifw/app/design/generated/Tokens.kt、Icons.kt
 生成的文件不要手改；改数值只改 JSON，再运行本脚本。只用 Python 标准库。
 """
@@ -16,7 +16,7 @@ import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DOC = os.path.join(ROOT, 'doc')
-IOS_OUT = os.path.join(ROOT, 'ios', 'ZhibeiFW', 'Design', 'Generated')
+IOS_OUT = os.path.join(ROOT, 'ios', 'Shared', 'Design', 'Generated')
 AND_OUT = os.path.join(ROOT, 'android', 'app', 'src', 'main', 'java', 'com', 'zhibeifw', 'app', 'design', 'generated')
 HEADER = '自动生成，不要手改。来源：doc/{src}，生成脚本：tools/gen_design.py'
 

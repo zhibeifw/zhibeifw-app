@@ -9,7 +9,10 @@
 ## 目录
 
 ```
-ios/            iOS 版（Swift、SwiftUI），Xcode 工程 ios/ZhibeiFW.xcodeproj
+ios/            iOS 和 Apple TV 版（Swift、SwiftUI），Xcode 工程 ios/ZhibeiFW.xcodeproj
+  Shared/       两个 App 共用：数据库、网络、播放、封面加载、设计常量
+  ZhibeiFW/     iPhone / iPad 版的界面、下载、检查更新
+  ZhibeiFWTV/   Apple TV 版（开发中）
 android/        Android 版（Kotlin、Jetpack Compose），Gradle 工程
 doc/            设计令牌（design-tokens.json）和图标数据
 tools/          gen_design.py：由设计令牌生成两端的常量文件；pre-commit：提交前用 gitleaks 检查；format/：Swift 格式化配置
@@ -22,11 +25,11 @@ Version.xcconfig  两端共用的版本号
 python3 tools/gen_design.py
 ```
 
-会重新生成 `ios/ZhibeiFW/Design/Generated/` 和 `android/app/src/main/java/com/zhibeifw/app/design/generated/` 里的文件。生成的文件不要手改。
+会重新生成 `ios/Shared/Design/Generated/` 和 `android/app/src/main/java/com/zhibeifw/app/design/generated/` 里的文件。生成的文件不要手改。
 
 ## 编译
 
-**iOS**：Xcode 26 或以上，系统要求 iOS 18 及以上。打开 `ios/ZhibeiFW.xcodeproj`，在 Signing 里换成你自己的开发者团队即可运行。
+**iOS**：Xcode 26 或以上，系统要求 iOS 18 及以上（Apple TV 版 tvOS 18 及以上）。打开 `ios/ZhibeiFW.xcodeproj`，在 Signing 里换成你自己的开发者团队即可运行；iPhone 版选 `ZhibeiFW` 目标，Apple TV 版选 `ZhibeiFWTV`。
 
 **Android**：Android Studio 或命令行，系统要求 Android 10 及以上。
 
