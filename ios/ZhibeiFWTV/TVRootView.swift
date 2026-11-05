@@ -10,7 +10,10 @@ struct TVRootView: View {
         Group {
             switch core.phase {
             case .launching:
-                ProgressView()
+                // 和系统启动屏（TVInfo.plist 的 UILaunchScreen）同一个 Logo、同样大小，接上时不闪
+                Image("Logo").resizable().scaledToFit().frame(width: 240).accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(C.background.ignoresSafeArea())
             case .dbError:
                 Text("读取本机数据时出错，请重新打开 App 再试；仍然不行请联系我们。")
                     .multilineTextAlignment(.center).padding(80)
