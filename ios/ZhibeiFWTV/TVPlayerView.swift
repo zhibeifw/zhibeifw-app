@@ -61,10 +61,8 @@ private struct SystemPlayer: UIViewControllerRepresentable {
     func makeUIViewController(context: Context) -> AVPlayerViewController {
         let vc = AVPlayerViewController()
         vc.player = player.player
-        // 锁屏、控制中心的“正在播放”信息和遥控命令由 PlayerController 管，系统播放界面别再写一份
-        vc.updatesNowPlayingInfoCenter = false
-        // 倍速用我们自己的菜单（会记住倍速、换集也保持），不显示系统自带的倍速菜单
-        vc.speeds = []
+        // tvOS 的系统播放界面没有 updatesNowPlayingInfoCenter、speeds 这两个设置：
+        // “正在播放”信息照旧由 PlayerController 写；倍速用下面我们自己的菜单
         // 画面中间：封面和标题，铺在系统控件下面
         let host = UIHostingController(rootView: AnyView(EmptyView()))
         host.view.backgroundColor = .clear
