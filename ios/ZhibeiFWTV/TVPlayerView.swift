@@ -57,9 +57,11 @@ private struct TVPlayerControls: View {
                             Text(now.info.seriesTitle).lineLimit(1)
                             Image(systemName: "chevron.right")
                         }
-                        .font(.callout).foregroundStyle(.secondary)
+                        .font(.callout)
                     }
-                    .buttonStyle(.borderless)
+                    // 和控制行一样是系统的灰底按钮；课程名有长有短，用胶囊形
+                    .buttonStyle(.bordered)
+                    .buttonBorderShape(.capsule)
                 }
                 Spacer(minLength: 8)
                 moreMenu
