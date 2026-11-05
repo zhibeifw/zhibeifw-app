@@ -23,9 +23,8 @@ enum DownloadEvent {
 /// 系统的下载服务（两端各一份；测试里换成假的）。
 protocol SystemDownloads: AnyObject {
     func setHandler(_ h: @escaping @MainActor (DownloadEvent) -> Void)
-    /// 交给系统下载；resumeFile 里有续传数据就从断点接着下（读完删掉）。返回系统的任务编号。
-    /// 建后台任务要和系统的下载进程打交道，一集要一两毫秒以上，放在下载器自己的队列上做，不占主线程。
-    func start(id: String, url: URL, resumeFile: URL) async -> Int?
+    /// 交给系统下载；有续传数据就从断点接着下。返回系统的任务编号。
+    @discardableResult func start(id: String, url: URL, resumeData: Data?) -> Int?
     /// 暂停：停下这一集，返回系统给的续传数据（拿不到为 nil）。
     /// task：要停的系统任务编号；nil 表示不知道（上次运行交给系统的），按集 ID 找。
     func pause(id: String, task: Int?) async -> Data?
@@ -144,7 +143,7 @@ final class DownloadManager {
         return nil
     }
 
-    /// 这一集还在交给系统（等线路、建任务）
+    /// 这一集还在等线路、没交给系统
     func isHandingOver(_ id: String) -> Bool { starting.contains(id) }
 
     /// 有没有排队或正在下的集
@@ -169,6 +168,7 @@ final class DownloadManager {
         }
         guard !todo.isEmpty else { return }
         let fresh = todo.filter { items[$0.episodeId]?.status != .paused }
+        let resumed = Set(todo.map(\.episodeId)).subtracting(fresh.map(\.episodeId))
         // 整批一个事务；连下载记录都写不进去，就别交给系统（否则下完找不到记录，这几集一直挂着“下载中”）
         do { try store.startDownloads(fresh, ids: todo.map(\.episodeId)) } catch {
             NSLog("写下载记录失败：\(error)"); onBatchFailed?(); return
@@ -194,23 +194,23 @@ final class DownloadManager {
                 // 等线路期间被暂停、取消，或者暂停后又继续了（那一轮自己会交给系统）
                 guard gen[id] == token else { continue }
                 guard items[id]?.status == .downloading else { starting.remove(id); continue }
-                guard let o, let url = buildUrl(o, it.audioPath) else { starting.remove(id); fail(id, nil); continue }
-                // 上一轮暂停、取消留下的“自己停的”记号：这一集重新开始了，不再适用
-                stopping.remove(id)
-                // 拿到任务编号之前一直算“正在交给系统”：这期间暂停、取消不用去系统里停，对账也不会当成中断
-                let t = await system.start(id: id, url: url, resumeFile: files.resumeDataFile(id))
-                guard gen[id] == token else {
-                    // 交给系统的这段时间里被暂停、取消或又继续了：刚建的任务撤掉，它的事件一律不认；
-                    // 已暂停的留下续传数据，继续时还能接着下
-                    if let t {
-                        retired.insert(t)
-                        let data = await system.pause(id: id, task: t)
-                        if let data, items[id]?.status == .paused { try? data.write(to: files.resumeDataFile(id)) }
+                guard let o, let url = buildUrl(o, it.audioPath) else {
+                    starting.remove(id)
+                    // 线路暂时都连不上：本来是暂停的退回暂停，续传数据留着；新加的才回到未下载
+                    if resumed.contains(id) {
+                        pauseRecord(id, try? Data(contentsOf: files.resumeDataFile(id)))
+                        failedInBatch += 1
+                    } else {
+                        fail(id, nil)
                     }
                     continue
                 }
+                // 上一轮暂停、取消留下的“自己停的”记号：这一集重新开始了，不再适用
+                stopping.remove(id)
                 starting.remove(id)
-                if let t { liveTask[id] = t }
+                let resume = try? Data(contentsOf: files.resumeDataFile(id))
+                try? FileManager.default.removeItem(at: files.resumeDataFile(id))
+                if let t = system.start(id: id, url: url, resumeData: resume) { liveTask[id] = t }
             }
             finishBatchIfIdle()
         }
@@ -388,15 +388,8 @@ final class DownloadManager {
 
     /// 没有任何下载记录的课，本机保存的封面删掉。
     func cleanupCovers() {
-        let fm = FileManager.default
-        let names = (try? fm.contentsOfDirectory(atPath: files.coversDir.path)) ?? []
+        let names = (try? FileManager.default.contentsOfDirectory(atPath: files.coversDir.path)) ?? []
         let keys = names.filter { $0.hasSuffix(".jpg") }.map { String($0.dropLast(4)) }
-        // 另存封面时中途被关掉留下的临时文件：封面已经在了、或这门课已经没有下载的才删（这两种情况都不会正在另存）
-        let keepKeys = Set(((try? store.seriesIdsWithDownloads()) ?? []).map(fileKey))
-        for n in names where n.hasSuffix(".jpg.tmp") {
-            let k = String(n.dropLast(8))
-            if keys.contains(k) || !keepKeys.contains(k) { try? fm.removeItem(at: files.coversDir.appendingPathComponent(n)) }
-        }
         for k in orphanCoverKeys(keys, seriesWithDownloads: (try? store.seriesIdsWithDownloads()) ?? []) {
             try? FileManager.default.removeItem(at: files.coversDir.appendingPathComponent(k + ".jpg"))
         }
@@ -439,8 +432,9 @@ final class DownloadManager {
         }
         // 孤儿临时文件：没有下载记录的续传数据、下完的文件，以及旧版本留下的半截文件和 .tmp
         let pending = ((try? store.allDownloads()) ?? []).filter { $0.state != .done }
+        // 续传数据按“没下完”保留，不只看暂停：继续时记录先改成下载中，等线路回来才读续传数据
         let keep = Set(
-            pending.filter { $0.state == .paused }.map { files.resumeDataFile($0.episodeId).lastPathComponent }
+            pending.map { files.resumeDataFile($0.episodeId).lastPathComponent }
                 + pending.map { files.doneFile($0.episodeId).lastPathComponent })
         for n in (try? FileManager.default.contentsOfDirectory(atPath: files.partDir.path)) ?? [] where !keep.contains(n) {
             try? FileManager.default.removeItem(at: files.partDir.appendingPathComponent(n))

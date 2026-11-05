@@ -167,9 +167,8 @@ struct SeriesView: View {
                 buttons: [
                     AlertButton(title: "取消", role: .cancel),
                     AlertButton(title: "删除", role: .destructive) {
-                        if let c = model.player.current, c.seriesId == h.id { model.player.stopIfCurrent(c.episodeId) };
-                        model.downloads.removeSeries(h.id)
-                    },  // 先停播放再删文件，和资料库、Android 一致,
+                        model.deleteSeriesDownloads(h.id)
+                    },
                 ])
         }
     }

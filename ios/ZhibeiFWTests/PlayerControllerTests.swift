@@ -271,6 +271,13 @@ final class PlayerControllerTests: XCTestCase {
         await pause(1)
         XCTAssertNil(p.current)
         XCTAssertFalse(p.isPlaying, "加载结果作废，不出声")
+        // 正在出声时删掉：按钮不再显示成在播
+        p.start("课_1", ctx: .series("课"))
+        await until("在出声") { p.isPlaying }
+        p.stopIfCurrent("课_1")
+        await pause(0.5)
+        XCTAssertNil(p.current)
+        XCTAssertFalse(p.looksPlaying)
     }
 
     // MARK: 跳转、倍速

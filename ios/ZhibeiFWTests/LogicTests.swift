@@ -5,11 +5,16 @@ import XCTest
 
 final class VersionTests: XCTestCase {
     func testWholeFileResponse() {
-        XCTAssertTrue(isWholeFileResponse(status: 200, contentRange: nil))
-        XCTAssertTrue(isWholeFileResponse(status: 206, contentRange: "bytes 0-51605985/51605986"))
-        XCTAssertTrue(isWholeFileResponse(status: 206, contentRange: nil))
-        XCTAssertFalse(isWholeFileResponse(status: 206, contentRange: "bytes 1000-51605985/51605986"))
-        XCTAssertFalse(isWholeFileResponse(status: 404, contentRange: nil))
+        XCTAssertTrue(isWholeFile(status: 200, contentRange: nil, fileSize: 51605986))
+        XCTAssertTrue(isWholeFile(status: 206, contentRange: "bytes 0-51605985/51605986", fileSize: 51605986))
+        XCTAssertTrue(isWholeFile(status: 206, contentRange: nil, fileSize: 51605986))
+        // 暂停后继续：回复只覆盖后半段，但系统已把文件接成整份
+        XCTAssertTrue(isWholeFile(status: 206, contentRange: "bytes 1000-51605985/51605986", fileSize: 51605986))
+        // 只拿到一段
+        XCTAssertFalse(isWholeFile(status: 206, contentRange: "bytes 1000-51605985/51605986", fileSize: 51604986))
+        XCTAssertFalse(isWholeFile(status: 206, contentRange: "bytes 0-999/51605986", fileSize: 1000))
+        XCTAssertFalse(isWholeFile(status: 206, contentRange: nil, fileSize: 0))
+        XCTAssertFalse(isWholeFile(status: 404, contentRange: nil, fileSize: 51605986))
     }
 }
 

@@ -21,13 +21,7 @@ final class FakeSystem: SystemDownloads {
     var holdPause = false
 
     func setHandler(_ h: @escaping @MainActor (DownloadEvent) -> Void) { handler = h }
-    /// 设了就让 start 等到放行（模拟建任务要一点时间）
-    var startGate: CheckedContinuation<Void, Never>?
-    var holdStart = false
-    func start(id: String, url: URL, resumeFile: URL) async -> Int? {
-        let resumeData = try? Data(contentsOf: resumeFile)
-        try? FileManager.default.removeItem(at: resumeFile)
-        if holdStart { await withCheckedContinuation { startGate = $0 } }
+    func start(id: String, url: URL, resumeData: Data?) -> Int? {
         started.append((id, resumeData)); active.insert(id)
         guard numbersTasks else { return nil }
         lastTask += 1
@@ -79,7 +73,7 @@ final class DownloadManagerTests: XCTestCase {
         await settle()
     }
 
-    /// 建任务是异步的：等管理器记下任务编号、移出“正在交给系统”
+    /// 等线路是异步的：等这一批都交给系统
     private func settle() async {
         for _ in 0..<500 where dm.items.keys.contains(where: dm.isHandingOver) { await Task.yield() }
     }
@@ -165,37 +159,6 @@ final class DownloadManagerTests: XCTestCase {
         send(.finished("a", try tmpFile()))
         XCTAssertEqual(dm.items["a"]?.status, .done)
         XCTAssertEqual(store.getDownload("a")?.state, .done)
-    }
-
-    /// 另存封面留下的临时文件：封面已在、或这门课没下载了的删掉；还在另存的（有下载、没封面）留着
-    func testCleanupCoversRemovesStaleTemp() async throws {
-        await enqueue([item("a", 0), DlItem(episodeId: "b1", seriesId: "t", seriesTitle: "t", episodeTitle: "b1", pos: 0, audioPath: "c/t/b1.mp3")])
-        func f(_ n: String) throws -> URL {
-            let u = files.coversDir.appendingPathComponent(n); try Data([1]).write(to: u); return u
-        }
-        _ = try f(fileKey("s") + ".jpg")
-        let doneTmp = try f(fileKey("s") + ".jpg.tmp")
-        let savingTmp = try f(fileKey("t") + ".jpg.tmp")
-        let orphanTmp = try f(fileKey("x") + ".jpg.tmp")
-        dm.cleanupCovers()
-        XCTAssertFalse(FileManager.default.fileExists(atPath: doneTmp.path))
-        XCTAssertFalse(FileManager.default.fileExists(atPath: orphanTmp.path))
-        XCTAssertTrue(FileManager.default.fileExists(atPath: savingTmp.path))
-    }
-
-    /// 建任务期间用户暂停了：刚建的任务撤掉，这一集保持暂停，之后它的事件不认
-    func testPauseWhileStartingRetiresNewTask() async {
-        sys.numbersTasks = true
-        sys.holdStart = true
-        dm.enqueue([item("a", 0)])
-        for _ in 0..<50 where sys.startGate == nil { await Task.yield() }
-        dm.pause("a")
-        XCTAssertEqual(dm.items["a"]?.status, .paused)
-        sys.startGate?.resume()
-        for _ in 0..<50 where sys.stoppedTasks.isEmpty { await Task.yield() }
-        XCTAssertEqual(sys.stoppedTasks, [1])  // 刚建的 1 号任务被撤掉
-        send(.progress("a", 500, 1000, task: 1))
-        XCTAssertEqual(dm.items["a"]?.status, .paused)
     }
 
     /// 上次运行交给系统的任务：对账时记下编号，暂停时按编号停
@@ -339,6 +302,47 @@ final class DownloadManagerTests: XCTestCase {
         for _ in 0..<100 { await Task.yield() }
         XCTAssertEqual(sys.started.map(\.id), ["a"])
         XCTAssertEqual(dm.items["a"]?.status, .downloading)
+    }
+
+    private func pausedWithResumeData(_ id: String) async {
+        await enqueue([item(id, 0)])
+        send(.progress(id, 400, 1000))
+        dm.pause(id)
+        for _ in 0..<50 where store.getDownload(id)?.state != .paused { await Task.yield() }
+    }
+
+    /// 继续时线路都连不上：已暂停的退回暂停（记录和续传数据都在），新加的回到未下载，整批提示一次
+    func testResumeWithoutRouteStaysPaused() async throws {
+        await pausedWithResumeData("a")
+        dm.origin = { nil }
+        sys.started = []
+        dm.enqueue([item("a", 0), item("b", 1)])
+        for _ in 0..<100 where dm.hasActive { await Task.yield() }
+        XCTAssertEqual(dm.items["a"]?.status, .paused)
+        XCTAssertEqual(store.getDownload("a")?.state, .paused)
+        XCTAssertEqual(dm.ratio("a"), 0.4)
+        XCTAssertTrue(FileManager.default.fileExists(atPath: files.resumeDataFile("a").path))
+        XCTAssertNil(dm.items["b"]); XCTAssertNil(store.getDownload("b"))
+        XCTAssertTrue(sys.started.isEmpty)
+        XCTAssertEqual(batchFailed, 1)
+    }
+
+    /// 继续后还在等线路时对账：续传数据不能被当成孤儿删掉
+    func testReconcileWhileWaitingForRouteKeepsResumeData() async throws {
+        await pausedWithResumeData("a")
+        var gate: CheckedContinuation<Void, Never>?
+        dm.origin = {
+            await withCheckedContinuation { gate = $0 }
+            return "https://example.invalid"
+        }
+        sys.started = []
+        dm.enqueue([item("a", 0)])
+        for _ in 0..<50 where gate == nil { await Task.yield() }
+        dm.reconcile(active: [:])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: files.resumeDataFile("a").path))
+        gate?.resume()
+        for _ in 0..<100 where sys.started.isEmpty { await Task.yield() }
+        XCTAssertEqual(sys.started.first?.resume, Data("resume".utf8))
     }
 
     /// 移入资料库失败但不是空间不足：按普通失败，不提示“存储空间不足”

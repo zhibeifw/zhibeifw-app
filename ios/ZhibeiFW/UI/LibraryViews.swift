@@ -152,8 +152,7 @@ struct LibraryView: View {
                 buttons: [
                     AlertButton(title: "取消", role: .cancel),
                     AlertButton(title: "删除", role: .destructive) {
-                        if let c = model.player.current, c.seriesId == s.seriesId { model.player.stopIfCurrent(c.episodeId) }
-                        model.downloads.removeSeries(s.seriesId)
+                        model.deleteSeriesDownloads(s.seriesId)
                     },
                 ])
         }

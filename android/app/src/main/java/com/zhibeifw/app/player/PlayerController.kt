@@ -461,6 +461,7 @@ class PlayerController(
         markedDone = false
         pendingStart = false
         clearStall()
+        player.pause() // stop() 不改 playWhenReady：不先暂停的话界面、通知栏还显示成“正在播放”
         player.stop()
         player.clearMediaItems()
         current = null

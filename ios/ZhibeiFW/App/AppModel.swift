@@ -162,7 +162,21 @@ final class AppModel {
     }
 
     func deleteDownload(_ episodeId: String) {
-        player.stopIfCurrent(episodeId)
+        stopIfCurrent(episodeId)
         downloads.removeDownload(episodeId)
+    }
+
+    /// 删一门课的下载：正在放这门课里的一集就先停掉。
+    func deleteSeriesDownloads(_ seriesId: String) {
+        if let c = player.current, c.seriesId == seriesId { stopIfCurrent(c.episodeId) }
+        downloads.removeSeries(seriesId)
+    }
+
+    /// 停掉正在放的这一集时播放页也收起来：只清掉当前集，播放页虽然不画了，“播放页开着”却一直留着
+    /// （弹窗只往播放页上挂、横屏不锁、点胶囊播放会自己弹出播放页）。
+    private func stopIfCurrent(_ episodeId: String) {
+        guard player.current?.episodeId == episodeId else { return }
+        player.stopIfCurrent(episodeId)
+        closePlayer()
     }
 }

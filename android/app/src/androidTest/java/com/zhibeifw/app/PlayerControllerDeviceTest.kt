@@ -333,6 +333,13 @@ class PlayerControllerDeviceTest {
         delay(1_000)
         assertNull(p.current)
         assertFalse("加载结果作废，不出声", p.isPlaying)
+        // 正在出声时删掉：按钮不再显示成在播
+        p.start("课_1", PlayContext.Series("课"))
+        until("在出声") { p.isPlaying }
+        p.stopIfCurrent("课_1")
+        delay(500)
+        assertNull(p.current)
+        assertFalse(p.looksPlaying)
     }
 
     // ---------- 跳转、倍速 ----------

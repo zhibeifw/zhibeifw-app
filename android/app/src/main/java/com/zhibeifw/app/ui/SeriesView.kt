@@ -316,12 +316,7 @@ private fun tapDownloadAll(model: AppModel, h: SeriesHeader, episodes: List<Epis
             listOf(
                 AlertButton("取消", cancel = true),
                 AlertButton("删除", destructive = true) {
-                    model.player?.current?.let { c ->
-                        if (c.seriesId == h.id) model.player?.stopIfCurrent(
-                            c.episodeId
-                        )
-                    }
-                    model.downloads?.removeSeries(h.id)
+                    model.deleteSeriesDownloads(h.id)
                 },
             )
         )

@@ -28,7 +28,7 @@ class CoverArchive(private val files: AppFiles, private val images: ImageLoader,
 
     private suspend fun copy(coverPath: String, dest: File) {
         val src = images.originalFile(coverPath) ?: return
-        // 先拷到临时文件再改名：中途被关掉不会留下半张图（留下的临时文件由清理封面时删掉）
+        // 先拷到临时文件再改名：中途被关掉不会留下半张图（下次另存这门课时覆盖）
         val tmp = File(dest.path + ".tmp")
         runCatching { src.copyTo(tmp, overwrite = true) }.onFailure { tmp.delete(); return }
         if (dest.exists() || !tmp.renameTo(dest)) tmp.delete()

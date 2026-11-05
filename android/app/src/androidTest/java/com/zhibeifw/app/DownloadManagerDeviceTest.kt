@@ -125,6 +125,21 @@ class DownloadManagerDeviceTest {
         assertFalse(cover.exists())
     }
 
+    /** 继续时线路都连不上：已暂停的退回暂停（记录还在），新加的回到未下载，整批提示一次 */
+    @Test
+    fun resumeWithoutRouteStaysPaused() = onMain {
+        dm.enqueue(listOf(item("a"))); settle()
+        dm.pause("a")
+        dm.origin = { null }
+        sys.started.clear()
+        dm.enqueue(listOf(item("a"), item("b"))); settle()
+        assertEquals(DlStatus.PAUSED, dm.items["a"]?.status)
+        assertEquals(DlStatus.PAUSED, store.getDownload("a")?.state)
+        assertNull(dm.items["b"]); assertNull(store.getDownload("b"))
+        assertTrue(sys.started.isEmpty())
+        assertEquals(1, batchFailed)
+    }
+
     /** 等线路期间暂停又继续：只交给系统一次 */
     @Test
     fun pauseResumeWhileWaitingForRouteStartsOnce() = onMain {
@@ -159,21 +174,6 @@ class DownloadManagerDeviceTest {
         assertEquals(0, diskFull)
         assertFalse(files.absolute(files.finalRelative("a", "c/s/a.mp3")).exists())
         assertEquals(listOf("a"), sys.released)
-    }
-
-    /** 另存封面留下的临时文件：封面已在、或这门课没下载了的删掉；还在另存的（有下载、没封面）留着 */
-    @Test
-    fun cleanupCoversRemovesStaleTemp() = onMain {
-        dm.enqueue(listOf(item("a"), DlItem("b1", "t", "T", "b1", 0, "c/t/b1.mp3"))); settle()
-        files.coversDir.mkdirs()
-        fun f(n: String) = File(files.coversDir, n).apply { writeBytes(ByteArray(1)) }
-        f(fileKey("s") + ".jpg")
-        val doneTmp = f(fileKey("s") + ".jpg.tmp")
-        val savingTmp = f(fileKey("t") + ".jpg.tmp")
-        val orphanTmp = f(fileKey("x") + ".jpg.tmp")
-        dm.cleanupCovers()
-        assertFalse(doneTmp.exists()); assertFalse(orphanTmp.exists())
-        assertTrue(savingTmp.exists())
     }
 
     /** 对账查系统表在前、刚好在这期间把一集交给系统：对账不把它记成暂停 */

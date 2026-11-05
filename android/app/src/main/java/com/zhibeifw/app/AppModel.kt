@@ -447,8 +447,24 @@ class AppModel(private val ctx: Context) {
     }
 
     fun deleteDownload(episodeId: String) {
-        player?.stopIfCurrent(episodeId)
+        stopIfCurrent(episodeId)
         downloads?.removeDownload(episodeId)
+    }
+
+    /** 删一门课的下载：正在放这门课里的一集就先停掉。 */
+    fun deleteSeriesDownloads(seriesId: String) {
+        player?.current?.let { if (it.seriesId == seriesId) stopIfCurrent(it.episodeId) }
+        downloads?.removeSeries(seriesId)
+    }
+
+    /**
+     * 停掉正在放的这一集时播放页也收起来：只清掉当前集，播放页虽然不画了，“播放页开着”却一直留着
+     * （返回键不回主页标签、横屏不锁、点胶囊播放会自己弹出播放页）。
+     */
+    private fun stopIfCurrent(episodeId: String) {
+        if (player?.current?.episodeId != episodeId) return
+        player?.stopIfCurrent(episodeId)
+        closePlayer()
     }
 
     // ---------- 关于页 ----------

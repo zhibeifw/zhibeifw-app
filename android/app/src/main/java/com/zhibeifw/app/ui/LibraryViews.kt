@@ -238,12 +238,7 @@ fun LibraryView(model: AppModel) {
                         listOf(
                             AlertButton("取消", cancel = true),
                             AlertButton("删除", destructive = true) {
-                                model.player?.current?.let { c ->
-                                    if (c.seriesId == s.seriesId) model.player?.stopIfCurrent(
-                                        c.episodeId
-                                    )
-                                }
-                                model.downloads?.removeSeries(s.seriesId)
+                                model.deleteSeriesDownloads(s.seriesId)
                             },
                         )
                     )

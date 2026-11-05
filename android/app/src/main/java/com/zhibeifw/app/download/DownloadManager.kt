@@ -7,7 +7,6 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.setValue
 import com.zhibeifw.app.core.DlStatus
-import com.zhibeifw.app.core.fileKey
 import com.zhibeifw.app.core.isNoSpaceError
 import com.zhibeifw.app.core.orphanAudioNames
 import com.zhibeifw.app.core.orphanCoverKeys
@@ -159,6 +158,7 @@ class DownloadManager(
             list.filter { seen.add(it.episodeId) && (items[it.episodeId]?.status.let { s -> s == null || s == DlStatus.PAUSED }) }
         if (todo.isEmpty()) return
         val fresh = todo.filter { items[it.episodeId]?.status != DlStatus.PAUSED }
+        val resumed = todo.map { it.episodeId }.toSet() - fresh.map { it.episodeId }.toSet()
         // 整批一个事务；连下载记录都写不进去，就别交给系统（否则下完找不到记录，这几集一直挂着“下载中”）
         if (runCatching { store.startDownloads(fresh, todo.map { it.episodeId }) }.isFailure) {
             onBatchFailed?.invoke(); return
@@ -184,7 +184,13 @@ class DownloadManager(
                 bump(it.episodeId)
                 if (items[it.episodeId]?.status != DlStatus.DOWNLOADING) continue
                 if (o == null) {
-                    fail(it.episodeId); continue
+                    // 线路暂时都连不上：本来是暂停的退回暂停，不删下载记录；新加的才回到未下载
+                    if (it.episodeId in resumed) {
+                        runCatching { store.setDlPaused(it.episodeId, 0) }
+                        items[it.episodeId]?.let { cur -> set(it.episodeId, cur.copy(status = DlStatus.PAUSED, written = 0)) }
+                        failedInBatch++
+                    } else fail(it.episodeId)
+                    continue
                 }
                 runCatching {
                     system.start(
@@ -349,15 +355,9 @@ class DownloadManager(
 
     /** 没有任何下载记录的课，本机保存的封面删掉。 */
     fun cleanupCovers() {
-        val all = files.coversDir.listFiles().orEmpty()
-        val keys = all.map { it.name }.filter { it.endsWith(".jpg") }.map { it.removeSuffix(".jpg") }
+        val keys = files.coversDir.listFiles()?.map { it.name }?.filter { it.endsWith(".jpg") }
+            ?.map { it.removeSuffix(".jpg") } ?: emptyList()
         val keep = runCatching { store.seriesIdsWithDownloads() }.getOrElse { return }
-        // 另存封面时中途被关掉留下的临时文件：封面已经在了、或这门课已经没有下载的才删（这两种情况都不会正在另存）
-        val keepKeys = keep.map(::fileKey).toSet()
-        for (f in all) if (f.name.endsWith(".jpg.tmp")) {
-            val k = f.name.removeSuffix(".jpg.tmp")
-            if (k in keys || k !in keepKeys) f.delete()
-        }
         for (k in orphanCoverKeys(keys, keep)) File(
             files.coversDir,
             "$k.jpg"

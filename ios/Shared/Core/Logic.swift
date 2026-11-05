@@ -202,12 +202,15 @@ func isOutOfSpace(_ error: Error) -> Bool {
 
 // MARK: - 下载
 
-/// 整份下载收到的回复算不算整份文件：200；或者 206 且 Content-Range 从 0 开始（真机上系统后台下载服务会自己分段取）。
-func isWholeFileResponse(status: Int, contentRange: String?) -> Bool {
+/// 下完的文件是不是整份：200 直接认；206（暂停后继续、系统后台下载服务自己分段取）不看起点，
+/// 按 Content-Range 里的总长核对文件大小。没有这个头或总长是 "*" 时只能信系统。
+func isWholeFile(status: Int, contentRange: String?, fileSize: Int64) -> Bool {
     if status == 200 { return true }
     guard status == 206 else { return false }
-    guard let cr = contentRange?.lowercased().trimmingCharacters(in: .whitespaces) else { return true }  // 系统没把这个头交出来：交给大小检查
-    return cr.hasPrefix("bytes 0-")
+    guard let cr = contentRange, let slash = cr.lastIndex(of: "/"),
+        let total = Int64(cr[cr.index(after: slash)...].trimmingCharacters(in: .whitespaces))
+    else { return fileSize > 0 }
+    return fileSize == total
 }
 
 // MARK: - 播放

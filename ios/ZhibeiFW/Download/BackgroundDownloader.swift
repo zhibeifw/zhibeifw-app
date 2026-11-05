@@ -41,20 +41,12 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
         Task { @MainActor in h(e) }
     }
 
-    /// 建任务用的串行队列：按交出的先后建，不占主线程
-    private let startQueue = DispatchQueue(label: "dl.start")
-
-    func start(id: String, url: URL, resumeFile: URL) async -> Int? {
-        await withCheckedContinuation { c in
-            startQueue.async { [session = session!] in
-                let resume = try? Data(contentsOf: resumeFile)
-                try? FileManager.default.removeItem(at: resumeFile)
-                let task = resume.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
-                task.taskDescription = id
-                task.resume()
-                c.resume(returning: task.taskIdentifier)
-            }
-        }
+    @discardableResult
+    func start(id: String, url: URL, resumeData: Data?) -> Int? {
+        let task = resumeData.map { session.downloadTask(withResumeData: $0) } ?? session.downloadTask(with: url)
+        task.taskDescription = id
+        task.resume()
+        return task.taskIdentifier
     }
 
     func pause(id: String, task tid: Int?) async -> Data? {
@@ -103,9 +95,10 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
     func urlSession(_ session: URLSession, downloadTask: URLSessionDownloadTask, didFinishDownloadingTo location: URL) {
         guard let id = downloadTask.taskDescription else { return }
         let tid = downloadTask.taskIdentifier
-        // 真机上系统的后台下载服务会自己分段取文件，下完报 206 而不是 200；从文件开头起的 206 也是整份文件
+        // 暂停后继续、系统自己分段取时报的是 206：location 处已是接好的整份文件，按总长核对大小
+        let size = Int64((try? location.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         guard let r = downloadTask.response as? HTTPURLResponse,
-            isWholeFileResponse(status: r.statusCode, contentRange: r.value(forHTTPHeaderField: "Content-Range"))
+            isWholeFile(status: r.statusCode, contentRange: r.value(forHTTPHeaderField: "Content-Range"), fileSize: size)
         else {
             emit(.failed(id, URLError(.badServerResponse), nil, task: tid)); return
         }
