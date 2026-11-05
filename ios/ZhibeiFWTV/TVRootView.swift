@@ -72,30 +72,23 @@ private struct TVMainView: View {
 
     var body: some View {
         @Bindable var m = model
-        // tvOS 18 的 Tab 写法；“搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘
+        // tvOS 18 的 Tab 写法，图标和 iPhone 底部标签栏一样（“关于”用 iPhone 主页右上角的 info.circle）；
+        // “搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘
         TabView(selection: $m.tab) {
-            Tab(value: TVTab.home) {
+            Tab("首页", systemImage: "house", value: TVTab.home) {
                 NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
-            } label: {
-                Text("首页")
             }
-            Tab(value: TVTab.categories) {
+            Tab("分类", systemImage: "square.grid.2x2", value: TVTab.categories) {
                 NavigationStack(path: $m.categoriesPath) { TVCategoriesView().withRoutes() }
-            } label: {
-                Text("分类")
             }
-            Tab(value: TVTab.library) {
+            Tab("资料库", systemImage: "square.stack", value: TVTab.library) {
                 NavigationStack(path: $m.libraryPath) { TVLibraryHubView().withRoutes() }
-            } label: {
-                Text("资料库")
             }
             Tab("搜索", systemImage: "magnifyingglass", value: TVTab.search, role: .search) {
                 NavigationStack(path: $m.searchPath) { TVSearchView().withRoutes() }
             }
-            Tab(value: TVTab.about) {
+            Tab("关于", systemImage: "info.circle", value: TVTab.about) {
                 NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
-            } label: {
-                Text("关于")
             }
         }
     }
