@@ -4,7 +4,7 @@ import SwiftUI
 /// 右边从上到下：集名、“课程名 ›”（前往课程）和“•••”更多；进度条；时间（左已播，右剩余 / 睡眠定时）；
 /// 控制行：倍速、后退 15 秒、播放暂停、前进 30 秒、睡眠定时。图标用和 iPhone 一样的共用图标。
 /// 电视上没有手指拖动：进度条可以选中，选中后按左右键后退 15 秒、前进 30 秒。
-/// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键收起播放页，声音照常播。
+/// 遥控器的播放/暂停键随时可用（PlayerController 注册的系统远程命令）；返回键由系统收起播放页，声音照常播。
 struct TVPlayerView: View {
     @Environment(AppCore.self) private var core
     @Environment(\.dismiss) private var dismiss
@@ -21,7 +21,6 @@ struct TVPlayerView: View {
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(C.background.ignoresSafeArea())
-            .onExitCommand { dismiss() }
             // 睡眠定时的倒计时每秒刷新一次（和 iPhone 一样）
             .task {
                 while !Task.isCancelled {

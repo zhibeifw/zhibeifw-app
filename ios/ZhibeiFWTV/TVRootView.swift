@@ -91,9 +91,6 @@ private struct TVMainView: View {
                 NavigationStack(path: $m.aboutPath) { TVAboutView().withRoutes() }
             }
         }
-        // 焦点在顶部标签栏上时按返回键：当前标签里进了页面就退一层（不然系统会直接退出 App）；
-        // 在最外层就不接（nil），交给系统退出到 Apple TV 桌面——tvOS 规定最外层的返回键要能退出
-        .onExitCommand(perform: model.canPop ? { model.popCurrent() } : nil)
     }
 }
 
@@ -104,17 +101,13 @@ extension View {
     }
 }
 
-/// 页面栈里的一页。按返回键时自己退一层（不交给系统判断：焦点一时落空时，系统会把返回键当成退出 App）。
+/// 页面栈里的一页。返回键交给系统（导航栈自己退一层）；各页在创建时就读好数据，第一帧就有能选中的东西，
+/// 系统的返回键才能正常退回上一页（页面上没有能选中的东西时，系统会把返回键当成退出 App）。
 private struct TVRouteView: View {
     @Environment(AppCore.self) private var core
-    @Environment(TVModel.self) private var model
     let route: TVRoute
 
     var body: some View {
-        page.onExitCommand { model.popCurrent() }
-    }
-
-    @ViewBuilder private var page: some View {
         switch route {
         case .series(let id): TVSeriesView(seriesId: id, store: core.store)
         case .category(let id): TVCategoryView(categoryId: id, store: core.store)

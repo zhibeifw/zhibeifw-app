@@ -44,28 +44,6 @@ final class TVModel {
     var searchPath: [TVRoute] = []
     var aboutPath: [TVRoute] = []
 
-    /// 当前标签里有没有进了的页面（返回键能不能退一层）。
-    var canPop: Bool {
-        switch tab {
-        case .home: !homePath.isEmpty
-        case .categories: !categoriesPath.isEmpty
-        case .library: !libraryPath.isEmpty
-        case .search: !searchPath.isEmpty
-        case .about: !aboutPath.isEmpty
-        }
-    }
-
-    /// 当前标签退一层（返回键）。
-    func popCurrent() {
-        switch tab {
-        case .home: _ = homePath.popLast()
-        case .categories: _ = categoriesPath.popLast()
-        case .library: _ = libraryPath.popLast()
-        case .search: _ = searchPath.popLast()
-        case .about: _ = aboutPath.popLast()
-        }
-    }
-
     /// “前往课程”：收起播放页，在当前标签里进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
         playerOpen = false
