@@ -21,7 +21,7 @@ struct ZhibeiFWTVApp: App {
     }
 }
 
-/// 电视上是顶部的标签：首页、分类、资料库、搜索（和 iPhone 一样），再加“关于”（iPhone 在主页右上角）。
+/// 电视上是顶部的标签：主页、分类、资料库、搜索（和 iPhone 一样），再加“关于”（iPhone 在主页右上角）。
 enum TVTab: Hashable { case home, categories, library, search, about }
 
 /// 页面地址（和 iPhone 的 Route 对应；没有“已下载”）。
@@ -64,7 +64,7 @@ final class TVModel {
         case .categories: if categoriesPath.last != r { categoriesPath.append(r) }
         case .library: if libraryPath.last != r { libraryPath.append(r) }
         case .search: if searchPath.last != r { searchPath.append(r) }
-        case .about:  // 关于里没有课程：到首页里进
+        case .about:  // 关于里没有课程：到主页里进
             tab = .home
             if homePath.last != r { homePath.append(r) }
         }

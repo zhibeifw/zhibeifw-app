@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（首页、分类、资料库、搜索、关于）。
+/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（主页、分类、资料库、搜索、关于）。
 struct TVRootView: View {
     @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
@@ -75,7 +75,7 @@ private struct TVMainView: View {
         // tvOS 18 的 Tab 写法，图标和 iPhone 底部标签栏一样（“关于”用 iPhone 主页右上角的 info.circle）；
         // “搜索”标成搜索标签（role: .search），系统才会在里面显示内嵌的搜索键盘
         TabView(selection: $m.tab) {
-            Tab("首页", systemImage: "house", value: TVTab.home) {
+            Tab("主页", systemImage: "house", value: TVTab.home) {
                 NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
             }
             Tab("分类", systemImage: "square.grid.2x2", value: TVTab.categories) {

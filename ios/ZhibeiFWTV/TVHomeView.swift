@@ -10,7 +10,7 @@ enum TVLayout {
     static func coverHeight(_ w: CGFloat) -> CGFloat { (w * 9 / 16).rounded() }
 }
 
-/// 首页：新课程、编辑精选、各分类，每行横向滚动。
+/// 主页：新课程、编辑精选、各分类，每行横向滚动。
 struct TVHomeView: View {
     @Environment(AppCore.self) private var core
 
