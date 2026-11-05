@@ -28,16 +28,16 @@ struct TVSeriesView: View {
                     Text(h.title).font(.title2).fontWeight(.semibold).lineLimit(3)
                     Text(seriesInfoText(category: false, count: episodes.count, status: h.status))
                         .font(.callout).foregroundStyle(.secondary)
-                    // 和播放页的“课程名 ›”一样：系统灰底按钮、胶囊形；书签图标和 iPhone 一样（收藏后是实心）
-                    Button {
-                        core.toggleFavorite(h.id, title: h.title, coverPath: h.coverPath)
-                    } label: {
-                        Label(h.favorited ? "已收藏" : "收藏", systemImage: h.favorited ? "bookmark.fill" : "bookmark")
-                    }
-                    .buttonStyle(.bordered)
-                    .buttonBorderShape(.capsule)
-                    Button { sortDialog = true } label: {
-                        Label("排序", systemImage: "arrow.up.arrow.down")
+                    // 收藏、排序并排一行。和播放页的“课程名 ›”一样：系统灰底按钮、胶囊形；书签图标和 iPhone 一样（收藏后是实心）
+                    HStack(spacing: 24) {
+                        Button {
+                            core.toggleFavorite(h.id, title: h.title, coverPath: h.coverPath)
+                        } label: {
+                            Label(h.favorited ? "已收藏" : "收藏", systemImage: h.favorited ? "bookmark.fill" : "bookmark")
+                        }
+                        Button { sortDialog = true } label: {
+                            Label("排序", systemImage: "arrow.up.arrow.down")
+                        }
                     }
                     .buttonStyle(.bordered)
                     .buttonBorderShape(.capsule)
