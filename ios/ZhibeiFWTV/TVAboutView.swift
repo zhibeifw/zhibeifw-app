@@ -4,7 +4,7 @@ import CoreImage.CIFilterBuiltins
 let CONTACT_EMAIL = "hello@zhibeifw.com"
 
 /// 关于（单独一个标签）：Logo、名字，下面一列：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
-/// 电视上没有浏览器、也不能发邮件：联系进去显示电邮地址；隐私政策的全文打包在 App 里；源代码进去是二维码和网址。
+/// 电视上没有浏览器、也不能发邮件：联系进去显示电邮地址；隐私政策、源代码进去是二维码和网址。
 struct TVAboutView: View {
     @Environment(AppCore.self) private var core
     @State private var clearing = false
@@ -83,11 +83,16 @@ struct TVContactView: View {
     }
 }
 
-/// 源代码：二维码（手机扫码打开）和网址。
-struct TVSourceView: View {
+/// 隐私政策、源代码：二维码（手机扫码打开）和网址。电视上打不开网页。
+/// 隐私政策的全文另外填在 App Store Connect 的“Apple TV 隐私政策”文字栏里，在电视的 App Store 页面上能读到。
+struct TVLinkView: View {
+    let title: String
+    let url: URL
+
     var body: some View {
         VStack(spacing: 30) {
-            if let img = qrImage(NetConfig.sourceURL.absoluteString) {
+            Text(title).font(.title3).foregroundStyle(.secondary)
+            if let img = qrImage(url.absoluteString) {
                 Image(decorative: img, scale: 1)
                     .interpolation(.none)  // 放大时方块保持清晰，不糊
                     .resizable()
@@ -96,8 +101,8 @@ struct TVSourceView: View {
                     .background(Color.white, in: RoundedRectangle(cornerRadius: 16))  // 深色模式下也是白底黑码，手机才扫得出
             }
             Text("用手机扫码查看").font(.callout).foregroundStyle(.secondary)
-            Text(NetConfig.sourceURL.absoluteString).font(.title3)
-                .focusable()
+            Text(url.absoluteString).font(.title3)
+                .focusable()  // 页面上总要有一个能选中的，遥控器按键才有反应
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -110,31 +115,4 @@ private func qrImage(_ text: String) -> CGImage? {
     f.correctionLevel = "M"
     guard let out = f.outputImage else { return nil }
     return CIContext().createCGImage(out, from: out.extent)
-}
-
-/// 隐私政策全文（打包在 App 里的 privacy.txt，和网站上的一致；改了网站上的文字要同步改这个文件）。
-/// 遥控器只能在能选中的东西之间移动：按段落拆开、每段都能选中，上下键一段段往下读。
-struct TVPrivacyView: View {
-    private let paragraphs: [String] = {
-        guard let url = Bundle.main.url(forResource: "privacy", withExtension: "txt"),
-            let text = try? String(contentsOf: url, encoding: .utf8)
-        else { return [] }
-        return text.components(separatedBy: "\n").map { $0.trimmingCharacters(in: .whitespaces) }.filter { !$0.isEmpty }
-    }()
-
-    var body: some View {
-        ScrollView(.vertical) {
-            VStack(alignment: .leading, spacing: 24) {
-                Text("隐私政策").font(.title2).fontWeight(.semibold)
-                if paragraphs.isEmpty {
-                    Text("隐私政策：\(NetConfig.privacyURL.absoluteString)").focusable()
-                }
-                ForEach(paragraphs.indices, id: \.self) { i in
-                    Text(paragraphs[i]).font(.callout).focusable()
-                }
-            }
-            .frame(maxWidth: 1400, alignment: .leading)
-            .padding(TVLayout.pageMargin)
-        }
-    }
 }

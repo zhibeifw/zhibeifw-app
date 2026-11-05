@@ -96,9 +96,9 @@ extension View {
             case .category(let id): TVCategoryView(categoryId: id)
             case .recent: TVRecentView()
             case .favorites: TVFavoritesView()
-            case .privacy: TVPrivacyView()
+            case .privacy: TVLinkView(title: "隐私政策", url: NetConfig.privacyURL)
             case .contact: TVContactView()
-            case .source: TVSourceView()
+            case .source: TVLinkView(title: "源代码", url: NetConfig.sourceURL)
             }
         }
     }
