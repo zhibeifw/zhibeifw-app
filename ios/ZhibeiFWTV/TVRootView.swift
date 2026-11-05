@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（首页、最近、收藏）。
+/// 电视的根视图：启动、首次准备内容、出错，准备好以后是顶部标签（首页、分类、资料库、搜索）。
 struct TVRootView: View {
     @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
@@ -73,23 +73,29 @@ private struct TVMainView: View {
     var body: some View {
         @Bindable var m = model
         TabView(selection: $m.tab) {
-            NavigationStack(path: $m.homePath) { TVHomeView().withSeriesDestination() }
+            NavigationStack(path: $m.homePath) { TVHomeView().withRoutes() }
                 .tabItem { Text("首页") }.tag(TVTab.home)
-            NavigationStack(path: $m.recentPath) { TVRecentView().withSeriesDestination() }
-                .tabItem { Text("最近") }.tag(TVTab.recent)
-            NavigationStack(path: $m.favoritesPath) { TVFavoritesView().withSeriesDestination() }
-                .tabItem { Text("收藏") }.tag(TVTab.favorites)
-            TVAboutView()
-                .tabItem { Text("关于") }.tag(TVTab.about)
+            NavigationStack(path: $m.categoriesPath) { TVCategoriesView().withRoutes() }
+                .tabItem { Text("分类") }.tag(TVTab.categories)
+            NavigationStack(path: $m.libraryPath) { TVLibraryHubView().withRoutes() }
+                .tabItem { Text("资料库") }.tag(TVTab.library)
+            NavigationStack(path: $m.searchPath) { TVSearchView().withRoutes() }
+                .tabItem { Text("搜索") }.tag(TVTab.search)
         }
     }
 }
 
-/// 导航到课程页的值：课程 ID。
-struct SeriesLink: Hashable { let id: String }
-
 extension View {
-    func withSeriesDestination() -> some View {
-        navigationDestination(for: SeriesLink.self) { TVSeriesView(seriesId: $0.id) }
+    /// 各标签页面栈里能进的页面。
+    func withRoutes() -> some View {
+        navigationDestination(for: TVRoute.self) { r in
+            switch r {
+            case .series(let id): TVSeriesView(seriesId: id)
+            case .category(let id): TVCategoryView(categoryId: id)
+            case .recent: TVRecentView()
+            case .favorites: TVFavoritesView()
+            case .about: TVAboutView()
+            }
+        }
     }
 }

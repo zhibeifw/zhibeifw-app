@@ -21,7 +21,15 @@ struct ZhibeiFWTVApp: App {
     }
 }
 
-enum TVTab: Hashable { case home, recent, favorites, about }
+/// 电视上是顶部的四个标签，和 iPhone 一样：首页、分类、资料库、搜索。
+enum TVTab: Hashable { case home, categories, library, search }
+
+/// 页面地址（和 iPhone 的 Route 对应；没有“已下载”）。
+enum TVRoute: Hashable {
+    case series(String)
+    case category(String)
+    case recent, favorites, about
+}
 
 /// Apple TV 版的 App 模型：AppCore 加上电视自己的界面状态（当前标签、各标签的页面栈、播放页）。
 @MainActor
@@ -30,21 +38,20 @@ final class TVModel {
     @ObservationIgnored let core: AppCore
     var playerOpen = false
     var tab: TVTab = .home
-    var homePath: [SeriesLink] = []
-    var recentPath: [SeriesLink] = []
-    var favoritesPath: [SeriesLink] = []
+    var homePath: [TVRoute] = []
+    var categoriesPath: [TVRoute] = []
+    var libraryPath: [TVRoute] = []
+    var searchPath: [TVRoute] = []
 
     /// “前往课程”：收起播放页，在当前标签里进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
         playerOpen = false
-        let link = SeriesLink(id: seriesId)
+        let r = TVRoute.series(seriesId)
         switch tab {
-        case .about:  // 关于页没有页面栈：到首页里进
-            tab = .home
-            if homePath.last != link { homePath.append(link) }
-        case .home: if homePath.last != link { homePath.append(link) }
-        case .recent: if recentPath.last != link { recentPath.append(link) }
-        case .favorites: if favoritesPath.last != link { favoritesPath.append(link) }
+        case .home: if homePath.last != r { homePath.append(r) }
+        case .categories: if categoriesPath.last != r { categoriesPath.append(r) }
+        case .library: if libraryPath.last != r { libraryPath.append(r) }
+        case .search: if searchPath.last != r { searchPath.append(r) }
         }
     }
 

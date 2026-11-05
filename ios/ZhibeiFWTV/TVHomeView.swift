@@ -29,7 +29,8 @@ struct TVHomeView: View {
                     TVCardRow(title: "编辑精选", cards: home.featured, width: TVLayout.smallCardWidth)
                 }
                 ForEach(home.categories) { c in
-                    TVCardRow(title: c.name, cards: c.series, width: TVLayout.smallCardWidth)
+                    // 分类行的标题可以选：进这个分类的全部课程（和 iPhone 一样）
+                    TVCardRow(title: c.name, cards: c.series, width: TVLayout.smallCardWidth, more: .category(c.id))
                 }
             }
             .padding(.vertical, 40)
@@ -42,10 +43,22 @@ struct TVCardRow: View {
     let title: String
     let cards: [SeriesCard]
     let width: CGFloat
+    /// 标题可以选时进的页面（分类）
+    var more: TVRoute? = nil
 
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            Text(title).font(.title3).fontWeight(.semibold).padding(.horizontal, TVLayout.pageMargin)
+            Group {
+                if let more {
+                    NavigationLink(value: more) {
+                        Label(title, systemImage: "chevron.right").labelStyle(TitleThenIcon())
+                    }
+                    .buttonStyle(.borderless)
+                } else {
+                    Text(title)
+                }
+            }
+            .font(.title3).fontWeight(.semibold).padding(.horizontal, TVLayout.pageMargin)
             ScrollView(.horizontal) {
                 LazyHStack(alignment: .top, spacing: TVLayout.cardGap) {
                     ForEach(cards) { card in TVSeriesCard(card: card, width: width) }
@@ -88,10 +101,20 @@ struct TVSeriesCard: View {
     }
 
     private var link: some View {
-        NavigationLink(value: SeriesLink(id: card.id)) {
+        NavigationLink(value: TVRoute.series(card.id)) {
             CoverImage(path: card.coverPath, colorId: card.id, radius: TVLayout.coverRadius)
                 .frame(width: width, height: TVLayout.coverHeight(width))
         }
         .buttonStyle(.card)
+    }
+}
+
+/// 文字在前、箭头在后（“分类名 ›”）。
+struct TitleThenIcon: LabelStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        HStack(spacing: 12) {
+            configuration.title
+            configuration.icon.font(.callout).foregroundStyle(.secondary)
+        }
     }
 }
