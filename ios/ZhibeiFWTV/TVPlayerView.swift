@@ -43,6 +43,9 @@ private struct TVPlayerControls: View {
     let now: NowPlaying
     @State private var favorite = false
     @State private var completed = false
+    /// 倍速、睡眠定时、“•••”：按下后弹系统的选项单。用 Menu 的话 tvOS 上焦点落不上去
+    @State private var dialog: Dialog?
+    private enum Dialog { case rate, sleep, more }
 
     private var p: PlayerController { player }
 
@@ -79,6 +82,9 @@ private struct TVPlayerControls: View {
                 controlRow.padding(.top, 56)
             }
         }
+        .confirmationDialog(
+            dialogTitle, isPresented: Binding(get: { dialog != nil }, set: { if !$0 { dialog = nil } }), titleVisibility: .visible
+        ) { dialogButtons }
         // 收藏、已听完变了（或换了一集）才重读，不在每次进度刷新时读库
         .task(id: "\(now.episodeId)|\(core.progressVersion)|\(core.favoritesVersion)") {
             favorite = core.store.isFavorite(now.seriesId)
@@ -97,13 +103,10 @@ private struct TVPlayerControls: View {
     // 倍速 | 后退 15 | 播放暂停 | 前进 30 | 睡眠定时（和 iPhone 同样的顺序）
     private var controlRow: some View {
         HStack {
-            Menu {
-                ForEach(PLAYBACK_RATES, id: \.self) { r in
-                    Button { p.setRate(r) } label: { checkLabel(rateMenuTitle(r), p.rate == r) }
-                }
-            } label: {
+            Button { dialog = .rate } label: {
                 Text(String(format: "%g×", p.rate)).font(.headline).foregroundStyle(C.labelSecondary).frame(minWidth: 72)
             }
+            .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
             Spacer()
             Button { p.seek(by: -SEEK_BACK_SECONDS) } label: { SeekIcon(forward: false, size: 64) }
                 .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
@@ -114,11 +117,7 @@ private struct TVPlayerControls: View {
             Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: { SeekIcon(forward: true, size: 64) }
                 .accessibilityLabel("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
             Spacer()
-            Menu {
-                ForEach(SLEEP_CHOICES) { ch in
-                    Button { p.setSleep(sleepSetting(ch)) } label: { checkLabel(ch.title, p.sleep.choiceId == ch.id) }
-                }
-            } label: {
+            Button { dialog = .sleep } label: {
                 ZIcon(name: "moon", size: 40, color: p.sleep == .off ? C.labelTertiary : C.labelPrimary).frame(minWidth: 72)
             }
             .accessibilityLabel("睡眠定时")
@@ -126,23 +125,9 @@ private struct TVPlayerControls: View {
         .buttonStyle(.borderless)
     }
 
-    /// “•••”：标记已听完、收藏课程、前往课程（和 iPhone 一样；没有下载）
+    /// “•••”：标记已听完、收藏课程、前往课程（和 iPhone 一样；没有下载），按下后弹选项单
     private var moreMenu: some View {
-        Menu {
-            Button {
-                core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
-            } label: {
-                Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
-            }
-            Button {
-                core.toggleFavorite(now.seriesId, title: now.info.seriesTitle, coverPath: now.info.coverPath)
-            } label: {
-                Label(favorite ? "取消收藏课程" : "收藏课程", systemImage: favorite ? "bookmark.fill" : "bookmark")
-            }
-            Button { model.goToSeries(now.seriesId) } label: {
-                Label("前往课程", systemImage: "arrow.forward.circle")
-            }
-        } label: {
+        Button { dialog = .more } label: {
             ZStack {
                 Circle().fill(C.backgroundSecondary).frame(width: 72, height: 72)
                 ZIcon(name: "ellipsis-horizontal", size: 36, color: C.labelPrimary)
@@ -152,9 +137,39 @@ private struct TVPlayerControls: View {
         .accessibilityLabel("更多操作")
     }
 
-    /// 单选菜单里的一项：选中的打勾。
-    @ViewBuilder private func checkLabel(_ title: String, _ checked: Bool) -> some View {
-        if checked { Label(title, systemImage: "checkmark") } else { Text(title) }
+    /// 选项单里的一项：选中的前面打勾。
+    private func checked(_ title: String, _ on: Bool) -> String { on ? "✓ " + title : title }
+
+    private var dialogTitle: String {
+        switch dialog {
+        case .rate: "播放速度"
+        case .sleep: "睡眠定时"
+        case .more, nil: now.info.episodeTitle
+        }
+    }
+
+    @ViewBuilder private var dialogButtons: some View {
+        switch dialog {
+        case .rate:
+            ForEach(PLAYBACK_RATES, id: \.self) { r in
+                Button(checked(rateMenuTitle(r), p.rate == r)) { p.setRate(r) }
+            }
+        case .sleep:
+            ForEach(SLEEP_CHOICES) { ch in
+                Button(checked(ch.title, p.sleep.choiceId == ch.id)) { p.setSleep(sleepSetting(ch)) }
+            }
+        case .more:
+            Button(completed ? "标记为未听完" : "标记为已听完") {
+                core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
+            }
+            Button(favorite ? "取消收藏课程" : "收藏课程") {
+                core.toggleFavorite(now.seriesId, title: now.info.seriesTitle, coverPath: now.info.coverPath)
+            }
+            Button("前往课程") { model.goToSeries(now.seriesId) }
+        case nil:
+            EmptyView()
+        }
+        Button("取消", role: .cancel) {}
     }
 
     private func errorText(_ e: PlayerError) -> String {
