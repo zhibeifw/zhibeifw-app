@@ -1,5 +1,6 @@
 import AppKit
 import Observation
+import Security
 
 /// Mac 的检查更新（照 Android 官网版）。读 upgrade.json 的 "mac" 段：
 /// - 官网版（Developer ID 签名、从官网下载）：有新版本弹“发现新版本”，“立刻更新”用浏览器下载 dmg，“稍后提醒”同一版本 7 天内不再自动弹；
@@ -14,9 +15,19 @@ final class MacUpdateChecker {
     var outdatedDismissed = false
     /// 有新版本时弹的对话框
     var dialog: (version: String, dmgPath: String)?
-    /// Mac App Store 装的包里有 App Store 收据；官网版没有
-    let channel: UpdateChannel =
-        Bundle.main.appStoreReceiptURL.map { FileManager.default.fileExists(atPath: $0.path) } == true ? .store : .site
+    /// 只有 Developer ID 签名的包（“直接分发”导出的官网版）才算官网版；App Store 版、TestFlight、送审版、
+    /// Xcode 直接运行的开发版都按商店版处理，不显示“检查更新”（看收据不可靠：送审版、开发版都可能没有收据）
+    let channel: UpdateChannel = MacUpdateChecker.isDeveloperIDSigned() ? .site : .store
+
+    /// 用系统的签名检查：签名证书链是 Apple 的，且最末一级是 Developer ID Application 证书（Apple 规定的证书扩展 1.2.840.113635.100.6.1.13）。
+    private static func isDeveloperIDSigned() -> Bool {
+        var code: SecCode?
+        guard SecCodeCopySelf([], &code) == errSecSuccess, let code else { return false }
+        var req: SecRequirement?
+        let text = "anchor apple generic and certificate leaf[field.1.2.840.113635.100.6.1.13] exists" as CFString
+        guard SecRequirementCreateWithString(text, [], &req) == errSecSuccess, let req else { return false }
+        return SecCodeCheckValidity(code, [], req) == errSecSuccess
+    }
 
     private static let kRemindVersion = "update.mac.remindVersion"
     private static let kRemindAt = "update.mac.remindAt"
