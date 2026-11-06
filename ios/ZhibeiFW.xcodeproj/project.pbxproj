@@ -25,7 +25,7 @@
 		A1000000000000000000F006 /* TVInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = TVInfo.plist; sourceTree = "<group>"; };
 		A1000000000000000000F007 /* ZhibeiFW.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZhibeiFW.entitlements; sourceTree = "<group>"; };
 		A1000000000000000000F008 /* ZhibeiFWTV.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZhibeiFWTV.entitlements; sourceTree = "<group>"; };
-		A1000000000000000000F009 /* ZhibeiFWMac.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZhibeiFWMac.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000F009 /* zhibeifw.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = zhibeifw.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000F010 /* MacInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = MacInfo.plist; sourceTree = "<group>"; };
 		A1000000000000000000F011 /* ZhibeiFWMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZhibeiFWMac.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -109,7 +109,7 @@
 				A1000000000000000000F001 /* ZhibeiFW.app */,
 				A1000000000000000000F002 /* ZhibeiFWTests.xctest */,
 				A1000000000000000000F005 /* ZhibeiFWTV.app */,
-				A1000000000000000000F009 /* ZhibeiFWMac.app */,
+				A1000000000000000000F009 /* zhibeifw.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -212,7 +212,7 @@
 			);
 			name = ZhibeiFWMac;
 			productName = ZhibeiFWMac;
-			productReference = A1000000000000000000F009 /* ZhibeiFWMac.app */;
+			productReference = A1000000000000000000F009 /* zhibeifw.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -547,7 +547,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app.dev;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = ZhibeiFWMac;
+				PRODUCT_NAME = "智悲佛网";
+				WRAPPER_NAME = zhibeifw.app;
+				EXECUTABLE_NAME = zhibeifw;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
@@ -578,7 +581,10 @@
 				);
 				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = ZhibeiFWMac;
+				PRODUCT_NAME = "智悲佛网";
+				WRAPPER_NAME = zhibeifw.app;
+				EXECUTABLE_NAME = zhibeifw;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
