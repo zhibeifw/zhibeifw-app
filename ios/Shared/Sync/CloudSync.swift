@@ -1,4 +1,5 @@
 import CloudKit
+import OSLog
 import Foundation
 
 /// iCloud 同步（iPhone、iPad、Apple TV 共用；Android 没有）：收听进度、已听完、最近列表（含删除）、收藏。
@@ -15,6 +16,9 @@ import Foundation
 /// - 没登录 iCloud、iCloud 空间满了、没网：本机照常工作，同步引擎之后自己补发。
 final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     private static let zoneName = "UserData"
+    #if DEBUG
+    private static let log = Logger(subsystem: "com.zhibeifw.app", category: "CloudSync")
+    #endif
     private static let stateKey = "cloud.state"
     private static let outboxKey = "cloud.outbox"
 
@@ -39,6 +43,18 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         config.automaticallySync = true
         engine = CKSyncEngine(config)
         store.onUserChange = { [weak self] change in self?.noteLocalChange(change) }
+    }
+
+    // MARK: 主动同步
+
+    /// 回到前台：主动去取别的设备的改动（只靠 iCloud 推送不稳，Mac 上尤其可能收不到）。
+    func fetchNow() {
+        Task { try? await engine.fetchChanges() }
+    }
+
+    /// 退到后台：马上把还没传的改动传上去，别的设备才能尽快看到。
+    func sendNow() {
+        Task { try? await engine.sendChanges() }
     }
 
     // MARK: 记录名、字段
@@ -148,10 +164,18 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             entries.append((favoriteName(id), Self.fields(store.favoriteRecord(id), modified: now)))
         }
         enqueue(entries)
+        // 收藏、取消收藏是用户点一下的操作：马上上传，别的设备切回来就能看到（系统自己安排的发送时间不固定）。
+        // 进度每 5 秒存一次，不这样做：退到后台时上传，平时交给同步引擎安排
+        if case .favorite = change { sendNow() }
     }
 
     private func enqueue(_ entries: [(String, Fields)]) {
         guard !entries.isEmpty else { return }
+        #if DEBUG
+        for (name, f) in entries {
+            Self.log.notice("待上传 \(name, privacy: .public) modified=\(Self.int(f, "modified")) present=\(Self.int(f, "present"))")
+        }
+        #endif
         for (name, f) in entries { setLocalModified(name, Self.int(f, "modified")) }
         updateOutbox { o in for (name, f) in entries { o[name] = f } }
         engine.state.add(pendingRecordZoneChanges: entries.map { .saveRecord(recordID($0.0)) })
@@ -190,6 +214,12 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         let name = rec.recordID.recordName
         saveSystemFields(rec)
         let remote = Self.int(f, "modified")
+        #if DEBUG
+        // 开发版的诊断日志：收到的是哪一条、两边的修改时间、收藏的 present，用没用（正式版不编进去）
+        let local = localModified(name)
+        Self.log.notice(
+            "收到 \(name, privacy: .public) remote=\(remote) local=\(local ?? -1) present=\(Self.int(f, "present")) force=\(force) 采用=\(force || remote > (local ?? -1))")
+        #endif
         guard force || remote > (localModified(name) ?? -1) else { return (false, false) }
         setLocalModified(name, remote)
         // 本机还没传上去的那份更旧：不要了
@@ -245,6 +275,12 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
             notify(p, f)
 
         case .sentRecordZoneChanges(let e):
+            #if DEBUG
+            for rec in e.savedRecords { Self.log.notice("已上传 \(rec.recordID.recordName, privacy: .public)") }
+            for x in e.failedRecordSaves {
+                Self.log.notice("上传失败 \(x.record.recordID.recordName, privacy: .public) \(x.error.code.rawValue)")
+            }
+            #endif
             for rec in e.savedRecords {
                 saveSystemFields(rec)
                 let sent = (rec["modified"] as? NSNumber)?.int64Value ?? 0
@@ -291,7 +327,14 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     {
         let pending = syncEngine.state.pendingRecordZoneChanges.filter { context.options.scope.contains($0) }
         guard !pending.isEmpty else { return nil }
-        return await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: pending) { [weak self] id in self?.recordToSend(id) }
+        return await CKSyncEngine.RecordZoneChangeBatch(pendingChanges: pending) { [weak self] id in
+            // 已经发过、或者这一条已经不存在：从同步引擎的待办里移掉（照 Apple 示例），免得它反复空跑
+            guard let rec = self?.recordToSend(id) else {
+                syncEngine.state.remove(pendingRecordZoneChanges: [.saveRecord(id)])
+                return nil
+            }
+            return rec
+        }
     }
 
     /// 要发的这一条：用“待上传”里存的内容；没有了（已经发过、或者这一条已经不存在）返回 nil，同步引擎就跳过它

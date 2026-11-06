@@ -6,7 +6,6 @@ import Observation
 @main
 struct ZhibeiFWMacApp: App {
     @State private var model = MacModel()
-    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         Window("智悲佛网", id: "main") {
@@ -17,12 +16,14 @@ struct ZhibeiFWMacApp: App {
                     await model.core.boot()
                     await model.updates.check(manual: false)
                 }
-                .onChange(of: scenePhase) { _, p in
-                    if p == .active {
-                        model.core.onForeground()
-                        Task { await model.updates.check(manual: false) }
-                    }
-                    if p == .background { model.core.onBackground() }
+                // Mac 上窗口开着时切到别的 App，场景不算“退到后台”：改看 App 是否是当前 App。
+                // 切回来时取一次 iCloud 改动、按时检查目录和更新；切走时存播放位置、把没传的改动传上去
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+                    model.core.onForeground()
+                    Task { await model.updates.check(manual: false) }
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
+                    model.core.onBackground()
                 }
         }
         .defaultSize(width: 1180, height: 760)

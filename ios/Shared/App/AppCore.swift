@@ -149,6 +149,8 @@ final class AppCore {
             if favorites { self.favoritesVersion += 1 }
         }
         cloud = c
+        // 启动时主动取一次：同步引擎没收到推送时，启动不会自己去取（日志里写“没有要做的事”）
+        c.fetchNow()
         // 别的设备改了，iCloud 用静默推送通知这台设备来取（同步引擎自己处理推送）
         #if os(macOS)
         NSApplication.shared.registerForRemoteNotifications()
@@ -233,10 +235,12 @@ final class AppCore {
         }
         player.refreshSleepDisplay()
         progressVersion += 1; favoritesVersion += 1
+        cloud?.fetchNow()
     }
 
     func onBackground() {
         player?.saveNow()
+        cloud?.sendNow()
     }
 
     // MARK: 播放入口
