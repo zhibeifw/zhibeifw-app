@@ -60,6 +60,8 @@ final class MacModel {
         didSet { if section != oldValue { path = [] } }
     }
     var path: [MacRoute] = []
+    /// 侧边栏开着还是收起：放在模型里，打开、关掉播放页时保持原样
+    var columns: NavigationSplitViewVisibility = .all
     var query = ""
     var playerOpen = false
 

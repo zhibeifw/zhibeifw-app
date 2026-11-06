@@ -73,9 +73,33 @@ private struct MacMainView: View {
     @Environment(MacModel.self) private var model
 
     var body: some View {
+        // 播放页打开时直接换掉整个窗口内容（不是盖在侧边栏布局上面）：
+        // 盖在上面时，缩放窗口、关播放页同时进课程页，下面的布局会跟着变、露出来或和上一页叠在一起。
+        // 侧边栏选中项、页面栈、搜索词、侧边栏开没开都存在 MacModel 里，关掉播放页后原样回来
+        Group {
+            if model.playerOpen {
+                MacPlayerView()
+            } else {
+                splitView
+            }
+        }
+        // 官网版有新版本：和 Android 官网版同样的文字
+        .alert(
+            "发现新版本 \(model.updates.dialog?.version ?? "")",
+            isPresented: Binding(get: { model.updates.dialog != nil }, set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } })
+        ) {
+            Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
+            Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
+        } message: {
+            Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
+        }
+        // 播放页打开时藏起整个工具栏，播放页占满窗口；关闭用播放页左上角的圈 X（或 Esc）
+        .toolbar(model.playerOpen ? .hidden : .visible, for: .windowToolbar)
+    }
+
+    private var splitView: some View {
         @Bindable var m = model
-        ZStack {
-        NavigationSplitView {
+        return NavigationSplitView(columnVisibility: $m.columns) {
             // 侧边栏：主页、分类；资料库：最近播放、收藏。分类只放一个入口（14 个分类全列出来太长）
             List(selection: $m.section) {
                 Label("主页", systemImage: "house").tag(MacSection.home)
@@ -118,25 +142,5 @@ private struct MacMainView: View {
         .toolbar {
             ToolbarItem(placement: .principal) { MacNowPlayingBar() }
         }
-            // 播放页：从下往上铺满窗口，盖住侧边栏和内容区；收起后回到原来的页面，声音照常播
-            if model.playerOpen {
-                MacPlayerView()
-                    .transition(.move(edge: .bottom))
-                    .zIndex(1)
-            }
-        }
-        .animation(.easeInOut(duration: 0.3), value: model.playerOpen)
-        // 官网版有新版本：和 Android 官网版同样的文字
-        .alert(
-            "发现新版本 \(model.updates.dialog?.version ?? "")",
-            isPresented: Binding(get: { model.updates.dialog != nil }, set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } })
-        ) {
-            Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
-            Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
-        } message: {
-            Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
-        }
-        // 播放页打开时藏起整个工具栏，播放页占满窗口；关闭用播放页左上角的圈 X（或 Esc）
-        .toolbar(model.playerOpen ? .hidden : .visible, for: .windowToolbar)
     }
 }
