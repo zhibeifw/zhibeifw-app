@@ -2,7 +2,7 @@ import SwiftUI
 import WidgetKit
 import AppIntents
 
-/// 智悲佛网的小组件：继续播放、最新课程。
+/// 智悲佛网的小组件：继续播放、最新课程。iPhone / iPad 和 Mac 共用这一份（Mac 没有锁屏小组件）。
 /// 数据都是 App 写好放在共享目录里的（WidgetStore），这里只读、只画。App 里内容变了会让系统刷新，这里不自己定时刷新。
 @main
 struct ZhibeiFWWidgets: WidgetBundle {
@@ -51,15 +51,22 @@ extension WidgetSnapshot {
 // MARK: - 继续播放
 
 struct NowPlayingWidget: Widget {
+    // 中、大号；iPhone 另有锁屏一行（Mac 没有锁屏小组件）
+    #if os(iOS)
+    static let families: [WidgetFamily] = [.systemMedium, .systemLarge, .accessoryRectangular]
+    #else
+    static let families: [WidgetFamily] = [.systemMedium, .systemLarge]
+    #endif
+
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetKinds.nowPlaying, provider: SnapshotProvider()) { e in
             NowPlayingView(np: e.snap.nowPlaying)
-                .containerBackground(for: .widget) { Color(.systemBackground) }
+                .containerBackground(for: .widget) { Color.widgetBackground }
         }
         .configurationDisplayName("继续播放")
         .description("接着听正在播放的一集。")
         // 小号只放得下一集的一点信息，不做（用户定）；锁屏一行
-        .supportedFamilies([.systemMedium, .systemLarge, .accessoryRectangular])
+        .supportedFamilies(Self.families)
     }
 }
 
@@ -79,12 +86,14 @@ struct NowPlayingView: View {
     @ViewBuilder private func content(_ np: WidgetNowPlaying) -> some View {
         let i = np.item
         switch family {
+        #if os(iOS)
         case .accessoryRectangular:
             VStack(alignment: .leading, spacing: 2) {
                 Text(i.seriesTitle).font(.headline).lineLimit(1)
                 Text(i.episodeTitle ?? "").font(.caption).lineLimit(1)
                 ProgressView(value: fraction(np)).tint(.primary)
             }
+        #endif
         case .systemMedium:
             HStack(spacing: 12) {
                 // 封面在左边上下居中
@@ -166,7 +175,7 @@ struct LatestWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetKinds.latest, provider: SnapshotProvider()) { e in
             LatestView(items: e.snap.latest, nowPlaying: e.snap.nowPlaying)
-                .containerBackground(for: .widget) { Color(.systemBackground) }
+                .containerBackground(for: .widget) { Color.widgetBackground }
         }
         .configurationDisplayName("最新课程")
         .description("新课程里每门课的最新一集，点一下就播放。")
@@ -244,15 +253,36 @@ struct Cover: View {
         Color.clear
             .aspectRatio(16 / 9, contentMode: .fit)
             .overlay {
-                if let u = WidgetStore.coverURL(item.cover), let img = UIImage(contentsOfFile: u.path) {
+                if let u = WidgetStore.coverURL(item.cover), let img = Self.load(u) {
                     // “着色”“透明”样式下按苹果的做法显示成灰度，不让系统染成一种颜色
-                    Image(uiImage: img).resizable().widgetAccentedRenderingMode(.desaturated).scaledToFill()
+                    img.resizable().widgetAccentedRenderingMode(.desaturated).scaledToFill()
                 } else {
                     Color(argb: item.color)
                 }
             }
             .clipShape(RoundedRectangle(cornerRadius: radius, style: .continuous))
             .accessibilityHidden(true)
+    }
+}
+
+extension Cover {
+    static func load(_ u: URL) -> Image? {
+        #if os(macOS)
+        NSImage(contentsOf: u).map { Image(nsImage: $0) }
+        #else
+        UIImage(contentsOfFile: u.path).map { Image(uiImage: $0) }
+        #endif
+    }
+}
+
+extension Color {
+    /// 小组件的底色：跟系统（浅色白、深色黑）
+    static var widgetBackground: Color {
+        #if os(macOS)
+        Color(nsColor: .windowBackgroundColor)
+        #else
+        Color(.systemBackground)
+        #endif
     }
 }
 

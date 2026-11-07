@@ -16,6 +16,8 @@ struct ZhibeiFWMacApp: App {
                     await model.core.boot()
                     await model.updates.check(manual: false)
                 }
+                // 点桌面 / 通知中心的小组件打开 App
+                .onOpenURL { model.openWidgetLink($0) }
                 // Mac 上窗口开着时切到别的 App，场景不算“退到后台”：改看 App 是否是当前 App。
                 // 切回来时取一次 iCloud 改动、按时检查目录和更新；切走时存播放位置、把没传的改动传上去
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
@@ -24,6 +26,7 @@ struct ZhibeiFWMacApp: App {
                 }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.didResignActiveNotification)) { _ in
                     model.core.onBackground()
+                    Task { await model.widgets.writeNow() }
                 }
         }
         .defaultSize(width: 1180, height: 760)
@@ -57,6 +60,10 @@ final class MacModel {
     @ObservationIgnored let core: AppCore
     /// 检查更新（官网版提示新版本，App Store 版只提示过旧）
     let updates = MacUpdateChecker()
+    /// 桌面 / 通知中心小组件的数据（和 iPhone 共用 WidgetFeeder）
+    @ObservationIgnored private(set) var widgets: WidgetFeeder!
+    /// 冷启动时点小组件带来的链接：等进了主页再打开
+    @ObservationIgnored private var pendingLink: URL?
     var section: MacSection? = .home {
         didSet { if section != oldValue { path = [] } }
     }
@@ -85,9 +92,64 @@ final class MacModel {
         core = AppCore()
         // Mac 上选一集只开始播放、不弹播放页（和 Mac 上的“播客”一样）；点工具栏里的集名打开播放页
         core.presentPlayer = nil
+        widgets = WidgetFeeder(core: core)
+        core.onReady = { [weak self] in
+            guard let self else { return }
+            self.widgets.start()
+            if let u = self.pendingLink { self.pendingLink = nil; self.openWidgetLink(u) }
+        }
+        connectWidgetButtons()
         core.prefetchHomeCovers = { home in
             let cards = home.ongoing + home.featured + home.categories.flatMap { $0.series.prefix(6) }
             ImageLoader.shared.prefetch(cards.map { (path: $0.coverPath, requested: COVER_THUMB_WIDTHS.last!) })
+        }
+    }
+}
+
+extension MacModel {
+    /// 小组件上的播放按钮（系统在 App 的进程里执行；App 没开着时在后台启动它，这时窗口还没起来，要自己先启动）。
+    /// 打开：播这一集（不是当前这一集就换成它）；关上：暂停。播放要等真的出声再结束（苹果对音频动作的要求）
+    fileprivate func connectWidgetButtons() {
+        WidgetBridge.setPlaying = { [weak self] id, on in
+            WidgetLog.note("按钮：\(id) play=\(on)")
+            guard let self, await self.readyForWidget(), let p = self.core.player else { return }
+            if p.current?.episodeId == id {
+                if on && !p.looksPlaying { p.resume() }
+                if !on && p.looksPlaying { p.pause() }
+            } else if on {
+                p.start(id, ctx: .single)
+            }
+            self.widgets.quickUpdateNowPlaying(playing: on)
+            guard on else { return }
+            for _ in 0..<100 where !p.isPlaying && p.error == nil {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            if !p.isPlaying { self.widgets.quickUpdateNowPlaying(playing: false) }
+        }
+    }
+
+    /// 启动只做一次：窗口那边已经在启动时，这里的 boot() 直接返回，要等它做完（最多约 10 秒）
+    private func readyForWidget() async -> Bool {
+        await core.boot()
+        for _ in 0..<100 where core.phase == .launching {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return core.phase == .ready
+    }
+
+    /// 点小组件打开 App：进课程页，或打开播放页（App 里已经不是这一集了就进课程页）
+    func openWidgetLink(_ url: URL) {
+        guard let link = WidgetLink(url) else { return }
+        guard core.phase == .ready else { pendingLink = url; return }
+        switch link {
+        case .player(let seriesId):
+            if core.player?.current != nil { playerOpen = true } else { openWidgetLink(WidgetLink.series(seriesId).url) }
+        case .series(let id):
+            // 一律回到侧边栏的主页、只留这门课一页（和 iPhone 一样）
+            playerOpen = false
+            query = ""
+            section = .home
+            path = [.series(id)]
         }
     }
 }

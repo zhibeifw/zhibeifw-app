@@ -3,6 +3,21 @@
 <!-- Mac 版的 Info.plist（其余键由 Xcode 按 INFOPLIST_KEY_* 生成）。 -->
 <plist version="1.0">
 <dict>
+	<!-- 小组件共享数据的 App Group（工程设置 ZBFW_APP_GROUP） -->
+	<key>ZBFWAppGroup</key>
+	<string>$(ZBFW_APP_GROUP)</string>
+	<!-- 点小组件打开 App 用的链接 zhibeifw:// -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>com.zhibeifw.app.widget</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>zhibeifw</string>
+			</array>
+		</dict>
+	</array>
 	<key>ZBFWCloudContainer</key>
 	<string>iCloud.com.zhibeifw.app</string>
 	<key>ITSAppUsesNonExemptEncryption</key>

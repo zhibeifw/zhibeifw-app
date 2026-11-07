@@ -1,8 +1,12 @@
 import SwiftUI
-import UIKit
 import WidgetKit
+#if os(macOS)
+import AppKit
+#else
+import UIKit
+#endif
 
-/// 给小组件备数据：把继续播放、最新课程写进共享目录，再让系统刷新小组件。
+/// 给小组件备数据（iPhone / iPad 和 Mac 共用）：把继续播放、最新课程写进共享目录，再让系统刷新小组件。
 /// 什么时候写：主页目录变了，换了一集、播放 / 暂停变了、读到这一集的时长（等 1 秒合并成一次），退到后台时，小组件的按钮执行完时。
 /// 播放进度不跟着每 5 秒的保存写（在后台时系统限制刷新次数），退到后台、暂停时会带上最新进度。
 @MainActor
@@ -20,6 +24,7 @@ final class WidgetFeeder {
 
     /// 进入主页后开始（数据库和目录都好了）
     func start() {
+        WidgetLog.note("开始备数据：共享目录=\(WidgetStore.dir?.path ?? "没有")")
         guard !started, WidgetStore.dir != nil else { return }
         started = true
         // 启动时让系统重画一次：数据没变时不会刷新，App 升级后桌面上会一直是旧版画出来的样子（按钮还连着旧版的动作）。
@@ -123,6 +128,15 @@ final class WidgetFeeder {
             cover: coverPath.isEmpty ? nil : coverPath, color: placeholderColor(seriesId).light)
     }
 
+    private static func jpeg(_ img: PlatformImage) -> Data? {
+        #if os(macOS)
+        guard let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+        return NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+        #else
+        img.jpegData(compressionQuality: 0.8)
+        #endif
+    }
+
     /// 把用到的封面缩小存进共享目录（已有的跳过），删掉不再用的；取不到的封面留空，小组件显示占位色
     private func prepareCovers(_ snap: inout WidgetSnapshot) async {
         guard let dir = WidgetStore.coversDir else { return }
@@ -134,7 +148,7 @@ final class WidgetFeeder {
             let name = ImageLoader.diskName(path) + ".jpg"
             let f = dir.appendingPathComponent(name)
             if fm.fileExists(atPath: f.path) { names[path] = name; continue }
-            if let img = await ImageLoader.shared.load(path, maxPixel: Self.coverPx), let d = img.jpegData(compressionQuality: 0.8),
+            if let img = await ImageLoader.shared.load(path, maxPixel: Self.coverPx), let d = Self.jpeg(img),
                 (try? d.write(to: f, options: .atomic)) != nil
             {
                 names[path] = name

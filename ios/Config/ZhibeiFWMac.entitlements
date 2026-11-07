@@ -8,6 +8,11 @@
 	<true/>
 	<key>com.apple.security.network.client</key>
 	<true/>
+	<!-- 和小组件共享数据（Mac 用带团队号的 App Group 名字，官网版、App Store 版都能用） -->
+	<key>com.apple.security.application-groups</key>
+	<array>
+		<string>$(ZBFW_APP_GROUP)</string>
+	</array>
 	<key>com.apple.developer.aps-environment</key>
 	<string>development</string>
 	<key>com.apple.developer.icloud-container-identifiers</key>
