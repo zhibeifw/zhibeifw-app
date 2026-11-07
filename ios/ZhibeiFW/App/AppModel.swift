@@ -30,12 +30,17 @@ final class AppModel {
         core.onReady = { [weak self] in
             guard let self else { return }
             self.widgets.start()
+            WidgetLog.note("进入主页，等着的链接=\(self.pendingLink?.absoluteString ?? "无")")
             if let u = self.pendingLink { self.pendingLink = nil; self.openWidgetLink(u) }
+            if let a = QuickAction.pending ?? self.pendingQuickAction {
+                QuickAction.pending = nil; self.pendingQuickAction = nil; self.openQuickAction(a)
+            }
             Task { await self.upgrade.check(manual: false) }
         }
         core.prefetchHomeCovers = { home in Self.prefetchHomeCovers(home) }
         core.presentPlayer = { [weak self] in self?.openPlayer() }
         widgets = WidgetFeeder(core: core)
+        QuickAction.handler = { [weak self] a in self?.openQuickAction(a) }
         connectWidgetButtons()
     }
 
@@ -75,6 +80,21 @@ final class AppModel {
         return phase == .ready
     }
 
+    /// 冷启动时长按图标菜单带来的：等进了主页再打开
+    @ObservationIgnored private var pendingQuickAction: QuickAction?
+
+    /// 长按 App 图标菜单：切到资料库标签，只留对应的那一页（之前停在哪都一样）
+    func openQuickAction(_ a: QuickAction) {
+        guard phase == .ready else { pendingQuickAction = a; return }
+        closePlayer()
+        nav.tab = .library
+        switch a {
+        case .recent: nav.libraryPath = [.recent]
+        case .favorites: nav.libraryPath = [.favorites]
+        case .downloads: nav.libraryPath = [.library]
+        }
+    }
+
     /// 点小组件打开 App：进课程页，或打开播放页（App 里已经不是这一集了就进课程页）
     func openWidgetLink(_ url: URL) {
         WidgetLog.note("打开链接：\(url.absoluteString) phase=\(phase)")
@@ -86,7 +106,10 @@ final class AppModel {
             if player.current != nil { openPlayer() } else { openWidgetLink(WidgetLink.series(seriesId).url) }
         case .series(let id):
             closePlayer()
-            if !nav.isShowingSeries(id) { nav.push(.series(id)) }
+            // 一律切到主页标签、只留这门课一页：App 之前停在别的标签、别的页面上时，推进那一栏会看不到
+            WidgetLog.note("进课程页：\(id)（原来在 \(nav.tab)）")
+            nav.tab = .home
+            nav.homePath = [.series(id)]
         }
     }
 

@@ -20,8 +20,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * 给桌面小组件备数据（与 iOS WidgetFeeder.swift 同样的规则）：把继续播放、最新课程、编辑精选、收藏写进 App 目录，再刷新小组件。
- * 什么时候写：主页目录、收藏变了，换了一集、播放 / 暂停变了、读到这一集的时长（等 1 秒合并成一次），退到后台时，小组件的按钮执行完时。
+ * 给桌面小组件备数据（与 iOS WidgetFeeder.swift 同样的规则）：把继续播放、最新课程写进 App 目录，再刷新小组件。
+ * 什么时候写：主页目录变了，换了一集、播放 / 暂停变了、读到这一集的时长（等 1 秒合并成一次），退到后台时，小组件的按钮执行完时。
  * 播放进度不跟着每 5 秒的保存写，退到后台、暂停时会带上最新进度。
  */
 class WidgetFeeder(private val ctx: Context, private val model: AppModel, private val scope: CoroutineScope) {
@@ -38,7 +38,7 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
         scope.launch {
             snapshotFlow {
                 val p = model.player
-                listOf(model.catalogVersion, model.favoritesVersion, p?.current?.episodeId, p?.looksPlaying, (p?.duration ?: 0.0) > 0)
+                listOf(model.catalogVersion, p?.current?.episodeId, p?.looksPlaying, (p?.duration ?: 0.0) > 0)
             }.distinctUntilChanged().debounce(1000).collect { write() }
         }
     }
@@ -108,8 +108,6 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
                 latest = home.ongoing.take(LATEST_LIMIT).mapNotNull { s ->
                     store.lastEpisode(s.id)?.let { (id, title) -> item(s.id, s.title, s.coverPath, id, title) }
                 },
-                featured = home.featured.take(GRID_LIMIT).map { item(it.id, it.featureTitle ?: it.title, it.coverPath) },
-                favorites = store.loadFavorites().filter { !it.gone }.take(GRID_LIMIT).map { item(it.id, it.title, it.coverPath) },
             )
         }
     }
@@ -122,7 +120,7 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
     private suspend fun withCovers(s: WidgetSnapshot): WidgetSnapshot {
         val dir = WidgetStore.coversDir(ctx)
         withContext(Dispatchers.IO) { dir.mkdirs() }
-        val all = listOfNotNull(s.nowPlaying?.item) + s.latest + s.featured + s.favorites
+        val all = listOfNotNull(s.nowPlaying?.item) + s.latest
         val names = HashMap<String, String?>()
         for (path in all.mapNotNull { it.cover }.toSet()) {
             val name = ImageLoader.diskName(path) + ".jpg"
@@ -137,7 +135,7 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
         withContext(Dispatchers.IO) { dir.listFiles()?.forEach { if (it.name !in keep) it.delete() } }
         return s.copy(
             nowPlaying = s.nowPlaying?.let { it.copy(item = fix(it.item)) },
-            latest = s.latest.map(::fix), featured = s.featured.map(::fix), favorites = s.favorites.map(::fix),
+            latest = s.latest.map(::fix),
         )
     }
 
@@ -153,14 +151,11 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
     companion object {
         /** 每种列表最多几条：大号小组件放得下的数量 */
         const val LATEST_LIMIT = 7
-        const val GRID_LIMIT = 9
         const val COVER_PX = 360
 
         suspend fun updateAllWidgets(ctx: Context) {
             NowPlayingWidget().refreshAll(ctx)
             LatestWidget().refreshAll(ctx)
-            FeaturedWidget().refreshAll(ctx)
-            FavoritesWidget().refreshAll(ctx)
         }
     }
 }

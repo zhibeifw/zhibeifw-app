@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 长按 App 图标菜单的图标（Material Icons，放在圆形底的中间，系统按快捷方式图标规格显示） -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="44dp"
+    android:height="44dp"
+    android:viewportWidth="44"
+    android:viewportHeight="44">
+    <path
+        android:fillColor="#FFF2F2F7"
+        android:pathData="M22,22m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0" />
+    <group android:scaleX="1.25" android:scaleY="1.25" android:translateX="7" android:translateY="7">
+        <path
+            android:fillColor="#FF3A3A3C"
+            android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM12,20c-4.41,0 -8,-3.59 -8,-8s3.59,-8 8,-8 8,3.59 8,8 -3.59,8 -8,8zM13,7h-2v5.59L8.71,10.3 7.3,11.71 12,16.41l4.71,-4.71 -1.42,-1.41L13,12.59z" />
+    </group>
+</vector>

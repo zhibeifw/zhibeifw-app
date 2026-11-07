@@ -25,7 +25,7 @@ struct SetPlayingIntent: AudioPlaybackIntent {
     }
 }
 
-/// App 启动时接上，小组件的开关通过它调 App 的播放器
+/// App 启动时接上，小组件的按钮通过它调 App
 @MainActor
 enum WidgetBridge {
     static var setPlaying: ((String, Bool) async -> Void)?

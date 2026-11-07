@@ -61,7 +61,7 @@ import com.zhibeifw.app.R
 import com.zhibeifw.app.ZhibeiApp
 import kotlin.math.ceil
 
-// 智悲佛网的桌面小组件：继续播放、最新课程、编辑精选、收藏的课程（和 iOS 的四个一样）。
+// 智悲佛网的桌面小组件：继续播放、最新课程（和 iOS 一样）。
 // 数据都是 App 写好的（WidgetStore），这里只读、只画；App 里内容变了会刷新，这里不自己定时刷新。
 // 外观跟系统走（Material You 的小组件底色和文字颜色），按尺寸分中、大两档排（不做小号：只放得下一门，用户定）。
 
@@ -277,75 +277,6 @@ private fun PlayIcon(size: Int, playing: Boolean = false) = Image(
     ImageProvider(if (playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play), contentDescription = null,
     colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface), modifier = GlanceModifier.size(size.dp),
 )
-
-// ---------- 编辑精选、收藏的课程 ----------
-
-class FeaturedWidget : SnapshotWidget() {
-    override fun covers(s: WidgetSnapshot) = s.featured
-
-    @Composable
-    override fun Content(s: WidgetSnapshot, covers: Map<String, Bitmap>) =
-        CoverGrid("编辑精选", s.featured, "暂时没有编辑精选", covers)
-}
-
-class FeaturedReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget = FeaturedWidget()
-}
-
-class FavoritesWidget : SnapshotWidget() {
-    override fun covers(s: WidgetSnapshot) = s.favorites
-
-    @Composable
-    override fun Content(s: WidgetSnapshot, covers: Map<String, Bitmap>) =
-        CoverGrid("收藏的课程", s.favorites, "还没有收藏的课程", covers)
-}
-
-class FavoritesReceiver : GlanceAppWidgetReceiver() {
-    override val glanceAppWidget = FavoritesWidget()
-}
-
-/**
- * 课程封面：点封面打开 App 进这门课的课程页。一行 3 个；放得下几行就放几行（各家桌面小组件宽高不同，
- * 按实际尺寸算：封面 16:9 + 两行标题），中号最多 1 行、大号最多 3 行
- */
-@Composable
-private fun CoverGrid(title: String, items: List<WidgetItem>, empty: String, covers: Map<String, Bitmap>) {
-    if (items.isEmpty()) return EmptyWidget(empty)
-    val f = family()
-    val cols = 3
-    val size = LocalSize.current
-    // 上下左右边距各 14、标题约 26、格子间距 10、两行标题约 32
-    val tileW = (size.width - 28.dp - 20.dp) / cols
-    val coverH = tileW * 9 / 16
-    val fit = maxOf(1, ((size.height - 28.dp - 26.dp + 10.dp) / (coverH + 4.dp + 32.dp + 10.dp)).toInt())
-    val rows = minOf(if (f == Family.LARGE) 3 else 1, fit, (items.size + cols - 1) / cols)
-    Column(GlanceModifier.fillMaxSize()) {
-        Header(title)
-        // 从上往下排，不满时空在下面
-        Column(GlanceModifier.fillMaxWidth().defaultWeight(), verticalAlignment = Alignment.Top) {
-            for (r in 0 until rows) {
-                if (r > 0) Spacer(GlanceModifier.height(10.dp))
-                Row(GlanceModifier.fillMaxWidth()) {
-                    for (c in 0 until cols) {
-                        if (c > 0) Spacer(GlanceModifier.width(10.dp))
-                        val i = items.getOrNull(r * cols + c)
-                        Column(
-                            GlanceModifier.defaultWeight().let { m ->
-                                if (i != null) m.clickable(open(WidgetLink.Series(i.seriesId))) else m
-                            }
-                        ) {
-                            if (i != null) {
-                                Cover(i, covers, GlanceModifier.fillMaxWidth().height(coverH), 6)
-                                Spacer(GlanceModifier.height(4.dp))
-                                Title(i.seriesTitle, 12, 2)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
 
 // ---------- 公用 ----------
 

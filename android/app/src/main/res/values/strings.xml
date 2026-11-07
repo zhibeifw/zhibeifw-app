@@ -2,7 +2,10 @@
 <resources>
     <!-- 桌面小组件：添加小组件时列表里的说明 -->
     <string name="widget_now_playing_desc">继续播放：接着听正在播放的一集</string>
+    <!-- 长按 App 图标的菜单 -->
+    <string name="shortcut_recent">最近播放</string>
+    <string name="shortcut_favorites">收藏</string>
+    <string name="shortcut_downloads">已下载</string>
+    <string name="shortcut_share">分享</string>
     <string name="widget_latest_desc">最新课程：新课程里每门课的最新一集，点一下就播放</string>
-    <string name="widget_featured_desc">编辑精选：点封面进入课程</string>
-    <string name="widget_favorites_desc">收藏的课程：点封面进入课程</string>
 </resources>

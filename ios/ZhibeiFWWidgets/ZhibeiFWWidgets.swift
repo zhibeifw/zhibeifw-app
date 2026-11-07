@@ -2,15 +2,13 @@ import SwiftUI
 import WidgetKit
 import AppIntents
 
-/// 智悲佛网的小组件：继续播放、最新课程、编辑精选、收藏的课程。
+/// 智悲佛网的小组件：继续播放、最新课程。
 /// 数据都是 App 写好放在共享目录里的（WidgetStore），这里只读、只画。App 里内容变了会让系统刷新，这里不自己定时刷新。
 @main
 struct ZhibeiFWWidgets: WidgetBundle {
     var body: some Widget {
         NowPlayingWidget()
         LatestWidget()
-        FeaturedWidget()
-        FavoritesWidget()
     }
 }
 
@@ -32,7 +30,7 @@ struct SnapshotProvider: TimelineProvider {
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
         let s = WidgetStore.read()
-        WidgetLog.note("小组件读到：在播 \(s.nowPlaying?.item.seriesId ?? "无") / \(s.nowPlaying?.item.episodeId ?? "无") playing=\(s.nowPlaying?.playing ?? false)，最新 \(s.latest.count)，收藏 \(s.favorites.count)")
+        WidgetLog.note("小组件读到：在播 \(s.nowPlaying?.item.seriesId ?? "无") / \(s.nowPlaying?.item.episodeId ?? "无") playing=\(s.nowPlaying?.playing ?? false)，最新 \(s.latest.count)")
         completion(Timeline(entries: [SnapshotEntry(date: .now, snap: s)], policy: .never))
     }
 }
@@ -46,7 +44,7 @@ extension WidgetSnapshot {
         }
         return WidgetSnapshot(
             nowPlaying: WidgetNowPlaying(item: items[0], position: 1200, duration: 3600, playing: false, loaded: false),
-            latest: items, featured: Array(items.prefix(6)), favorites: Array(items.prefix(6)))
+            latest: items)
     }
 }
 
@@ -231,90 +229,6 @@ struct LatestRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(playing ? "暂停" : "播放") \(item.seriesTitle) \(item.episodeTitle ?? "")")
-    }
-}
-
-// MARK: - 编辑精选、收藏的课程
-
-struct FeaturedWidget: Widget {
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: WidgetKinds.featured, provider: SnapshotProvider()) { e in
-            CoverGridView(title: "编辑精选", items: e.snap.featured, empty: "暂时没有编辑精选")
-                .containerBackground(for: .widget) { Color(.systemBackground) }
-        }
-        .configurationDisplayName("编辑精选")
-        .description("编辑精选的课程，点封面进入课程。")
-        // 小号只放得下一个封面，不做（用户定）
-        .supportedFamilies([.systemMedium, .systemLarge])
-    }
-}
-
-struct FavoritesWidget: Widget {
-    var body: some WidgetConfiguration {
-        StaticConfiguration(kind: WidgetKinds.favorites, provider: SnapshotProvider()) { e in
-            CoverGridView(title: "收藏的课程", items: e.snap.favorites, empty: "还没有收藏的课程")
-                .containerBackground(for: .widget) { Color(.systemBackground) }
-        }
-        .configurationDisplayName("收藏的课程")
-        .description("收藏的课程，点封面进入课程。")
-        // 小号只放得下一个封面，不做（用户定）
-        .supportedFamilies([.systemMedium, .systemLarge])
-    }
-}
-
-/// 课程封面：点封面打开 App 进这门课的课程页
-struct CoverGridView: View {
-    let title: String
-    let items: [WidgetItem]
-    let empty: String
-    @Environment(\.widgetFamily) private var family
-
-    var body: some View {
-        if items.isEmpty {
-            EmptyWidget(text: empty)
-        } else {
-            // 一行 3 个；放得下几行就放几行（各机型小组件宽高不同）：系统的 ViewThatFits 从多到少试，
-            // 中号最多 1 行、大号最多 3 行；从上往下排，不满时空在下面（和系统的小组件一样）
-            let most = min(family == .systemLarge ? 3 : 1, (items.count + 2) / 3)
-            VStack(alignment: .leading, spacing: 0) {
-                Header(title: title)
-                ViewThatFits(in: .vertical) {
-                    ForEach((1...most).reversed(), id: \.self) { n in grid(n) }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            }
-        }
-    }
-
-    private func grid(_ rows: Int) -> some View {
-        let cols = 3
-        return Grid(horizontalSpacing: 10, verticalSpacing: 12) {
-            ForEach(0..<rows, id: \.self) { r in
-                GridRow(alignment: .top) {
-                    ForEach(0..<cols, id: \.self) { c in
-                        let k = r * cols + c
-                        if k < items.count {
-                            Link(destination: WidgetLink.series(items[k].seriesId).url) { CoverTile(item: items[k]) }
-                        } else {
-                            Color.clear.gridCellUnsizedAxes([.vertical])
-                        }
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct CoverTile: View {
-    let item: WidgetItem
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Cover(item: item, radius: 6)
-            Text(item.seriesTitle).font(.caption.weight(.semibold)).lineLimit(2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .accessibilityElement(children: .combine)
     }
 }
 

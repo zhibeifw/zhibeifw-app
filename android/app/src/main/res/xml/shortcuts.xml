@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 长按 App 图标弹出的菜单（系统的静态 App 快捷方式）：最近播放、收藏、已下载（点了进资料库里对应的那一页，和 iOS 一样），
+     再加“分享”（iOS 上从 App Store 装的 App 系统自己会加“分享 App”，Android 不会）。
+     targetPackage 要写死（这里不能用变量）：开发版包名不同，用 src/debug/res/xml/shortcuts.xml 那一份 -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="recent"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_clock"
+        android:shortcutShortLabel="@string/shortcut_recent">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://recent"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="favorites"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_bookmark"
+        android:shortcutShortLabel="@string/shortcut_favorites">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://favorites"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="downloads"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_download"
+        android:shortcutShortLabel="@string/shortcut_downloads">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://downloads"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="share"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_share"
+        android:shortcutShortLabel="@string/shortcut_share">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://share"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app" />
+    </shortcut>
+</shortcuts>

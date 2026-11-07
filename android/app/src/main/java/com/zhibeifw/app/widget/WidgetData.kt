@@ -14,7 +14,7 @@ import java.io.File
 data class WidgetItem(
     val seriesId: String,
     val seriesTitle: String,
-    /** 最新课程、继续播放：要播的那一集；编辑精选、收藏：没有 */
+    /** 要播的那一集 */
     val episodeId: String? = null,
     val episodeTitle: String? = null,
     /** covers 目录里的文件名；还没有封面图时为空，显示占位色 */
@@ -37,8 +37,6 @@ data class WidgetSnapshot(
     val nowPlaying: WidgetNowPlaying? = null,
     /** 最新课程：主页“新课程”里每门课的最新一集 */
     val latest: List<WidgetItem> = emptyList(),
-    val featured: List<WidgetItem> = emptyList(),
-    val favorites: List<WidgetItem> = emptyList(),
 )
 
 object WidgetStore {
@@ -84,8 +82,6 @@ object WidgetStore {
             )
         },
         "latest" to s.latest.map(::encode),
-        "featured" to s.featured.map(::encode),
-        "favorites" to s.favorites.map(::encode),
     )
 
     private fun item(m: Map<*, *>) = WidgetItem(
@@ -107,8 +103,6 @@ object WidgetStore {
             )
         },
         latest = items(m["latest"]),
-        featured = items(m["featured"]),
-        favorites = items(m["favorites"]),
     )
 }
 
@@ -120,14 +114,33 @@ sealed class WidgetLink {
     /** 打开播放页；App 里已经没有在放的一集时进这门课 */
     data class Player(val seriesId: String) : WidgetLink()
 
+    /** 长按 App 图标菜单：资料库的最近播放、收藏、已下载（res/xml/shortcuts.xml） */
+    object Recent : WidgetLink()
+    object Favorites : WidgetLink()
+    object Downloads : WidgetLink()
+    /** 长按图标菜单“分享”：弹出系统分享面板，分享官网链接 */
+    object Share : WidgetLink()
+
     val uri: Uri
-        get() = Uri.Builder().scheme(SCHEME).authority(if (this is Player) "player" else "series")
-            .appendQueryParameter("id", if (this is Series) id else (this as Player).seriesId).build()
+        get() = when (this) {
+            Recent -> Uri.Builder().scheme(SCHEME).authority("recent").build()
+            Favorites -> Uri.Builder().scheme(SCHEME).authority("favorites").build()
+            Downloads -> Uri.Builder().scheme(SCHEME).authority("downloads").build()
+            Share -> Uri.Builder().scheme(SCHEME).authority("share").build()
+            is Series -> Uri.Builder().scheme(SCHEME).authority("series").appendQueryParameter("id", id).build()
+            is Player -> Uri.Builder().scheme(SCHEME).authority("player").appendQueryParameter("id", seriesId).build()
+        }
 
     companion object {
         const val SCHEME = "zhibeifw"
         fun parse(uri: Uri?): WidgetLink? {
             if (uri?.scheme != SCHEME) return null
+            when (uri.host) {
+                "recent" -> return Recent
+                "favorites" -> return Favorites
+                "downloads" -> return Downloads
+                "share" -> return Share
+            }
             val id = uri.getQueryParameter("id")?.takeIf { it.isNotEmpty() } ?: return null
             return when (uri.host) {
                 "series" -> Series(id)

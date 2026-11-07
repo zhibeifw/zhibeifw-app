@@ -1,6 +1,7 @@
 package com.zhibeifw.app
 
 import android.content.Context
+import android.content.Intent
 import android.database.sqlite.SQLiteDatabase
 import android.util.Log
 import androidx.compose.runtime.getValue
@@ -30,6 +31,7 @@ import com.zhibeifw.app.download.SystemDownloader
 import com.zhibeifw.app.images.CoverArchive
 import com.zhibeifw.app.images.ImageLoader
 import com.zhibeifw.app.net.Connectivity
+import com.zhibeifw.app.net.NetConfig
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
 import com.zhibeifw.app.net.editPrefs
@@ -356,14 +358,42 @@ class AppModel(private val ctx: Context) {
         val link = WidgetLink.parse(uri) ?: return
         if (phase != Phase.Ready) { pendingLink = uri; return }
         when (link) {
+            WidgetLink.Share -> {
+                // 系统分享面板：分享官网链接（官网上两端都能下载）
+                val send = Intent(Intent.ACTION_SEND).setType("text/plain")
+                    .putExtra(Intent.EXTRA_TEXT, "智悲佛网 ${NetConfig.SITE_URL}")
+                ctx.startActivity(Intent.createChooser(send, "分享智悲佛网").addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+            }
+            WidgetLink.Recent, WidgetLink.Favorites, WidgetLink.Downloads -> {
+                // 长按 App 图标菜单：切到资料库标签，只留对应的那一页（之前停在哪都一样）
+                closePlayer()
+                nav.tab = Tab.LIBRARY
+                val route = when (link) { WidgetLink.Recent -> Routes.RECENT; WidgetLink.Favorites -> Routes.FAVORITES; else -> Routes.LIBRARY }
+                // 刚启动时资料库的页面栈还没建好：等一下再进
+                scope.launch {
+                    repeat(30) {
+                        val lib = nav.libraryNav
+                        if (lib != null) {
+                            lib.popBackStack(lib.graph.startDestinationId, false)
+                            lib.navigate(route)
+                            return@launch
+                        }
+                        delay(100)
+                    }
+                }
+            }
             is WidgetLink.Player -> if (player?.current != null) openPlayer() else openWidgetLink(WidgetLink.Series(link.seriesId).uri)
             is WidgetLink.Series -> {
                 closePlayer()
                 // 刚启动时各标签的页面栈还没建好：等一下再进
                 scope.launch {
                     repeat(30) {
-                        if (nav.navController != null) {
-                            if (!nav.isShowingSeries(link.id)) nav.push(Routes.series(link.id))
+                        // 一律切到主页标签、只留这门课一页：App 之前停在别的标签、别的页面上时，推进那一栏会看不到
+                        val home = nav.homeNav
+                        if (home != null) {
+                            nav.tab = Tab.HOME
+                            home.popBackStack(home.graph.startDestinationId, false)
+                            home.navigate(Routes.series(link.id))
                             return@launch
                         }
                         delay(100)

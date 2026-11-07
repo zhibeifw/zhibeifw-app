@@ -8,6 +8,16 @@ enum WidgetLog {
     static func note(_ s: String) {
         log.notice("\(s, privacy: .public)")
         print("[Widget] \(s)")  // 用 devicectl --console 启动 App 时能直接看到
+        // 也追加到本进程的文件里（App：Documents/widget-debug.log），App 被关掉后也能用 devicectl 拷出来看
+        let line = "\(Date().formatted(.iso8601)) \(s)\n"
+        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+            let f = dir.appendingPathComponent("widget-debug.log")
+            if let h = try? FileHandle(forWritingTo: f) {
+                h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+            } else {
+                try? Data(line.utf8).write(to: f)
+            }
+        }
     }
     #else
     static func note(_ s: String) {}
@@ -21,7 +31,7 @@ enum WidgetLog {
 struct WidgetItem: Codable, Hashable {
     var seriesId: String
     var seriesTitle: String
-    /// 最新课程、继续播放：要播的那一集；编辑精选、收藏：没有
+    /// 要播的那一集
     var episodeId: String?
     var episodeTitle: String?
     /// 共享目录 covers 里的文件名；还没有封面图时为空，显示占位色
@@ -44,16 +54,12 @@ struct WidgetSnapshot: Codable, Hashable {
     var nowPlaying: WidgetNowPlaying?
     /// 最新课程：主页“新课程”里每门课的最新一集
     var latest: [WidgetItem] = []
-    var featured: [WidgetItem] = []
-    var favorites: [WidgetItem] = []
 }
 
 /// 小组件的种类（kind），App 刷新时用
 enum WidgetKinds {
     static let nowPlaying = "NowPlaying"
     static let latest = "Latest"
-    static let featured = "Featured"
-    static let favorites = "Favorites"
 }
 
 /// 共享目录里的文件。App Group 写在 Info.plist 的 ZBFWAppGroup（开发版、正式版各一个，互不串数据）。

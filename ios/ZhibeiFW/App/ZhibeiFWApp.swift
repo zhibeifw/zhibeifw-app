@@ -13,6 +13,7 @@ struct ZhibeiFWApp: App {
                 .environment(model)
                 .task { await model.boot() }
                 .onOpenURL { model.openWidgetLink($0) }
+                .task { WidgetLog.note("App 界面起来了 phase=\(model.phase)") }
                 .onChange(of: scenePhase) { _, p in
                     if p == .active { model.onForeground() }
                     if p == .background { model.onBackground() }
@@ -31,6 +32,16 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         _ = BackgroundDownloader.shared  // 尽早接上后台下载会话，系统交回的结果不丢
         _ = Connectivity.shared  // 尽早开始看网络：启动时判断有没有网，读到的才是真实状态，不是初始值
         return true
+    }
+
+    /// 场景用自己的代理，才能收到长按 App 图标菜单的点击（QuickActionSceneDelegate）
+    func application(
+        _ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession,
+        options: UIScene.ConnectionOptions
+    ) -> UISceneConfiguration {
+        let c = UISceneConfiguration(name: nil, sessionRole: connectingSceneSession.role)
+        c.delegateClass = QuickActionSceneDelegate.self
+        return c
     }
 
     func application(

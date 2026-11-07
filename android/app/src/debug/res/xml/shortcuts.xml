@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 开发版（包名 com.zhibeifw.app.dev）用的长按图标菜单：内容和 src/main/res/xml/shortcuts.xml 一样，只有 targetPackage 不同 -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="recent"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_clock"
+        android:shortcutShortLabel="@string/shortcut_recent">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://recent"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app.dev" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="favorites"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_bookmark"
+        android:shortcutShortLabel="@string/shortcut_favorites">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://favorites"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app.dev" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="downloads"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_download"
+        android:shortcutShortLabel="@string/shortcut_downloads">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://downloads"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app.dev" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="share"
+        android:enabled="true"
+        android:icon="@drawable/ic_shortcut_share"
+        android:shortcutShortLabel="@string/shortcut_share">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="zhibeifw://share"
+            android:targetClass="com.zhibeifw.app.MainActivity"
+            android:targetPackage="com.zhibeifw.app.dev" />
+    </shortcut>
+</shortcuts>

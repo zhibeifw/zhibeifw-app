@@ -22,6 +22,34 @@
 			</array>
 		</dict>
 	</array>
+	<!-- 长按 App 图标弹出的菜单：最近播放、收藏、已下载（和资料库里的名字、图标一样） -->
+	<key>UIApplicationShortcutItems</key>
+	<array>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.zhibeifw.app.recent</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>最近播放</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>clock</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.zhibeifw.app.favorites</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>收藏</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>bookmark</string>
+		</dict>
+		<dict>
+			<key>UIApplicationShortcutItemType</key>
+			<string>com.zhibeifw.app.downloads</string>
+			<key>UIApplicationShortcutItemTitle</key>
+			<string>已下载</string>
+			<key>UIApplicationShortcutItemIconSymbolName</key>
+			<string>arrow.down.circle</string>
+		</dict>
+	</array>
 	<key>ZBFWCloudContainer</key>
 	<string>iCloud.com.zhibeifw.app</string>
 	<key>UILaunchScreen</key>

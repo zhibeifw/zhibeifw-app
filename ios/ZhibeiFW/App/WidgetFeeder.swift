@@ -2,8 +2,8 @@ import SwiftUI
 import UIKit
 import WidgetKit
 
-/// 给小组件备数据：把继续播放、最新课程、编辑精选、收藏写进共享目录，再让系统刷新小组件。
-/// 什么时候写：主页目录、收藏变了，换了一集、播放 / 暂停变了、读到这一集的时长（等 1 秒合并成一次），退到后台时，小组件的按钮执行完时。
+/// 给小组件备数据：把继续播放、最新课程写进共享目录，再让系统刷新小组件。
+/// 什么时候写：主页目录变了，换了一集、播放 / 暂停变了、读到这一集的时长（等 1 秒合并成一次），退到后台时，小组件的按钮执行完时。
 /// 播放进度不跟着每 5 秒的保存写（在后台时系统限制刷新次数），退到后台、暂停时会带上最新进度。
 @MainActor
 final class WidgetFeeder {
@@ -13,7 +13,6 @@ final class WidgetFeeder {
 
     /// 每种列表最多几条：大号小组件放得下的数量
     private static let latestLimit = 7
-    private static let gridLimit = 9
     /// 写给小组件的封面宽度（像素）：大号小组件里最宽的封面约 160pt × 3 倍
     private static let coverPx = 480
 
@@ -33,7 +32,6 @@ final class WidgetFeeder {
     private func track() {
         withObservationTracking {
             _ = core.catalogVersion
-            _ = core.favoritesVersion
             _ = core.player?.current?.episodeId
             _ = core.player?.looksPlaying
             // 刚开始播时还不知道时长，读到后再写一次（“剩余几分钟”）
@@ -96,10 +94,6 @@ final class WidgetFeeder {
             guard let e = store.lastEpisode(c.id) else { return nil }
             return item(c.id, c.title, c.coverPath, episodeId: e.id, episodeTitle: e.title)
         }
-        snap.featured = core.home.featured.prefix(Self.gridLimit).map { item($0.id, $0.featureTitle ?? $0.title, $0.coverPath) }
-        snap.favorites = ((try? store.loadFavorites()) ?? []).filter { !$0.gone }.prefix(Self.gridLimit).map {
-            item($0.id, $0.title, $0.coverPath)
-        }
         await prepareCovers(&snap)
         let changed = WidgetStore.write(snap)
         WidgetLog.note("App 写：在播 \(snap.nowPlaying?.item.seriesId ?? "无") / \(snap.nowPlaying?.item.episodeId ?? "无") playing=\(snap.nowPlaying?.playing ?? false) 变了=\(changed)")
@@ -135,7 +129,7 @@ final class WidgetFeeder {
         let fm = FileManager.default
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         var names: [String: String?] = [:]
-        let paths = Set(([snap.nowPlaying?.item].compactMap { $0 } + snap.latest + snap.featured + snap.favorites).compactMap(\.cover))
+        let paths = Set(([snap.nowPlaying?.item].compactMap { $0 } + snap.latest).compactMap(\.cover))
         for path in paths {
             let name = ImageLoader.diskName(path) + ".jpg"
             let f = dir.appendingPathComponent(name)
@@ -155,8 +149,6 @@ final class WidgetFeeder {
         }
         if let np = snap.nowPlaying { snap.nowPlaying?.item = fix(np.item) }
         snap.latest = snap.latest.map(fix)
-        snap.featured = snap.featured.map(fix)
-        snap.favorites = snap.favorites.map(fix)
         let keep = Set(names.values.compactMap { $0 })
         for f in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where !keep.contains(f) {
             try? fm.removeItem(at: dir.appendingPathComponent(f))

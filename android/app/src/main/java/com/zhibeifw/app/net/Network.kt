@@ -58,6 +58,8 @@ object NetConfig {
     const val IDLE_TIMEOUT_MS = 15000
     const val HEAD_TIMEOUT_MS = 5000
     const val PRIVACY_URL = "https://zhibeifw.com/privacy"
+    /** 官网（两端都能下载）：长按图标菜单“分享”分享的链接 */
+    const val SITE_URL = "https://zhibeifw.com"
     const val SOURCE_URL = "https://github.com/zhibeifw/zhibeifw-app"
 }
 
