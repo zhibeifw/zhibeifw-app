@@ -104,6 +104,8 @@ dependencies {
     implementation(libs.media3.session)
     implementation(libs.datastore.preferences)
     implementation(libs.browser)
+    // 桌面小组件（谷歌官方 Jetpack Glance）
+    implementation(libs.glance.appwidget)
     implementation(libs.splashscreen)
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)

@@ -54,5 +54,51 @@
                 <action android:name="androidx.media3.session.MediaSessionService" />
             </intent-filter>
         </service>
+
+        <!-- 桌面小组件：继续播放、最新课程、编辑精选、收藏的课程（不对外，只有系统桌面能连） -->
+        <receiver
+            android:name=".widget.NowPlayingReceiver"
+            android:exported="false"
+            android:label="继续播放">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_now_playing" />
+        </receiver>
+        <receiver
+            android:name=".widget.LatestReceiver"
+            android:exported="false"
+            android:label="最新课程">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_latest" />
+        </receiver>
+        <receiver
+            android:name=".widget.FeaturedReceiver"
+            android:exported="false"
+            android:label="编辑精选">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_featured" />
+        </receiver>
+        <receiver
+            android:name=".widget.FavoritesReceiver"
+            android:exported="false"
+            android:label="收藏的课程">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/widget_favorites" />
+        </receiver>
     </application>
 </manifest>

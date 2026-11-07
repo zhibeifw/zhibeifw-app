@@ -12,6 +12,7 @@ struct ZhibeiFWApp: App {
             RootView()
                 .environment(model)
                 .task { await model.boot() }
+                .onOpenURL { model.openWidgetLink($0) }
                 .onChange(of: scenePhase) { _, p in
                     if p == .active { model.onForeground() }
                     if p == .background { model.onBackground() }

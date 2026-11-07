@@ -14,6 +14,9 @@ final class AppModel {
 
     @ObservationIgnored let nav = Navigator()
     @ObservationIgnored let upgrade = UpgradeChecker()
+    @ObservationIgnored private(set) var widgets: WidgetFeeder!
+    /// 冷启动时点小组件带来的链接：等进了主页再打开
+    @ObservationIgnored private var pendingLink: URL?
     private var covers: CoverArchive { CoverArchive(files: files) }
     var playerOpen = false
     var sheet: SheetSpec?
@@ -26,10 +29,65 @@ final class AppModel {
         core.onStoreReady = { [weak self] in await self?.setUpDownloads() }
         core.onReady = { [weak self] in
             guard let self else { return }
+            self.widgets.start()
+            if let u = self.pendingLink { self.pendingLink = nil; self.openWidgetLink(u) }
             Task { await self.upgrade.check(manual: false) }
         }
         core.prefetchHomeCovers = { home in Self.prefetchHomeCovers(home) }
         core.presentPlayer = { [weak self] in self?.openPlayer() }
+        widgets = WidgetFeeder(core: core)
+        connectWidgetButtons()
+    }
+
+    // MARK: 小组件
+
+    /// 小组件上的播放按钮（系统在 App 的进程里执行；App 没开着时在后台启动，这时界面还没起来，要自己先启动）
+    private func connectWidgetButtons() {
+        // 打开：播这一集（不是当前这一集就换成它）；关上：暂停当前这一集
+        WidgetBridge.setPlaying = { [weak self] id, on in
+            WidgetLog.note("按钮：\(id) play=\(on)")
+            guard let self, await self.readyForWidget() else { WidgetLog.note("按钮：App 没准备好"); return }
+            if self.player.current?.episodeId == id {
+                if on && !self.player.looksPlaying { self.player.resume() }
+                if !on && self.player.looksPlaying { self.player.pause() }
+            } else if on {
+                self.player.start(id, ctx: .single)
+            }
+            // 先按要切到的状态写，按钮马上变
+            self.widgets.quickUpdateNowPlaying(playing: on)
+            // 播放：等声音真的出来（或出错、最多 10 秒）再结束这个动作。苹果对音频动作的要求：动作结束前要开始出声，
+            // 否则 App 在后台被叫起来时，动作一结束就被挂起，播放起不来（小组件上又变回播放键）
+            guard on else { return }
+            for _ in 0..<100 where !self.player.isPlaying && self.player.error == nil {
+                try? await Task.sleep(nanoseconds: 100_000_000)
+            }
+            WidgetLog.note("按钮：出声=\(self.player.isPlaying) 出错=\(self.player.error != nil)")
+            if !self.player.isPlaying { self.widgets.quickUpdateNowPlaying(playing: false) }
+        }
+    }
+
+    /// 启动只做一次：界面那边已经在启动时，这里的 boot() 直接返回，要等它做完（最多约 10 秒）
+    private func readyForWidget() async -> Bool {
+        await boot()
+        for _ in 0..<100 where phase == .launching {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        return phase == .ready
+    }
+
+    /// 点小组件打开 App：进课程页，或打开播放页（App 里已经不是这一集了就进课程页）
+    func openWidgetLink(_ url: URL) {
+        WidgetLog.note("打开链接：\(url.absoluteString) phase=\(phase)")
+        guard let link = WidgetLink(url) else { WidgetLog.note("链接解析失败"); return }
+        guard phase == .ready else { pendingLink = url; return }
+        switch link {
+        case .player(let seriesId):
+            // App 被系统关过、已经不是这一集了：进这门课
+            if player.current != nil { openPlayer() } else { openWidgetLink(WidgetLink.series(seriesId).url) }
+        case .series(let id):
+            closePlayer()
+            if !nav.isShowingSeries(id) { nav.push(.series(id)) }
+        }
     }
 
     // MARK: 共用部分（AppCore）
@@ -100,7 +158,10 @@ final class AppModel {
         downloadsVersion += 1
     }
 
-    func onBackground() { core.onBackground() }
+    func onBackground() {
+        core.onBackground()
+        Task { await widgets.writeNow() }
+    }
 
     /// 对账（启动、回到前台）：系统后台会话里还在跑的任务不算中断。
     func reconcileDownloads() async {

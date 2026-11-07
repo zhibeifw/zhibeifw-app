@@ -476,6 +476,11 @@ class Store(val db: Db) {
     fun seriesExists(id: String) =
         db.first("SELECT 1 AS x FROM catalog_series WHERE id = ?", id) != null
 
+    /** 一门课的最后一集（新课程“更新至”的那一集）：集 ID 和集名 */
+    fun lastEpisode(seriesId: String): Pair<String, String>? =
+        db.first("SELECT id, title FROM catalog_episode WHERE series_id = ? ORDER BY pos DESC LIMIT 1", seriesId)
+            ?.let { it.str("id") to it.str("title") }
+
     fun seriesEpisodeIds(seriesId: String) =
         db.all("SELECT id FROM catalog_episode WHERE series_id = ? ORDER BY pos", seriesId)
             .map { it.str("id") }

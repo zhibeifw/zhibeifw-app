@@ -352,6 +352,12 @@ final class Store: @unchecked Sendable {
         ).map(info)
     }
 
+    /// 一门课的最后一集（新课程“更新至”的那一集）
+    func lastEpisode(_ seriesId: String) -> (id: String, title: String)? {
+        guard let r = (try? db.first("SELECT id, title FROM catalog_episode WHERE series_id = ? ORDER BY pos DESC LIMIT 1", [seriesId])) ?? nil
+        else { return nil }
+        return (r.str("id"), r.str("title"))
+    }
     func seriesExists(_ id: String) -> Bool { ((try? db.first("SELECT 1 AS x FROM catalog_series WHERE id = ?", [id])) ?? nil) != nil }
     func seriesEpisodeIds(_ seriesId: String) throws -> [String] {
         try db.all("SELECT id FROM catalog_episode WHERE series_id = ? ORDER BY pos", [seriesId]).map { $0.str("id") }

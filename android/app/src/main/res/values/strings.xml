@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 桌面小组件：添加小组件时列表里的说明 -->
+    <string name="widget_now_playing_desc">继续播放：接着听正在播放的一集</string>
+    <string name="widget_latest_desc">最新课程：新课程里每门课的最新一集，点一下就播放</string>
+    <string name="widget_featured_desc">编辑精选：点封面进入课程</string>
+    <string name="widget_favorites_desc">收藏的课程：点封面进入课程</string>
+</resources>

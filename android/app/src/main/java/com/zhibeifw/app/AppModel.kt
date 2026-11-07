@@ -36,6 +36,10 @@ import com.zhibeifw.app.net.editPrefs
 import com.zhibeifw.app.net.readPrefs
 import com.zhibeifw.app.player.PlayerController
 import com.zhibeifw.app.ui.SheetSpec
+import com.zhibeifw.app.widget.WidgetFeeder
+import com.zhibeifw.app.widget.WidgetLink
+import android.net.Uri
+import kotlinx.coroutines.delay
 import java.io.File
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -112,6 +116,8 @@ class AppModel(private val ctx: Context) {
     val channel = if (BuildConfig.CHANNEL == "store") UpdateChannel.STORE else UpdateChannel.SITE
     val upgrade = UpgradeChecker(ctx, net, scope, versionName, channel) { openExternal(it) }
     private val covers = CoverArchive(files, images, scope)
+    /** 桌面小组件的数据 */
+    val widgets = WidgetFeeder(ctx, this, scope)
 
     // ---------- 启动 ----------
 
@@ -178,11 +184,18 @@ class AppModel(private val ctx: Context) {
                 withTimeoutOrNull(wait) { job.await() }
             } else scope.launch { syncCatalog(false) }
             phase = Phase.Ready
-            scope.launch { upgrade.check(manual = false) }
+            onReady()
         } else {
             phase = Phase.Initializing(1, false)
             scope.launch { runInitialization() }
         }
+    }
+
+    /** 进入主页之后：检查更新、开始给小组件备数据、打开冷启动时点小组件带来的链接 */
+    private fun onReady() {
+        scope.launch { upgrade.check(manual = false) }
+        widgets.start()
+        pendingLink?.let { pendingLink = null; openWidgetLink(it) }
     }
 
     /** 正在首次初始化：网络恢复和“重试”同时来时只跑一轮 */
@@ -208,7 +221,7 @@ class AppModel(private val ctx: Context) {
             loadHome()
             phase = Phase.Ready
             lastSyncAt = System.currentTimeMillis()
-            scope.launch { upgrade.check(manual = false) }
+            onReady()
         } else phase = Phase.Initializing(CatalogSync.INIT_ATTEMPTS, true)
     }
 
@@ -311,6 +324,53 @@ class AppModel(private val ctx: Context) {
 
     fun onBackground() {
         player?.saveNow()
+        scope.launch { widgets.writeNow() }
+    }
+
+    // ---------- 桌面小组件 ----------
+
+    /** 小组件上的播放按钮（App 没开着时进程是被小组件叫起来的，界面没起来，要自己先启动） */
+    suspend fun playFromWidget(episodeId: String, toggle: Boolean) {
+        withContext(Dispatchers.Main) {
+            bootOnce()
+            bootJob?.join()
+            if (phase != Phase.Ready) return@withContext
+            val p = player ?: return@withContext
+            // 点了以后要切到的状态：toggle（继续播放的按钮、最新课程里正在播的那一行）切换，否则就是播
+            val play = if (p.current?.episodeId == episodeId && toggle) !p.looksPlaying else true
+            if (p.current?.episodeId == episodeId) {
+                if (play && !p.looksPlaying) p.resume()
+                if (!play && p.looksPlaying) p.pause()
+            } else {
+                p.start(episodeId, PlayContext.Single)
+            }
+            widgets.quickUpdateNowPlaying(play)
+        }
+    }
+
+    /** 冷启动时点小组件带来的链接：等进了主页再打开 */
+    private var pendingLink: Uri? = null
+
+    /** 点小组件打开 App：进课程页，或打开播放页（App 里已经不是这一集了就进课程页） */
+    fun openWidgetLink(uri: Uri?) {
+        val link = WidgetLink.parse(uri) ?: return
+        if (phase != Phase.Ready) { pendingLink = uri; return }
+        when (link) {
+            is WidgetLink.Player -> if (player?.current != null) openPlayer() else openWidgetLink(WidgetLink.Series(link.seriesId).uri)
+            is WidgetLink.Series -> {
+                closePlayer()
+                // 刚启动时各标签的页面栈还没建好：等一下再进
+                scope.launch {
+                    repeat(30) {
+                        if (nav.navController != null) {
+                            if (!nav.isShowingSeries(link.id)) nav.push(Routes.series(link.id))
+                            return@launch
+                        }
+                        delay(100)
+                    }
+                }
+            }
+        }
     }
 
     // ---------- 播放页 ----------

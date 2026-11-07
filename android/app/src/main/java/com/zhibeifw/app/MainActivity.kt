@@ -54,6 +54,8 @@ class MainActivity : ComponentActivity() {
         lockOrientation(false)
         model.openUrl = openUrlRef
         model.bootOnce()
+        // 点桌面小组件打开的（页面重建时不再处理一次）
+        if (savedInstanceState == null) model.openWidgetLink(intent?.data)
         setContent {
             val dark = isSystemInDarkTheme()
             ZTheme(dark) {
@@ -61,6 +63,12 @@ class MainActivity : ComponentActivity() {
                 RootView(model)
             }
         }
+    }
+
+    /** App 已经开着时点桌面小组件（singleTask：不新建页面，交到这里） */
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        model.openWidgetLink(intent.data)
     }
 
     /** 屏幕方向：手机只有全屏播放页能横屏；平板（最短边 ≥ 600dp）全部方向。 */

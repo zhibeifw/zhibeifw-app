@@ -14,7 +14,32 @@
 			remoteGlobalIDString = A1000000000000000000T001;
 			remoteInfo = ZhibeiFW;
 		};
+		A1000000000000000000C002 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A1000000000000000000P001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A1000000000000000000T005;
+			remoteInfo = ZhibeiFWWidgets;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXBuildFile section */
+		A1000000000000000000E001 /* ZhibeiFWWidgets.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = A1000000000000000000F012 /* ZhibeiFWWidgets.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A1000000000000000000B004 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				A1000000000000000000E001 /* ZhibeiFWWidgets.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		A1000000000000000000F001 /* ZhibeiFW.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ZhibeiFW.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -28,6 +53,9 @@
 		A1000000000000000000F009 /* zhibeifw.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = zhibeifw.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A1000000000000000000F010 /* MacInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = MacInfo.plist; sourceTree = "<group>"; };
 		A1000000000000000000F011 /* ZhibeiFWMac.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZhibeiFWMac.entitlements; sourceTree = "<group>"; };
+		A1000000000000000000F012 /* ZhibeiFWWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = ZhibeiFWWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		A1000000000000000000F013 /* WidgetsInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = WidgetsInfo.plist; sourceTree = "<group>"; };
+		A1000000000000000000F014 /* ZhibeiFWWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ZhibeiFWWidgets.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -54,6 +82,16 @@
 		A1000000000000000000S005 /* ZhibeiFWMac */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = ZhibeiFWMac;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000S006 /* ZhibeiFWWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = ZhibeiFWWidgets;
+			sourceTree = "<group>";
+		};
+		A1000000000000000000S007 /* WidgetShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WidgetShared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -87,6 +125,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1000000000000000000B041 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -98,6 +143,8 @@
 				A1000000000000000000S001 /* ZhibeiFW */,
 				A1000000000000000000S004 /* ZhibeiFWTV */,
 				A1000000000000000000S005 /* ZhibeiFWMac */,
+				A1000000000000000000S006 /* ZhibeiFWWidgets */,
+				A1000000000000000000S007 /* WidgetShared */,
 				A1000000000000000000S002 /* ZhibeiFWTests */,
 				A1000000000000000000G002 /* Products */,
 			);
@@ -110,6 +157,7 @@
 				A1000000000000000000F002 /* ZhibeiFWTests.xctest */,
 				A1000000000000000000F005 /* ZhibeiFWTV.app */,
 				A1000000000000000000F009 /* zhibeifw.app */,
+				A1000000000000000000F012 /* ZhibeiFWWidgets.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -123,6 +171,8 @@
 				A1000000000000000000F008 /* ZhibeiFWTV.entitlements */,
 				A1000000000000000000F010 /* MacInfo.plist */,
 				A1000000000000000000F011 /* ZhibeiFWMac.entitlements */,
+				A1000000000000000000F013 /* WidgetsInfo.plist */,
+				A1000000000000000000F014 /* ZhibeiFWWidgets.entitlements */,
 				A1000000000000000000F004 /* Version.xcconfig */,
 			);
 			path = Config;
@@ -138,14 +188,17 @@
 				A1000000000000000000B002 /* Sources */,
 				A1000000000000000000B001 /* Frameworks */,
 				A1000000000000000000B003 /* Resources */,
+				A1000000000000000000B004 /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				A1000000000000000000D002 /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				A1000000000000000000S001 /* ZhibeiFW */,
 				A1000000000000000000S003 /* Shared */,
+				A1000000000000000000S007 /* WidgetShared */,
 			);
 			name = ZhibeiFW;
 			productName = ZhibeiFW;
@@ -215,6 +268,27 @@
 			productReference = A1000000000000000000F009 /* zhibeifw.app */;
 			productType = "com.apple.product-type.application";
 		};
+		A1000000000000000000T005 /* ZhibeiFWWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A1000000000000000000L006 /* Build configuration list for PBXNativeTarget "ZhibeiFWWidgets" */;
+			buildPhases = (
+				A1000000000000000000B042 /* Sources */,
+				A1000000000000000000B041 /* Frameworks */,
+				A1000000000000000000B043 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				A1000000000000000000S006 /* ZhibeiFWWidgets */,
+				A1000000000000000000S007 /* WidgetShared */,
+			);
+			name = ZhibeiFWWidgets;
+			productName = ZhibeiFWWidgets;
+			productReference = A1000000000000000000F012 /* ZhibeiFWWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -238,6 +312,9 @@
 					A1000000000000000000T004 = {
 						CreatedOnToolsVersion = 27.0;
 					};
+					A1000000000000000000T005 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 				};
 			};
 			buildConfigurationList = A1000000000000000000L001 /* Build configuration list for PBXProject "ZhibeiFW" */;
@@ -258,6 +335,7 @@
 				A1000000000000000000T002 /* ZhibeiFWTests */,
 				A1000000000000000000T003 /* ZhibeiFWTV */,
 				A1000000000000000000T004 /* ZhibeiFWMac */,
+				A1000000000000000000T005 /* ZhibeiFWWidgets */,
 			);
 		};
 /* End PBXProject section */
@@ -285,6 +363,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		A1000000000000000000B033 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A1000000000000000000B043 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -322,6 +407,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		A1000000000000000000B042 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -329,6 +421,11 @@
 			isa = PBXTargetDependency;
 			target = A1000000000000000000T001 /* ZhibeiFW */;
 			targetProxy = A1000000000000000000C001 /* PBXContainerItemProxy */;
+		};
+		A1000000000000000000D002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A1000000000000000000T005 /* ZhibeiFWWidgets */;
+			targetProxy = A1000000000000000000C002 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -403,6 +500,7 @@
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				ZBFW_APP_GROUP = group.com.zhibeifw.app.dev;
 			};
 			name = Debug;
 		};
@@ -432,6 +530,7 @@
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
+				ZBFW_APP_GROUP = group.com.zhibeifw.app;
 			};
 			name = Release;
 		};
@@ -536,6 +635,7 @@
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
 				ENABLE_PREVIEWS = YES;
+				EXECUTABLE_NAME = zhibeifw;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
@@ -549,13 +649,12 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app.dev;
 				PRODUCT_MODULE_NAME = ZhibeiFWMac;
 				PRODUCT_NAME = "智悲佛网";
-				WRAPPER_NAME = zhibeifw.app;
-				EXECUTABLE_NAME = zhibeifw;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
+				WRAPPER_NAME = zhibeifw.app;
 			};
 			name = Debug;
 		};
@@ -570,6 +669,7 @@
 				DEVELOPMENT_TEAM = W8EHGAVKHV;
 				ENABLE_APP_SANDBOX = YES;
 				ENABLE_HARDENED_RUNTIME = YES;
+				EXECUTABLE_NAME = zhibeifw;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Config/MacInfo.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
@@ -583,13 +683,68 @@
 				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app;
 				PRODUCT_MODULE_NAME = ZhibeiFWMac;
 				PRODUCT_NAME = "智悲佛网";
-				WRAPPER_NAME = zhibeifw.app;
-				EXECUTABLE_NAME = zhibeifw;
 				SDKROOT = macosx;
 				SUPPORTED_PLATFORMS = macosx;
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_STRICT_CONCURRENCY = minimal;
 				SWIFT_VERSION = 5.0;
+				WRAPPER_NAME = zhibeifw.app;
+			};
+			name = Release;
+		};
+		A1000000000000000000X011 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000F004 /* Version.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ZhibeiFWWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = W8EHGAVKHV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/WidgetsInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app.dev.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				ZBFW_APP_GROUP = group.com.zhibeifw.app.dev;
+			};
+			name = Debug;
+		};
+		A1000000000000000000X012 /* Release */ = {
+			isa = XCBuildConfiguration;
+			baseConfigurationReference = A1000000000000000000F004 /* Version.xcconfig */;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = Config/ZhibeiFWWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				DEVELOPMENT_TEAM = W8EHGAVKHV;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Config/WidgetsInfo.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = "智悲佛网";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.zhibeifw.app.widgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_STRICT_CONCURRENCY = minimal;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				ZBFW_APP_GROUP = group.com.zhibeifw.app;
 			};
 			name = Release;
 		};
@@ -637,6 +792,15 @@
 			buildConfigurations = (
 				A1000000000000000000X009 /* Debug */,
 				A1000000000000000000X010 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A1000000000000000000L006 /* Build configuration list for PBXNativeTarget "ZhibeiFWWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A1000000000000000000X011 /* Debug */,
+				A1000000000000000000X012 /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
