@@ -25,8 +25,19 @@ struct TVSeriesView: View {
                     CoverImage(path: h.coverPath, colorId: h.id, radius: TVLayout.coverRadius)
                         .frame(width: 560, height: TVLayout.coverHeight(560))
                     Text(h.title).font(.title2).fontWeight(.semibold).lineLimit(3)
-                    Text(seriesInfoText(category: false, count: episodes.count, status: h.status))
-                        .font(.callout).foregroundStyle(.secondary)
+                    HStack {
+                        if let category = h.categoryName {
+                            NavigationLink(value: TVRoute.category(h.categoryId)) {
+                                Text(category).lineLimit(1)
+                            }
+                            .buttonStyle(.bordered)
+                            .buttonBorderShape(.capsule)
+                            .accessibilityLabel("分类：\(category)，查看全部课程")
+                        }
+                        Text(seriesInfoText(category: false, count: episodes.count, status: h.status))
+                            .foregroundStyle(.secondary)
+                    }
+                    .font(.callout)
                     // 收藏、排序并排一行。和播放页的“课程名 ›”一样：系统灰底按钮、胶囊形；书签图标和 iPhone 一样（收藏后是实心）。
                     // 两个按钮一个逻辑：按一下就切换，按钮上显示现在的状态，不弹选项单
                     HStack(spacing: 24) {
@@ -35,7 +46,9 @@ struct TVSeriesView: View {
                         } label: {
                             Label(h.favorited ? "已收藏" : "收藏", systemImage: h.favorited ? "bookmark.fill" : "bookmark")
                         }
-                        Button { oldestFirst.toggle() } label: {
+                        Button {
+                            oldestFirst.toggle()
+                        } label: {
                             Label(oldestFirst ? "从旧到新" : "从新到旧", systemImage: oldestFirst ? "arrow.down" : "arrow.up")
                         }
                         .accessibilityLabel(oldestFirst ? "排序：从旧到新" : "排序：从新到旧")
