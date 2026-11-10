@@ -48,10 +48,12 @@ struct PlayerCapsule: View {
             Button {
                 p?.toggle()
             } label: {
-                ZIcon(
+                PlaybackLoadingView(loading: p?.loadingPlayback ?? false) {
+                    ZIcon(
                     name: (p?.looksPlaying ?? false) ? "pause" : "play", size: CP.Capsule.playIcon,
                     color: cur == nil ? C.iconDisabled : C.labelPrimary
                 )
+                }
                 .frame(width: CP.Capsule.iconTouch, height: CP.Capsule.iconTouch).contentShape(Rectangle())
             }
             .buttonStyle(PressableStyle())

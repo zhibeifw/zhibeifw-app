@@ -597,6 +597,7 @@ fun PlayPill(
     state: PillState,
     ratio: Double,
     playing: Boolean,
+    loading: Boolean = false,
     onIcon: () -> Unit,
     onBody: () -> Unit
 ) {
@@ -613,6 +614,7 @@ fun PlayPill(
             contentAlignment = Alignment.Center,
         ) {
             when {
+                loading -> CircularProgressIndicator(Modifier.size(CP.EpisodeRow.playIcon.d), color = C.labelPrimary(), strokeWidth = CP.EpisodeRow.ringLine.d)
                 playing -> ZIcon("pause", CP.EpisodeRow.playIcon.d, C.labelPrimary())
                 state.kind == PillKind.DONE -> ZIcon(
                     "refresh",
@@ -770,3 +772,13 @@ fun widthOf(maxW: Float, content: @Composable () -> Unit) =
 /** 简介右下角“更多”左边的一小段渐隐。 */
 @Composable
 fun fadeBrush(bg: Color) = Brush.horizontalGradient(listOf(bg.copy(alpha = 0f), bg))
+
+/** 使用系统加载指示器，按钮点击仍交给调用处控制。 */
+@Composable
+fun PlaybackIcon(name: String, size: Dp, color: Color, loading: Boolean) {
+    if (loading) {
+        CircularProgressIndicator(Modifier.size(size), color = color, strokeWidth = CP.EpisodeRow.ringLine.d)
+    } else {
+        ZIcon(name, size, color)
+    }
+}

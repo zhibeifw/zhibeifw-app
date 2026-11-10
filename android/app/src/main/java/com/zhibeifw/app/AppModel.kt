@@ -350,6 +350,20 @@ class AppModel(private val ctx: Context) {
         }
     }
 
+    /**
+     * 后台取目录（CatalogRefreshWorker）：App 没开着时进程是被系统叫起来的，要自己先启动；
+     * 和切回前台一样按 2 小时一次判断，到时间才联网（没变服务器回 304）；有新课就更新小组件
+     */
+    suspend fun refreshInBackground() {
+        withContext(Dispatchers.Main) {
+            bootOnce()
+            bootJob?.join()
+            if (phase != Phase.Ready) return@withContext
+            if (shouldSyncOnForeground(System.currentTimeMillis(), lastSyncAt, syncing)) syncCatalog(false)
+            widgets.writeNow()
+        }
+    }
+
     /** 冷启动时点小组件带来的链接：等进了主页再打开 */
     private var pendingLink: Uri? = null
 

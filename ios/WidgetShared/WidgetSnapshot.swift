@@ -4,23 +4,23 @@ import os
 /// 开发版的小组件诊断日志（.notice 级别才会存下来；正式版不编进去）
 enum WidgetLog {
     #if DEBUG
-    static let log = Logger(subsystem: "com.zhibeifw.app", category: "Widget")
-    static func note(_ s: String) {
-        log.notice("\(s, privacy: .public)")
-        print("[Widget] \(s)")  // 用 devicectl --console 启动 App 时能直接看到
-        // 也追加到本进程的文件里（App：Documents/widget-debug.log），App 被关掉后也能用 devicectl 拷出来看
-        let line = "\(Date().formatted(.iso8601)) \(s)\n"
-        if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
-            let f = dir.appendingPathComponent("widget-debug.log")
-            if let h = try? FileHandle(forWritingTo: f) {
-                h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
-            } else {
-                try? Data(line.utf8).write(to: f)
+        static let log = Logger(subsystem: "com.zhibeifw.app", category: "Widget")
+        static func note(_ s: String) {
+            log.notice("\(s, privacy: .public)")
+            print("[Widget] \(s)")  // 用 devicectl --console 启动 App 时能直接看到
+            // 也追加到本进程的文件里（App：Documents/widget-debug.log），App 被关掉后也能用 devicectl 拷出来看
+            let line = "\(Date().formatted(.iso8601)) \(s)\n"
+            if let dir = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first {
+                let f = dir.appendingPathComponent("widget-debug.log")
+                if let h = try? FileHandle(forWritingTo: f) {
+                    h.seekToEndOfFile(); h.write(Data(line.utf8)); try? h.close()
+                } else {
+                    try? Data(line.utf8).write(to: f)
+                }
             }
         }
-    }
     #else
-    static func note(_ s: String) {}
+        static func note(_ s: String) {}
     #endif
 }
 
@@ -38,6 +38,8 @@ struct WidgetItem: Codable, Hashable {
     var cover: String?
     /// 没有封面时的占位色（ARGB），和 App 里同一门课的色块一样
     var color: UInt32
+    /// 这集上次保存的收听比例；旧快照或尚未收听时为空。
+    var progress: Double? = nil
 }
 
 /// 继续播放：App 里正在播放的这一集；App 没在播时是最近播放里最近一条没听完的
@@ -54,6 +56,12 @@ struct WidgetSnapshot: Codable, Hashable {
     var nowPlaying: WidgetNowPlaying?
     /// 最新课程：主页“新课程”里每门课的最新一集
     var latest: [WidgetItem] = []
+    /// App 上次连通的线路（https://域名）：小组件自己取新课程时用
+    var origin: String?
+    /// App 上次检查目录的时间（毫秒）：刚检查过，小组件就不再取
+    var catalogCheckedAt: Double?
+    /// 小组件自己取到新课程的时间（毫秒）：比 App 上次同步还新时，App 写数据时保留这份最新课程，不用自己数据库里旧的盖掉
+    var latestFromWidgetAt: Double?
 }
 
 /// 小组件的种类（kind），App 刷新时用
@@ -126,4 +134,13 @@ enum WidgetLink {
         default: return nil
         }
     }
+}
+
+/// 加载中使用该集的存档，避免临时零值清空圆环；有效的播放器位置（包括重播的零）优先。
+func widgetPlaybackProgress(
+    position: Double, duration: Double, positionKnown: Bool,
+    savedPosition: Double?, savedDuration: Double?, completed: Bool
+) -> (position: Double, duration: Double) {
+    if positionKnown { return (position, duration) }
+    return (completed ? 0 : savedPosition ?? 0, savedDuration ?? 0)
 }

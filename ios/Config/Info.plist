@@ -6,6 +6,12 @@
 	<array>
 		<string>audio</string>
 		<string>remote-notification</string>
+		<string>fetch</string>
+	</array>
+	<!-- 后台刷新（BackgroundRefresh）：每 2 小时左右请系统叫醒 App 取一次目录，更新小组件 -->
+	<key>BGTaskSchedulerPermittedIdentifiers</key>
+	<array>
+		<string>com.zhibeifw.app.refresh</string>
 	</array>
 	<!-- 小组件共享数据的 App Group（开发版、正式版各一个，在工程设置 ZBFW_APP_GROUP 里） -->
 	<key>ZBFWAppGroup</key>

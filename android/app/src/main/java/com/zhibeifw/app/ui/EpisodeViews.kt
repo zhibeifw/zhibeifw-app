@@ -136,6 +136,7 @@ fun EpisodeRowView(
                     state,
                     prog?.let { progressRatio(it.position, it.duration) } ?: 0.0,
                     playing,
+                    loading = playing && p?.loadingPlayback == true,
                     onIcon = { model.togglePlay(item.episodeId, ctx) },
                     onBody = { model.playAndOpen(item.episodeId, ctx) })
                 if (dl != DlStatus.DONE || showDownloadedIcon) DownloadIndicator(
@@ -201,6 +202,7 @@ fun RecentRowView(model: AppModel, row: RecentRow) {
                         state,
                         prog?.let { progressRatio(it.position, it.duration) } ?: 0.0,
                         playing,
+                        loading = playing && p?.loadingPlayback == true,
                         onIcon = { model.playFromRecent(row, false) },
                         onBody = { model.playFromRecent(row, true) })
                     DownloadIndicator(dl, ratio) { model.tapDownloadIndicator(it) }

@@ -1,5 +1,9 @@
 import XCTest
+#if os(watchOS)
+@testable import ZhibeiFWWatch
+#else
 @testable import ZhibeiFW
+#endif
 
 // 下载。下载、排队、重试、续传都交给系统，这里只测我们自己做的部分：
 // 下载记录、下完移入资料库、暂停与续传数据、失败整批只提示一次、空间不足、对账。
@@ -61,7 +65,10 @@ final class DownloadManagerTests: XCTestCase {
         diskFullAlerts = 0
         dm.onDiskFull = { [unowned self] in self.diskFullAlerts += 1 }
     }
-    override func tearDown() async throws { try? FileManager.default.removeItem(at: dir) }
+    override func tearDown() async throws {
+        dm = nil; sys = nil; store = nil
+        try? FileManager.default.removeItem(at: dir)
+    }
 
     private func item(_ id: String, _ pos: Int) -> DlItem {
         DlItem(episodeId: id, seriesId: "s", seriesTitle: "s", episodeTitle: id, pos: pos, audioPath: "c/s/\(id).mp3")
@@ -98,6 +105,23 @@ final class DownloadManagerTests: XCTestCase {
         XCTAssertEqual(r?.state, .done)
         XCTAssertTrue(FileManager.default.fileExists(atPath: files.absolute(r!.localFile!).path))
         XCTAssertEqual(batchFailed, 0)
+    }
+
+    func testDownloadedAudioSurvivesStoreReopenWithoutNetwork() async throws {
+        await enqueue([item("offline", 0)])
+        let payload = Data("offline audio fixture".utf8)
+        let tmp = try tmpFile()
+        try payload.write(to: tmp)
+        send(.finished("offline", tmp))
+        let reopened = Store(db: try SQLiteDB(path: dir.appendingPathComponent("t.db").path))
+        guard case .file(let url) = files.localAudio(for: "offline", store: reopened) else {
+            return XCTFail("已下载文件应能在资料库重开后直接读取")
+        }
+        XCTAssertEqual(try Data(contentsOf: url), payload)
+        try FileManager.default.removeItem(at: url)
+        guard case .missing = files.localAudio(for: "offline", store: reopened) else {
+            return XCTFail("丢失的离线文件不能当作可用下载")
+        }
     }
 
     /// 系统报失败：没有续传数据的回到未下载；有的记为已暂停；整批结束只提示一次

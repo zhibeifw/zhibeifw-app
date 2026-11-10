@@ -319,10 +319,10 @@ private fun Controls(
                     .semantics { contentDescription = if (p.looksPlaying) "暂停" else "播放" },
                 contentAlignment = Alignment.Center
             ) {
-                ZIcon(
+                PlaybackIcon(
                     if (p.looksPlaying) "pause" else "play",
                     CP.Player.playIcon.d,
-                    C.labelPrimary()
+                    C.labelPrimary(), p.loadingPlayback
                 )
             }
             Box(

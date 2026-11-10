@@ -279,13 +279,14 @@ struct PlayPill: View {
     var state: PillState
     var ratio: Double
     var playing: Bool
+    var loading = false
     var onIcon: () -> Void
     var onBody: () -> Void
 
     var body: some View {
         HStack(spacing: 0) {
             Button(action: onIcon) {
-                Group {
+                PlaybackLoadingView(loading: loading) {
                     if playing {
                         ZIcon(name: "pause", size: CP.EpisodeRow.playIcon)
                     } else if state.kind == .done {

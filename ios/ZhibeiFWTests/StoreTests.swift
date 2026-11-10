@@ -1,5 +1,9 @@
 import XCTest
+#if os(watchOS)
+@testable import ZhibeiFWWatch
+#else
 @testable import ZhibeiFW
+#endif
 
 // 数据库：建表与迁移、目录写库、搜索、用户表状态规则、下载对账。
 
@@ -15,7 +19,10 @@ final class StoreTests: XCTestCase {
         _ = try Migrator.migrate(db)
         store = Store(db: db)
     }
-    override func tearDownWithError() throws { try? FileManager.default.removeItem(at: dir) }
+    override func tearDownWithError() throws {
+        store = nil; db = nil
+        try? FileManager.default.removeItem(at: dir)
+    }
 
     private func index(_ series: [(String, String, String, [String])], featured: [FeaturedEntry] = []) -> IndexFile {
         // (id, 分类, 状态, 各集标题)
@@ -78,7 +85,37 @@ final class StoreTests: XCTestCase {
         XCTAssertNil(try store.loadSeriesHeader("净土教言"))  // 下架的课清掉
     }
 
+    #if !os(watchOS)
+    /// 小组件自己读 index.json 得到的“最新课程”，必须和 App 写库后主页的“新课程”一样：同样的课、同样的先后、同样的最后一集
+    func testWidgetLatestMatchesHome() throws {
+        let json = #"""
+        {"categories":[
+          {"id":"中观","name":"中观","series":[
+            {"id":"甲","title":"甲课","coverPath":"a/c.jpg","status":"ongoing","updatedAt":100,"episodes":[{"id":"甲_1","title":"第1课","audioPath":"a/1.mp3"},{"id":"甲_2","title":"第2课","audioPath":"a/2.mp3"}]},
+            {"id":"乙","title":"乙课","coverPath":"b/c.jpg","status":"ongoing","episodes":[{"id":"乙_1","title":"第1课","audioPath":"b/1.mp3"}]},
+            {"id":"丙","title":"丙课","coverPath":"c/c.jpg","status":"completed","updatedAt":999,"episodes":[{"id":"丙_1","title":"第1课","audioPath":"c/1.mp3"}]},
+            {"id":"丁","title":"丁课","coverPath":"d/c.jpg","status":"ongoing","updatedAt":300,"episodes":[{"id":"丁_1","title":"第1课","audioPath":"d/1.mp3"},{"id":"丁_2","title":"坏的一集","audioPath":"/abs.mp3"}]}
+          ]},
+          {"id":"净土","name":"净土","series":[
+            {"id":"戊","title":"戊课","coverPath":"e/c.jpg","status":"ongoing","updatedAt":300,"episodes":[{"id":"戊_1","title":"第1课","audioPath":"e/1.mp3"}]},
+            {"id":"己","title":"己课","coverPath":"f/c.jpg","status":"ongoing","episodes":[{"id":"己_1","title":"第1课","audioPath":"f/1.mp3"}]},
+            {"id":"坏","title":"","coverPath":"g/c.jpg","status":"ongoing","episodes":[]}
+          ]}
+        ]}
+        """#
+        let data = Data(json.utf8)
+        try store.replaceIndex(try XCTUnwrap(parseIndex(data)))
+        let home = try store.loadHome().ongoing.prefix(WidgetCatalog.latestLimit)
+        let widget = try XCTUnwrap(WidgetCatalog.parseLatest(data))
+        XCTAssertEqual(widget.map(\.id), home.map(\.id))
+        XCTAssertEqual(widget.map(\.id), ["丁", "戊", "甲", "乙", "己"])
+        XCTAssertEqual(widget.map(\.lastId), home.map { store.lastEpisode($0.id)?.id ?? "" })
+        XCTAssertEqual(widget.first?.lastTitle, "第1课")  // 不合规的那一集丢掉
+    }
+
     /// 分类页按 categoryOrder 排，主页仍按 categories；清单里没有的排后面；index.json 去掉清单后回到 categories 的先后
+    #endif
+
     func testCategoryOrderOnlyForCategoryPage() throws {
         var idx = index([("课1", "中观", "completed", []), ("课2", "净土", "completed", []), ("课3", "基础", "completed", [])])
         idx.categoryOrder = ["基础", "中观", "不存在"]

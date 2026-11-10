@@ -341,4 +341,9 @@ object Tok {
             const val fadeOutMs: Float = 90f
         }
     }
+    object Widget {
+        const val playProgressDiameter: Float = 32f
+        const val latestPlayProgressDiameter: Float = 24f
+        const val gaugeNative: Float = 52f
+    }
 }

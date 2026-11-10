@@ -29,7 +29,6 @@ import androidx.glance.action.actionParametersOf
 import androidx.glance.action.clickable
 import androidx.glance.appwidget.GlanceAppWidget
 import androidx.glance.appwidget.GlanceAppWidgetReceiver
-import androidx.glance.appwidget.LinearProgressIndicator
 import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
@@ -59,11 +58,10 @@ import androidx.glance.unit.ColorProvider
 import com.zhibeifw.app.MainActivity
 import com.zhibeifw.app.R
 import com.zhibeifw.app.ZhibeiApp
-import kotlin.math.ceil
 
 // 智悲佛网的桌面小组件：继续播放、最新课程（和 iOS 一样）。
 // 数据都是 App 写好的（WidgetStore），这里只读、只画；App 里内容变了会刷新，这里不自己定时刷新。
-// 外观跟系统走（Material You 的小组件底色和文字颜色），按尺寸分中、大两档排（不做小号：只放得下一门，用户定）。
+// 外观跟系统走；继续播放提供小号封面与播放按钮，最新课程按中、大两档排。
 
 private enum class Family { MEDIUM, LARGE }
 
@@ -144,55 +142,24 @@ private fun open(link: WidgetLink) = actionStartActivity(
 
 // ---------- 继续播放 ----------
 
-class NowPlayingWidget : SnapshotWidget() {
+class NowPlayingWidget : SnapshotWidget(setOf(DpSize(110.dp, 110.dp))) {
     override fun covers(s: WidgetSnapshot) = listOfNotNull(s.nowPlaying?.item)
 
     @Composable
     override fun Content(s: WidgetSnapshot, covers: Map<String, Bitmap>) {
         val np = s.nowPlaying ?: return EmptyWidget("还没有在听的课程")
-        val i = np.item
-        val link = if (np.loaded) WidgetLink.Player(i.seriesId) else WidgetLink.Series(i.seriesId)
-        val f = family()
-        Column(GlanceModifier.fillMaxSize().clickable(open(link))) {
-            when (f) {
-                Family.MEDIUM -> Row(GlanceModifier.fillMaxSize(), verticalAlignment = Alignment.CenterVertically) {
-                    // 封面在左边上下居中
-                    Cover(i, covers, GlanceModifier.width(140.dp).height(79.dp), 10)
-                    Spacer(GlanceModifier.width(12.dp))
-                    Column(GlanceModifier.defaultWeight().fillMaxHeight()) {
-                        Caption(i.seriesTitle)
-                        Title(i.episodeTitle ?: "", 16, 2)
-                        Spacer(GlanceModifier.defaultWeight())
-                        Progress(np, GlanceModifier.fillMaxWidth())
-                        Spacer(GlanceModifier.height(4.dp))
-                        Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                            Caption(remaining(np), GlanceModifier.defaultWeight())
-                            PlayButton(np, 38)
-                        }
-                    }
+        Column(GlanceModifier.fillMaxSize()) {
+            Cover(np.item, covers, GlanceModifier.fillMaxWidth().defaultWeight(), 10)
+            Spacer(GlanceModifier.height(6.dp))
+            Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(GlanceModifier.defaultWeight()) {
+                    Title(np.item.seriesTitle, 12, 1)
+                    Caption(np.item.episodeTitle ?: "")
                 }
-
-                Family.LARGE -> {
-                    Cover(i, covers, GlanceModifier.fillMaxWidth().defaultWeight(), 12)
-                    Spacer(GlanceModifier.height(10.dp))
-                    Caption(i.seriesTitle)
-                    Title(i.episodeTitle ?: "", 20, 2)
-                    Spacer(GlanceModifier.height(10.dp))
-                    Progress(np, GlanceModifier.fillMaxWidth())
-                    Spacer(GlanceModifier.height(6.dp))
-                    Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                        Caption(remaining(np), GlanceModifier.defaultWeight())
-                        PlayButton(np, 48)
-                    }
-                }
+                Spacer(GlanceModifier.width(6.dp))
+                PlayButton(np, 28)
             }
         }
-    }
-
-    private fun remaining(np: WidgetNowPlaying): String {
-        if (np.duration <= 0) return ""
-        val m = ceil((np.duration - np.position) / 60).toInt()
-        return if (m <= 0) "即将听完" else "剩余 $m 分钟"
     }
 }
 
@@ -213,15 +180,6 @@ private fun PlayButton(np: WidgetNowPlaying, size: Int) {
     )
 }
 
-@Composable
-private fun Progress(np: WidgetNowPlaying, modifier: GlanceModifier) {
-    val v = if (np.duration > 0) (np.position / np.duration).coerceIn(0.0, 1.0).toFloat() else 0f
-    LinearProgressIndicator(
-        progress = v, modifier = modifier.height(4.dp),
-        color = GlanceTheme.colors.onSurface, backgroundColor = GlanceTheme.colors.surfaceVariant,
-    )
-}
-
 // ---------- 最新课程 ----------
 
 class LatestWidget : SnapshotWidget() {
@@ -233,8 +191,11 @@ class LatestWidget : SnapshotWidget() {
         val large = family() == Family.LARGE
         val gap = if (large) 8.dp else 6.dp
         // 放得下几行就放几行：各家桌面小组件高度不同，不能写死 3 行、7 行（上下边距 28、标题约 26）
-        val room = LocalSize.current.height - 28.dp - 26.dp
-        val n = maxOf(1, ((room + gap) / (ROW_HEIGHT + gap)).toInt())
+        // 一行的高度跟着系统字体大小（字体放大时两行字会比封面高）；标题“新课程”约 13sp 一行加下边距 8
+        val ctx = LocalContext.current
+        val rowHeight = rowHeight(ctx)
+        val room = LocalSize.current.height - 28.dp - (13 * 1.45f * ctx.resources.configuration.fontScale + 8).dp
+        val n = maxOf(1, ((room + gap) / (rowHeight + gap)).toInt())
         Column(GlanceModifier.fillMaxSize()) {
             Header("新课程")
             for ((k, i) in s.latest.take(n).withIndex()) {
@@ -252,7 +213,7 @@ class LatestWidget : SnapshotWidget() {
                 ) {
                     Cover(i, covers, GlanceModifier.width(64.dp).height(36.dp), 5)
                     Spacer(GlanceModifier.width(10.dp))
-                    Column(GlanceModifier.defaultWeight().height(ROW_HEIGHT), verticalAlignment = Alignment.CenterVertically) {
+                    Column(GlanceModifier.defaultWeight(), verticalAlignment = Alignment.CenterVertically) {
                         Title(i.seriesTitle, 14, 1)
                         Caption("更新至 ${i.episodeTitle ?: ""}")
                     }
@@ -262,14 +223,21 @@ class LatestWidget : SnapshotWidget() {
         }
     }
 
-    /** 一行的高度：64dp 宽的 16:9 封面 36dp，右边两行字差不多一样高 */
-    private val ROW_HEIGHT = 40.dp
+    /** 一行的高度：64dp 宽的 16:9 封面 36dp 和右边两行字（14sp + 12sp，按系统字体大小放大）里高的那个 */
+    private fun rowHeight(ctx: android.content.Context) =
+        maxOf(36f, (14 + 12) * 1.45f * ctx.resources.configuration.fontScale).dp
 
     private fun play(i: WidgetItem) = actionRunCallback<PlayEpisodeAction>(actionParametersOf(EpisodeKey to (i.episodeId ?: "")))
 }
 
 class LatestReceiver : GlanceAppWidgetReceiver() {
     override val glanceAppWidget = LatestWidget()
+
+    /** 系统每 2 小时左右（updatePeriodMillis）刷新一次时：顺便在后台取一次目录，有新课就更新 */
+    override fun onUpdate(context: android.content.Context, appWidgetManager: android.appwidget.AppWidgetManager, appWidgetIds: IntArray) {
+        super.onUpdate(context, appWidgetManager, appWidgetIds)
+        CatalogRefreshWorker.runOnce(context)
+    }
 }
 
 @Composable

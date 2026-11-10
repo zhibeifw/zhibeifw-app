@@ -565,5 +565,11 @@
       "durationMs": 300,
       "fadeOutMs": 90
     }
+  },
+  "widget": {
+    "_来源": "Apple小组件的系统Gauge等比适配现有播放按钮区域，不自绘圆环。",
+    "playProgressDiameter": 32,
+    "latestPlayProgressDiameter": 24,
+    "gaugeNative": 52
   }
 }

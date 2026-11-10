@@ -90,7 +90,7 @@ struct EpisodeRowView: View {
                 Text(item.title).zFont(S.listRowTitle).foregroundStyle(C.labelPrimary).lineLimit(2).multilineTextAlignment(.leading)
                 HStack(spacing: CP.EpisodeRow.statusGap) {
                     PlayPill(
-                        state: state, ratio: prog.map { progressRatio($0.position, $0.duration) } ?? 0, playing: playing,
+                        state: state, ratio: prog.map { progressRatio($0.position, $0.duration) } ?? 0, playing: playing, loading: playing && (model.player?.loadingPlayback ?? false),
                         onIcon: { model.togglePlay(item.episodeId, ctx: ctx) },
                         onBody: { model.playAndOpen(item.episodeId, ctx: ctx) })
                     if dl != .done || showDownloadedIcon {
@@ -143,7 +143,7 @@ struct RecentRowView: View {
                         .multilineTextAlignment(.leading)
                     HStack(spacing: CP.EpisodeRow.statusGap) {
                         PlayPill(
-                            state: state, ratio: prog.map { progressRatio($0.position, $0.duration) } ?? 0, playing: playing,
+                            state: state, ratio: prog.map { progressRatio($0.position, $0.duration) } ?? 0, playing: playing, loading: playing && (model.player?.loadingPlayback ?? false),
                             onIcon: { model.playFromRecent(row, open: false) }, onBody: { model.playFromRecent(row, open: true) })
                         DownloadIndicator(status: dl, ratio: ratio) { model.tapDownloadIndicator(it) }
                         Spacer(minLength: 0)

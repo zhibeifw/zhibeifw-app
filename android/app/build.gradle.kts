@@ -106,6 +106,8 @@ dependencies {
     implementation(libs.browser)
     // 桌面小组件（谷歌官方 Jetpack Glance）
     implementation(libs.glance.appwidget)
+    // 后台定时取目录、更新小组件（谷歌官方 Jetpack WorkManager）
+    implementation(libs.work.runtime)
     implementation(libs.splashscreen)
     implementation(libs.coroutines.android)
     testImplementation(libs.junit)

@@ -120,7 +120,9 @@ private struct TVPlayerControls: View {
             .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
             Spacer()
             Button { p.toggle() } label: {
-                Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.system(size: 48))
+                PlaybackLoadingView(loading: p.loadingPlayback) {
+                    Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.system(size: 48))
+                }
             }
             .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
             Spacer()

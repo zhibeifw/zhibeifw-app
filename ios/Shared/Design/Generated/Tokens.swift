@@ -339,4 +339,9 @@ enum Tok {
             static let fadeOutMs: CGFloat = 90
         }
     }
+    enum Widget {
+        static let playProgressDiameter: CGFloat = 32
+        static let latestPlayProgressDiameter: CGFloat = 24
+        static let gaugeNative: CGFloat = 52
+    }
 }

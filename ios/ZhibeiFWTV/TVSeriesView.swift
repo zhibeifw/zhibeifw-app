@@ -80,7 +80,11 @@ struct TVEpisodeRow: View {
             core.playAndOpen(episode.id, ctx: ctx)
         } label: {
             HStack(spacing: 24) {
-                if isCurrent { Image(systemName: (p?.looksPlaying ?? false) ? "speaker.wave.2.fill" : "pause.fill") }
+                if isCurrent {
+                    PlaybackLoadingView(loading: p?.loadingPlayback ?? false) {
+                        Image(systemName: (p?.looksPlaying ?? false) ? "speaker.wave.2.fill" : "pause.fill")
+                    }
+                }
                 Text(episode.title).lineLimit(2)
                 Spacer()
                 Text(progressText(prog, knownDuration: episode.epDuration)).font(.callout).foregroundStyle(.secondary)

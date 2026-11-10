@@ -15,7 +15,9 @@ struct MacNowPlayingBar: View {
             }
             .help("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
             Button { p?.toggle() } label: {
-                Image(systemName: p?.looksPlaying == true ? "pause.fill" : "play.fill")
+                PlaybackLoadingView(loading: p?.loadingPlayback ?? false) {
+                    Image(systemName: p?.looksPlaying == true ? "pause.fill" : "play.fill")
+                }
             }
             .help(p?.looksPlaying == true ? "暂停" : "播放")
             Button { p?.seek(by: SEEK_FORWARD_SECONDS) } label: {
@@ -201,7 +203,9 @@ private struct MacPlayerControls: View {
             .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
             Spacer()
             Button { p.toggle() } label: {
-                Image(systemName: p.looksPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 44))
+                PlaybackLoadingView(loading: p.loadingPlayback) {
+                    Image(systemName: p.looksPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 44))
+                }
             }
             .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
             Spacer()

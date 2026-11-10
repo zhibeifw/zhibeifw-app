@@ -92,6 +92,7 @@ class PlayerController(
 
     /** 界面上显示“暂停”图标：在出声，或用户刚点了播放、还在加载。 */
     val looksPlaying get() = isPlaying || systemWantsPlay || pendingStart
+    val loadingPlayback get() = looksPlaying && (pendingStart || buffering)
 
     var onProgressSaved: (() -> Unit)? = null
     var onDamaged: ((String) -> Unit)? = null
@@ -438,7 +439,7 @@ class PlayerController(
         }
     }
 
-    /** 用户把正在播放的这一集标为已听完：停止，之后不把旧位置写回；再点播放从头重新加载。 */
+    /** 用户把正在播放的这一集标记为已听完：停止，之后不把旧位置写回；再点播放从头重新加载。 */
     fun stopAsCompleted(episodeId: String): Boolean {
         if (current?.episodeId != episodeId) return false
         generation++

@@ -1,9 +1,9 @@
 import SwiftUI
 import WidgetKit
 #if os(macOS)
-import AppKit
+    import AppKit
 #else
-import UIKit
+    import UIKit
 #endif
 
 /// 给小组件备数据（iPhone / iPad 和 Mac 共用）：把继续播放、最新课程写进共享目录，再让系统刷新小组件。
@@ -39,6 +39,7 @@ final class WidgetFeeder {
             _ = core.catalogVersion
             _ = core.player?.current?.episodeId
             _ = core.player?.looksPlaying
+            _ = core.player?.positionKnown
             // 刚开始播时还不知道时长，读到后再写一次（“剩余几分钟”）
             _ = (core.player?.duration ?? 0) > 0
         } onChange: { [weak self] in
@@ -71,11 +72,12 @@ final class WidgetFeeder {
         let i = c.info
         let name = ImageLoader.diskName(i.coverPath) + ".jpg"
         let cover = WidgetStore.coverURL(name).map { FileManager.default.fileExists(atPath: $0.path) } == true ? name : nil
+        let progress = playbackProgress(p)
         snap.nowPlaying = WidgetNowPlaying(
             item: WidgetItem(
                 seriesId: i.seriesId, seriesTitle: i.seriesTitle, episodeId: i.episodeId, episodeTitle: i.episodeTitle,
                 cover: cover, color: placeholderColor(i.seriesId).light),
-            position: p.position, duration: p.duration, playing: playing, loaded: true)
+            position: progress.position, duration: progress.duration, playing: playing, loaded: true)
         let changed = WidgetStore.write(snap)
         WidgetLog.note("按钮后写：\(i.seriesId) / \(i.episodeId) playing=\(playing) 变了=\(changed)")
         if changed {
@@ -95,23 +97,53 @@ final class WidgetFeeder {
         guard core.phase == .ready, let store = core.store else { return }
         var snap = WidgetSnapshot()
         snap.nowPlaying = nowPlaying(store)
-        snap.latest = core.home.ongoing.prefix(Self.latestLimit).compactMap { c in
-            guard let e = store.lastEpisode(c.id) else { return nil }
-            return item(c.id, c.title, c.coverPath, episodeId: e.id, episodeTitle: e.title)
+        snap.origin = Network.shared.currentOrigin ?? Prefs.d.string(forKey: Prefs.kLastService)
+        snap.catalogCheckedAt = core.lastSyncAt > 0 ? core.lastSyncAt : nil
+        let old = WidgetStore.read()
+        if let w = old.latestFromWidgetAt, w > core.lastSyncAt {
+            // 小组件自己取到的新课程比 App 上次同步还新（App 很久没打开）：先用它，等 App 同步后再换成自己的
+            snap.latest = old.latest
+            snap.latestFromWidgetAt = w
+        } else {
+            snap.latest = core.home.ongoing.prefix(Self.latestLimit).compactMap { c in
+                guard let e = store.lastEpisode(c.id) else { return nil }
+                return item(c.id, c.title, c.coverPath, episodeId: e.id, episodeTitle: e.title)
+            }
+        }
+        snap.latest = snap.latest.map { item in
+            var item = item
+            if let id = item.episodeId {
+                if let current = snap.nowPlaying, current.item.episodeId == id {
+                    item.progress = progressRatio(current.position, current.duration)
+                } else if let progress = store.loadProgress(id) {
+                    item.progress = progress.completed ? 1 : progressRatio(progress.position, progress.duration)
+                }
+            }
+            return item
         }
         await prepareCovers(&snap)
         let changed = WidgetStore.write(snap)
-        WidgetLog.note("App 写：在播 \(snap.nowPlaying?.item.seriesId ?? "无") / \(snap.nowPlaying?.item.episodeId ?? "无") playing=\(snap.nowPlaying?.playing ?? false) 变了=\(changed)")
+        WidgetLog.note(
+            "App 写：在播 \(snap.nowPlaying?.item.seriesId ?? "无") / \(snap.nowPlaying?.item.episodeId ?? "无") playing=\(snap.nowPlaying?.playing ?? false) 变了=\(changed)"
+        )
         if changed { WidgetCenter.shared.reloadAllTimelines() }
+    }
+
+    private func playbackProgress(_ player: PlayerController) -> (position: Double, duration: Double) {
+        let saved = player.current.flatMap { core.store?.loadProgress($0.episodeId) }
+        return widgetPlaybackProgress(
+            position: player.position, duration: player.duration, positionKnown: player.positionKnown,
+            savedPosition: saved?.position, savedDuration: saved?.duration, completed: saved?.completed ?? false)
     }
 
     /// 正在播放的这一集；没在播就是最近播放里最近一条没听完的
     private func nowPlaying(_ store: Store) -> WidgetNowPlaying? {
         if let p = core.player, let c = p.current {
             let i = c.info
+            let progress = playbackProgress(p)
             return WidgetNowPlaying(
                 item: item(i.seriesId, i.seriesTitle, i.coverPath, episodeId: i.episodeId, episodeTitle: i.episodeTitle),
-                position: p.position, duration: p.duration, playing: p.looksPlaying, loaded: true)
+                position: progress.position, duration: progress.duration, playing: p.looksPlaying, loaded: true)
         }
         guard let r = ((try? store.loadRecent(limit: 20)) ?? []).first(where: { !$0.gone && !$0.progress.completed }) else { return nil }
         return WidgetNowPlaying(
@@ -120,7 +152,9 @@ final class WidgetFeeder {
     }
 
     /// cover 先放原路径，prepareCovers 换成共享目录里的文件名
-    private func item(_ seriesId: String, _ title: String, _ coverPath: String, episodeId: String? = nil, episodeTitle: String? = nil)
+    private func item(
+        _ seriesId: String, _ title: String, _ coverPath: String, episodeId: String? = nil, episodeTitle: String? = nil
+    )
         -> WidgetItem
     {
         WidgetItem(
@@ -130,10 +164,10 @@ final class WidgetFeeder {
 
     private static func jpeg(_ img: PlatformImage) -> Data? {
         #if os(macOS)
-        guard let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
-        return NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
+            guard let cg = img.cgImage(forProposedRect: nil, context: nil, hints: nil) else { return nil }
+            return NSBitmapImageRep(cgImage: cg).representation(using: .jpeg, properties: [.compressionFactor: 0.8])
         #else
-        img.jpegData(compressionQuality: 0.8)
+            img.jpegData(compressionQuality: 0.8)
         #endif
     }
 

@@ -370,6 +370,12 @@ def main():
     icons = json.load(open(os.path.join(DOC, 'icons.json'), encoding='utf-8'))
     os.makedirs(IOS_OUT, exist_ok=True)
     os.makedirs(AND_OUT, exist_ok=True)
+    widget_out = os.path.join(ROOT, 'ios', 'WidgetShared', 'Generated')
+    os.makedirs(widget_out, exist_ok=True)
+    widget = [f'// {HEADER.format(src="design-tokens.json")}', 'import CoreGraphics', '', 'enum WidgetDesign {']
+    widget += [f'    static let {key}: CGFloat = {num(value)}' for key, value in tokens['widget'].items() if is_num(value)]
+    widget += ['}', '']
+    open(os.path.join(widget_out, 'WidgetDesign.swift'), 'w', encoding='utf-8').write('\n'.join(widget))
     sw, kt = gen_tokens(tokens)
     open(os.path.join(IOS_OUT, 'Tokens.swift'), 'w', encoding='utf-8').write(sw)
     open(os.path.join(AND_OUT, 'Tokens.kt'), 'w', encoding='utf-8').write(kt)

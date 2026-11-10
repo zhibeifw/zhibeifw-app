@@ -284,10 +284,12 @@ class PlayerControllerDeviceTest {
         record("课_1", 3.0, 8.0)
         val p = make()
         p.start("课_1", PlayContext.Series("课"))
+        assertTrue("等待音频时显示加载", p.loadingPlayback)
         p.pause()
         delay(1_200)
         assertFalse(p.isPlaying)
         assertFalse(p.looksPlaying)
+        assertFalse("暂停后不再显示加载", p.loadingPlayback)
         assertEquals(3.0, store.loadProgress("课_1")!!.position, 0.0)
     }
 
@@ -304,7 +306,7 @@ class PlayerControllerDeviceTest {
         p.pause()
     }
 
-    // ---------- 标为已听完、删除下载 ----------
+    // ---------- 标记为已听完、删除下载 ----------
 
     @Test
     fun markCompletedStopsAndIsNotOverwritten() = onMain {

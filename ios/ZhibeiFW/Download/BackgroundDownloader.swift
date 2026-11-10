@@ -123,8 +123,12 @@ final class BackgroundDownloader: NSObject, SystemDownloads, URLSessionDownloadD
     }
 
     func urlSessionDidFinishEvents(forBackgroundURLSession session: URLSession) {
+        #if os(watchOS)
+        Task { @MainActor in WatchDownloadEvents.finish() }
+        #else
         DispatchQueue.main.async {
             AppDelegate.backgroundCompletion?(); AppDelegate.backgroundCompletion = nil
         }
+        #endif
     }
 }

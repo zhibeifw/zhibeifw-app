@@ -32,6 +32,7 @@ class ZhibeiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         model = AppModel(this)
+        com.zhibeifw.app.widget.CatalogRefreshWorker.schedule(this)
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) = model.onForeground()
             override fun onStop(owner: LifecycleOwner) = model.onBackground()

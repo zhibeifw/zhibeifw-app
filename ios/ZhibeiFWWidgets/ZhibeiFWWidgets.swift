@@ -3,7 +3,7 @@ import WidgetKit
 import AppIntents
 
 /// 智悲佛网的小组件：继续播放、最新课程。iPhone / iPad 和 Mac 共用这一份（Mac 没有锁屏小组件）。
-/// 数据都是 App 写好放在共享目录里的（WidgetStore），这里只读、只画。App 里内容变了会让系统刷新，这里不自己定时刷新。
+/// 数据是 App 写好放在共享目录里的（WidgetStore）。App 里内容变了会让系统刷新；另外每 2 小时左右小组件自己取一次新课程（WidgetCatalog），App 很久没打开也能更新。
 @main
 struct ZhibeiFWWidgets: WidgetBundle {
     var body: some Widget {
@@ -28,10 +28,18 @@ struct SnapshotProvider: TimelineProvider {
         completion(SnapshotEntry(date: .now, snap: context.isPreview && s == WidgetSnapshot() ? .sample : s))
     }
 
+    /// 每 2 小时左右让系统再来一次：到时候（距上次检查够 2 小时）小组件自己取一次新课程（WidgetCatalog）。
+    /// 什么时候真的来由系统定；App 里内容变了也会让系统马上重画
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
-        let s = WidgetStore.read()
-        WidgetLog.note("小组件读到：在播 \(s.nowPlaying?.item.seriesId ?? "无") / \(s.nowPlaying?.item.episodeId ?? "无") playing=\(s.nowPlaying?.playing ?? false)，最新 \(s.latest.count)")
-        completion(Timeline(entries: [SnapshotEntry(date: .now, snap: s)], policy: .never))
+        Task {
+            var s = WidgetStore.read()
+            if WidgetCatalog.due(s), let fresh = await WidgetCatalog.refresh(s) { s = fresh }
+            WidgetLog.note(
+                "小组件读到：在播 \(s.nowPlaying?.item.seriesId ?? "无") / \(s.nowPlaying?.item.episodeId ?? "无") playing=\(s.nowPlaying?.playing ?? false)，最新 \(s.latest.count)"
+            )
+            completion(
+                Timeline(entries: [SnapshotEntry(date: .now, snap: s)], policy: .after(Date().addingTimeInterval(WidgetCatalog.interval))))
+        }
     }
 }
 
@@ -51,13 +59,6 @@ extension WidgetSnapshot {
 // MARK: - 继续播放
 
 struct NowPlayingWidget: Widget {
-    // 中、大号；iPhone 另有锁屏一行（Mac 没有锁屏小组件）
-    #if os(iOS)
-    static let families: [WidgetFamily] = [.systemMedium, .systemLarge, .accessoryRectangular]
-    #else
-    static let families: [WidgetFamily] = [.systemMedium, .systemLarge]
-    #endif
-
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetKinds.nowPlaying, provider: SnapshotProvider()) { e in
             NowPlayingView(np: e.snap.nowPlaying)
@@ -65,106 +66,65 @@ struct NowPlayingWidget: Widget {
         }
         .configurationDisplayName("继续播放")
         .description("接着听正在播放的一集。")
-        // 小号只放得下一集的一点信息，不做（用户定）；锁屏一行
-        .supportedFamilies(Self.families)
+        .supportedFamilies([.systemSmall])
     }
 }
 
 struct NowPlayingView: View {
     let np: WidgetNowPlaying?
-    @Environment(\.widgetFamily) private var family
 
     var body: some View {
         if let np {
-            content(np).widgetURL(
-                (np.loaded ? WidgetLink.player(seriesId: np.item.seriesId) : WidgetLink.series(np.item.seriesId)).url)
+            VStack(alignment: .leading, spacing: 6) {
+                Cover(item: np.item, radius: 10)
+                Spacer(minLength: 0)
+                HStack(spacing: 6) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(np.item.seriesTitle)
+                            .font(.caption.weight(.semibold)).lineLimit(1)
+                        Text(np.item.episodeTitle ?? "")
+                            .font(.caption2).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    PlayButton(np: np)
+                }
+            }
         } else {
             EmptyWidget(text: "还没有在听的课程")
         }
-    }
-
-    @ViewBuilder private func content(_ np: WidgetNowPlaying) -> some View {
-        let i = np.item
-        switch family {
-        #if os(iOS)
-        case .accessoryRectangular:
-            VStack(alignment: .leading, spacing: 2) {
-                Text(i.seriesTitle).font(.headline).lineLimit(1)
-                Text(i.episodeTitle ?? "").font(.caption).lineLimit(1)
-                ProgressView(value: fraction(np)).tint(.primary)
-            }
-        #endif
-        case .systemMedium:
-            HStack(spacing: 12) {
-                // 封面在左边上下居中
-                Cover(item: i, radius: 10).frame(maxHeight: .infinity)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(i.seriesTitle).font(.caption.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-                    Text(i.episodeTitle ?? "").font(.headline).lineLimit(2)
-                    Spacer(minLength: 0)
-                    ProgressBar(value: fraction(np))
-                    HStack {
-                        Text(remaining(np)).font(.caption).foregroundStyle(.secondary).lineLimit(1)
-                        Spacer(minLength: 0)
-                        PlayButton(np: np, size: 36)
-                    }
-                }
-            }
-        default:
-            VStack(alignment: .leading, spacing: 6) {
-                Cover(item: i, radius: 12)
-                Text(i.seriesTitle).font(.subheadline.weight(.semibold)).foregroundStyle(.secondary).lineLimit(1)
-                    .padding(.top, 4)
-                Text(i.episodeTitle ?? "").font(.title3.weight(.semibold)).lineLimit(2)
-                Spacer(minLength: 0)
-                ProgressBar(value: fraction(np))
-                HStack {
-                    Text(remaining(np)).font(.footnote).foregroundStyle(.secondary).lineLimit(1)
-                    Spacer(minLength: 0)
-                    PlayButton(np: np, size: 48)
-                }
-            }
-        }
-    }
-
-    private func fraction(_ np: WidgetNowPlaying) -> Double {
-        np.duration > 0 ? min(1, max(0, np.position / np.duration)) : 0
-    }
-
-    private func remaining(_ np: WidgetNowPlaying) -> String {
-        guard np.duration > 0 else { return "" }
-        let m = Int(((np.duration - np.position) / 60).rounded(.up))
-        return m <= 0 ? "即将听完" : "剩余 \(m) 分钟"
     }
 }
 
 /// 播放 / 暂停：在 App 的进程里执行，不打开 App；动作带上点了以后要切到的状态
 struct PlayButton: View {
     let np: WidgetNowPlaying
-    let size: CGFloat
-
     var body: some View {
         Button(intent: SetPlayingIntent(episodeId: np.item.episodeId ?? "", play: !np.playing)) {
-            Image(systemName: np.playing ? "pause.circle.fill" : "play.circle.fill")
-                .resizable().scaledToFit().frame(width: size, height: size)
-                .foregroundStyle(.primary)
+            PlayProgressSymbol(playing: np.playing, progress: progressRatio(np.position, np.duration))
         }
         .buttonStyle(.plain)
         .accessibilityLabel(np.playing ? "暂停" : "播放")
     }
 }
 
-struct ProgressBar: View {
-    let value: Double
+/// 圆环由系统Gauge绘制，中心只放播放状态图标；进度取共享快照，不在小组件内推算。
+struct PlayProgressSymbol: View {
+    let playing: Bool
+    let progress: Double
+    var diameter: CGFloat = WidgetDesign.playProgressDiameter
 
     var body: some View {
-        GeometryReader { g in
-            ZStack(alignment: .leading) {
-                Capsule().fill(Color.primary.opacity(0.15))
-                Capsule().fill(Color.primary).frame(width: g.size.width * value)
-            }
+        Gauge(value: progress) {
+            Text("收听进度")
+        } currentValueLabel: {
+            Image(systemName: playing ? "pause.fill" : "play.fill")
+                .font(.title2)
         }
-        .frame(height: 4)
+        .gaugeStyle(.accessoryCircularCapacity)
+        .tint(Color.primary)
+        .frame(width: WidgetDesign.gaugeNative, height: WidgetDesign.gaugeNative)
+        .scaleEffect(diameter / WidgetDesign.gaugeNative)
+        .frame(width: diameter, height: diameter)
         .accessibilityHidden(true)
     }
 }
@@ -196,7 +156,9 @@ struct LatestView: View {
                 // 正在播的那一集显示暂停，点了暂停；点别的行开始播那一集
                 let id = i.episodeId ?? ""
                 let on = nowPlaying.map { $0.loaded && $0.playing && $0.item.episodeId == id } ?? false
-                Button(intent: SetPlayingIntent(episodeId: id, play: !on)) { LatestRow(item: i, playing: on) }
+                let current = nowPlaying.flatMap { $0.item.episodeId == id ? $0 : nil }
+                let progress = current.map { progressRatio($0.position, $0.duration) } ?? i.progress ?? 0
+                Button(intent: SetPlayingIntent(episodeId: id, play: !on)) { LatestRow(item: i, playing: on, progress: progress) }
                     .buttonStyle(.plain)
             }
         }
@@ -224,6 +186,7 @@ struct LatestView: View {
 struct LatestRow: View {
     let item: WidgetItem
     let playing: Bool
+    let progress: Double
 
     var body: some View {
         HStack(spacing: 10) {
@@ -233,7 +196,7 @@ struct LatestRow: View {
                 Text("更新至 \(item.episodeTitle ?? "")").font(.caption2).foregroundStyle(.secondary).lineLimit(1)
             }
             Spacer(minLength: 0)
-            Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill").font(.title3)
+            PlayProgressSymbol(playing: playing, progress: progress, diameter: WidgetDesign.latestPlayProgressDiameter)
         }
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
@@ -268,9 +231,9 @@ struct Cover: View {
 extension Cover {
     static func load(_ u: URL) -> Image? {
         #if os(macOS)
-        NSImage(contentsOf: u).map { Image(nsImage: $0) }
+            NSImage(contentsOf: u).map { Image(nsImage: $0) }
         #else
-        UIImage(contentsOfFile: u.path).map { Image(uiImage: $0) }
+            UIImage(contentsOfFile: u.path).map { Image(uiImage: $0) }
         #endif
     }
 }
@@ -279,9 +242,9 @@ extension Color {
     /// 小组件的底色：跟系统（浅色白、深色黑）
     static var widgetBackground: Color {
         #if os(macOS)
-        Color(nsColor: .windowBackgroundColor)
+            Color(nsColor: .windowBackgroundColor)
         #else
-        Color(.systemBackground)
+            Color(.systemBackground)
         #endif
     }
 }

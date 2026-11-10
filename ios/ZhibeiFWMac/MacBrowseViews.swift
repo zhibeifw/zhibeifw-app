@@ -335,7 +335,9 @@ struct MacEpisodeRow: View {
             HStack {
                 Button { core.togglePlay(episode.id, ctx: ctx) } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: playing ? "pause.fill" : (pill.kind == .done ? "checkmark" : "play.fill"))
+                        PlaybackLoadingView(loading: playing && (p?.loadingPlayback ?? false)) {
+                    Image(systemName: playing ? "pause.fill" : (pill.kind == .done ? "checkmark" : "play.fill"))
+                }
                             .font(.caption)
                         if pill.kind == .half, let prog {
                             ProgressView(value: progressRatio(prog.position, prog.duration)).frame(width: 36)

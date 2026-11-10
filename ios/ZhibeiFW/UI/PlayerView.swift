@@ -208,7 +208,9 @@ struct PlayerView: View {
             Button {
                 p.toggle()
             } label: {
-                ZIcon(name: p.looksPlaying ? "pause" : "play", size: CP.Player.playIcon).minTouch()
+                PlaybackLoadingView(loading: p.loadingPlayback) {
+                    ZIcon(name: p.looksPlaying ? "pause" : "play", size: CP.Player.playIcon).minTouch()
+                }
             }
             .buttonStyle(PressableStyle()).accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
             Spacer()

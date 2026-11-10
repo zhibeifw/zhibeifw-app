@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 桌面小组件的尺寸：默认 4×2，可拉成 4×2 到 4×4（内容按中、大两档排；不做小号） -->
+<!-- 每 2 小时左右系统刷新一次（同时在后台取一次目录）。桌面小组件的尺寸：默认 4×2，可拉成 4×2 到 4×4（内容按中、大两档排；不做小号） -->
 <appwidget-provider xmlns:android="http://schemas.android.com/apk/res/android"
     android:description="@string/widget_latest_desc"
     android:initialLayout="@layout/glance_default_loading_layout"
@@ -10,5 +10,5 @@
     android:targetCellWidth="4"
     android:targetCellHeight="2"
     android:resizeMode="horizontal|vertical"
-    android:updatePeriodMillis="0"
+    android:updatePeriodMillis="7200000"
     android:widgetCategory="home_screen" />

@@ -36,13 +36,6 @@ enum Prefs {
     static let kMigratedV1 = "migrated.v1kv"
 }
 
-/// encodeURI 的等价物：保留 URL 里的保留字符和不需要编码的字符，其余（中文等）按 UTF-8 百分号编码。
-func buildUrl(_ origin: String, _ path: String) -> URL? {
-    var allowed = CharacterSet(charactersIn: "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789")
-    allowed.insert(charactersIn: ";,/?:@&=+$-_.!~*'()#")
-    guard let enc = path.addingPercentEncoding(withAllowedCharacters: allowed) else { return nil }
-    return URL(string: origin + "/" + enc)
-}
 
 /// 网络状态（NWPathMonitor）。“有没有网络连接”用系统的，不用“能否上网”检测。
 @MainActor

@@ -48,6 +48,7 @@ final class PlayerController {
 
     /// 界面上显示“暂停”图标：在出声，或用户刚点了播放、还在加载。
     var looksPlaying: Bool { isPlaying || systemWantsPlay || pendingStart }
+    var loadingPlayback: Bool { looksPlaying && (pendingStart || buffering) }
 
     @ObservationIgnored let player = AVPlayer()
     @ObservationIgnored private let store: Store
@@ -60,7 +61,7 @@ final class PlayerController {
     @ObservationIgnored private var timeObserver: Any?
     @ObservationIgnored private var lastSavedAt: Double = -.infinity
     @ObservationIgnored private var generation = 0
-    @ObservationIgnored private var positionKnown = false
+    private(set) var positionKnown = false
     @ObservationIgnored private var markedDone = false
     /// 用户想听：点了播放 / 继续以后为真，自己点暂停（含睡眠定时、拔耳机、锁屏暂停）后为假；打断结束时据此决定接不接着播
     @ObservationIgnored private var wantsPlay = false
@@ -309,6 +310,13 @@ final class PlayerController {
             self.position = startAt
             self.duration = known
             self.positionKnown = true
+            #if os(watchOS)
+            do { try await AVAudioSession.sharedInstance().activate(options: []) } catch {
+                guard gen == self.generation else { return }
+                self.fail(.cannotPlay); return
+            }
+            guard gen == self.generation else { return }
+            #endif
             let item = AVPlayerItem(url: url)
             item.audioTimePitchAlgorithm = .timeDomain
             self.itemObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] it, _ in
@@ -348,7 +356,19 @@ final class PlayerController {
         dropExpiredSleep()
         wantsPlay = true
         if needsReload || player.currentItem == nil { play(c.info, ctx: c.ctx); return }
+        #if os(watchOS)
+        let gen = generation
+        Task {
+            do { try await AVAudioSession.sharedInstance().activate(options: []) } catch {
+                guard gen == generation else { return }
+                fail(.cannotPlay); return
+            }
+            guard gen == generation, wantsPlay else { return }
+            if positionKnown { player.playImmediately(atRate: Float(rate)) } else { pendingStart = true }
+        }
+        #else
         if positionKnown { player.playImmediately(atRate: Float(rate)) } else { pendingStart = true }
+        #endif
     }
 
     func pause() {
@@ -424,7 +444,7 @@ final class PlayerController {
     /// 界面倒计时：前台每秒刷新一次显示（只是显示；到点暂停由播放器时间回调保证）。
     func refreshSleepDisplay() { _ = tickSleep() }
 
-    /// 用户把正在播放的这一集标为已听完：停止，之后不把旧位置写回；再点播放从头重新加载。
+    /// 用户把正在播放的这一集标记为已听完：停止，之后不把旧位置写回；再点播放从头重新加载。
     @discardableResult
     func stopAsCompleted(_ episodeId: String) -> Bool {
         guard current?.episodeId == episodeId else { return false }
@@ -453,6 +473,9 @@ final class PlayerController {
         current = nil
         position = 0; duration = 0
         MPNowPlayingInfoCenter.default().nowPlayingInfo = nil
+        #if os(watchOS)
+        MPNowPlayingInfoCenter.default().playbackState = .stopped
+        #endif
     }
 
     private func onFinished() {
@@ -527,6 +550,9 @@ final class PlayerController {
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         if let a = artwork { info[MPMediaItemPropertyArtwork] = a }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        #if os(watchOS)
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+        #endif
     }
 
     private func updateNowPlayingRate() {
@@ -536,6 +562,9 @@ final class PlayerController {
         info[MPNowPlayingInfoPropertyDefaultPlaybackRate] = rate
         if duration > 0 { info[MPMediaItemPropertyPlaybackDuration] = duration }
         MPNowPlayingInfoCenter.default().nowPlayingInfo = info
+        #if os(watchOS)
+        MPNowPlayingInfoCenter.default().playbackState = isPlaying ? .playing : .paused
+        #endif
     }
 
     /// 锁屏封面：本机有这门课的封面（下载时存的）优先，离线也有；否则走封面缓存/网络。

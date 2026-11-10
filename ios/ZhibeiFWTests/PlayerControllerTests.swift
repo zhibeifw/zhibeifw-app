@@ -84,6 +84,7 @@ final class PlayerControllerTests: XCTestCase {
         XCTAssertTrue(p.start("课_1", ctx: .series("课")))
         XCTAssertTrue(p.looksPlaying, "点了马上显示暂停图标")
         await until("在出声") { p.isPlaying }
+        XCTAssertFalse(p.loadingPlayback, "出声后显示暂停图标")
         XCTAssertGreaterThanOrEqual(p.position, 2.9)
         XCTAssertFalse(p.streaming)
         XCTAssertEqual(try store.loadRecent().first?.episodeId, "课_1", "一播放即进最近")
@@ -225,10 +226,12 @@ final class PlayerControllerTests: XCTestCase {
         _ = try store.recordPlayback(episodeId: "课_1", seriesId: "课", position: 3, duration: 8, seriesTitle: "课", episodeTitle: "第1课", coverPath: "")
         let p = make()
         p.start("课_1", ctx: .series("课"))
+        XCTAssertTrue(p.loadingPlayback, "等待音频时显示加载且按钮仍可暂停")
         p.pause()
         await pause(1.2)
         XCTAssertFalse(p.isPlaying)
         XCTAssertFalse(p.looksPlaying)
+        XCTAssertFalse(p.loadingPlayback, "暂停后不再显示加载")
         XCTAssertEqual(store.loadProgress("课_1")?.position, 3)
     }
 
@@ -244,7 +247,7 @@ final class PlayerControllerTests: XCTestCase {
         p.pause()
     }
 
-    // MARK: 标为已听完、删除下载
+    // MARK: 标记为已听完、删除下载
 
     func testMarkCompletedStopsAndIsNotOverwritten() async throws {
         try download(1, wav(seconds: 8))

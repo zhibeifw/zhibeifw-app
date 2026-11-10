@@ -41,6 +41,13 @@ final class AppModel {
         core.presentPlayer = { [weak self] in self?.openPlayer() }
         widgets = WidgetFeeder(core: core)
         QuickAction.handler = { [weak self] a in self?.openQuickAction(a) }
+        // 后台刷新：系统在后台叫醒 App 时取一次目录（和切回前台时一样按 2 小时一次判断），有新课就更新小组件
+        BackgroundRefresh.handler = { [weak self] in
+            guard let self, await self.readyForWidget() else { return }
+            WidgetLog.note("后台刷新：取目录")
+            await self.core.syncCatalog(userInitiated: false)
+            await self.widgets.writeNow()
+        }
         connectWidgetButtons()
     }
 
@@ -183,6 +190,7 @@ final class AppModel {
 
     func onBackground() {
         core.onBackground()
+        BackgroundRefresh.schedule()
         Task { await widgets.writeNow() }
     }
 

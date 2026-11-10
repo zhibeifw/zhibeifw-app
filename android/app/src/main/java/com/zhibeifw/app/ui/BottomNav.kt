@@ -184,10 +184,10 @@ fun PlayerCapsule(model: AppModel, collapsed: Boolean) {
                 .semantics { contentDescription = if (playing) "暂停" else "播放" },
             contentAlignment = Alignment.Center
         ) {
-            ZIcon(
+            PlaybackIcon(
                 if (playing) "pause" else "play",
                 CP.Capsule.playIcon.d,
-                if (cur == null) C.iconDisabled() else C.labelPrimary()
+                if (cur == null) C.iconDisabled() else C.labelPrimary(), p?.loadingPlayback == true
             )
         }
         if (!collapsed) {

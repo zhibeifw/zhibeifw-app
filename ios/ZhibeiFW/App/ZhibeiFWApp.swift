@@ -31,6 +31,8 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         AppFiles().prepare()
         _ = BackgroundDownloader.shared  // 尽早接上后台下载会话，系统交回的结果不丢
         _ = Connectivity.shared  // 尽早开始看网络：启动时判断有没有网，读到的才是真实状态，不是初始值
+        BackgroundRefresh.register()
+        BackgroundRefresh.schedule()
         return true
     }
 

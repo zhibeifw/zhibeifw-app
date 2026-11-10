@@ -64,6 +64,9 @@ final class MacModel {
     @ObservationIgnored private(set) var widgets: WidgetFeeder!
     /// 冷启动时点小组件带来的链接：等进了主页再打开
     @ObservationIgnored private var pendingLink: URL?
+    /// App 开着时每 2 小时左右取一次目录、更新小组件（苹果的 NSBackgroundActivityScheduler，系统挑空闲的时候做）。
+    /// App 没开着时靠小组件自己取（WidgetCatalog）
+    @ObservationIgnored private let refresher = NSBackgroundActivityScheduler(identifier: "com.zhibeifw.app.refresh")
     var section: MacSection? = .home {
         didSet { if section != oldValue { path = [] } }
     }
@@ -97,6 +100,7 @@ final class MacModel {
             guard let self else { return }
             self.widgets.start()
             if let u = self.pendingLink { self.pendingLink = nil; self.openWidgetLink(u) }
+            self.startRefresher()
         }
         connectWidgetButtons()
         core.prefetchHomeCovers = { home in
@@ -125,6 +129,23 @@ extension MacModel {
                 try? await Task.sleep(nanoseconds: 100_000_000)
             }
             if !p.isPlaying { self.widgets.quickUpdateNowPlaying(playing: false) }
+        }
+    }
+
+    fileprivate func startRefresher() {
+        refresher.repeats = true
+        refresher.interval = 2 * 3600
+        refresher.tolerance = 30 * 60
+        refresher.qualityOfService = .utility
+        refresher.schedule { [weak self] done in
+            Task { @MainActor in
+                if let self {
+                    WidgetLog.note("后台刷新：取目录")
+                    await self.core.syncCatalog(userInitiated: false)
+                    await self.widgets.writeNow()
+                }
+                done(.finished)
+            }
         }
     }
 

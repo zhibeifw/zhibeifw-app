@@ -2,6 +2,8 @@ import SwiftUI
 import Observation
 #if os(macOS)
 import AppKit
+#elseif os(watchOS)
+import WatchKit
 #else
 import UIKit
 #endif
@@ -154,6 +156,8 @@ final class AppCore {
         // 别的设备改了，iCloud 用静默推送通知这台设备来取（同步引擎自己处理推送）
         #if os(macOS)
         NSApplication.shared.registerForRemoteNotifications()
+        #elseif os(watchOS)
+        WKApplication.shared().registerForRemoteNotifications()
         #else
         UIApplication.shared.registerForRemoteNotifications()
         #endif
