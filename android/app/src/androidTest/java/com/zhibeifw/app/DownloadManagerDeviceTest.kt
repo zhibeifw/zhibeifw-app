@@ -35,21 +35,23 @@ class DownloadManagerDeviceTest {
         var onEvent: ((DownloadEvent) -> Unit)? = null
         val started = ArrayList<String>()
         val stopped = ArrayList<String>()
-        val released = ArrayList<String>()
+        val released = ArrayList<Pair<String, Long>>()
+        val generations = mutableMapOf<String, Int>()
         override fun setHandler(h: (DownloadEvent) -> Unit) {
             onEvent = h
         }
 
-        override fun start(id: String, url: String, title: String, description: String) {
+        override fun start(id: String, generation: Int, url: String, title: String, description: String) {
             started += id
+            generations[id] = generation
         }
 
         override fun stop(id: String) {
             stopped += id
         }
 
-        override fun release(id: String) {
-            released += id
+        override fun release(id: String, taskId: Long) {
+            released += id to taskId
         }
         /** 系统表里在下的；null＝查不了 */
         var active: Set<String>? = emptySet()
@@ -98,12 +100,35 @@ class DownloadManagerDeviceTest {
     fun finishedMovesIntoLibrary() = onMain {
         dm.enqueue(listOf(item("a"))); settle()
         assertEquals(listOf("a"), sys.started)
-        sys.onEvent!!(DownloadEvent.Progress("a", 500, 1000))
+        sys.onEvent!!(DownloadEvent.Progress("a", sys.generations["a"], 500, 1000))
         assertEquals(0.5, dm.ratio("a"), 0.0)
         val src = File(dir, "a.part").apply { writeBytes(ByteArray(1000)) }
-        sys.onEvent!!(DownloadEvent.Finished("a", src)); settle()
+        sys.onEvent!!(DownloadEvent.Finished("a", sys.generations["a"], 101, src)); settle()
         assertEquals(DlStatus.DONE, dm.items["a"]?.status)
         assertTrue(files.absolute(store.getDownload("a")!!.localFile!!).length() == 1000L)
+    }
+
+    @Test
+    fun lateEventsAfterRestartingEpisodeDoNotAffectNewTask() = onMain {
+        dm.enqueue(listOf(item("a"))); settle()
+        val oldGeneration = sys.generations.getValue("a")
+        dm.cancel("a")
+        dm.enqueue(listOf(item("a"))); settle()
+        val newGeneration = sys.generations.getValue("a")
+        val old = File(dir, "old.part").apply { writeText("old") }
+        val fresh = File(dir, "new.part").apply { writeText("new") }
+
+        sys.onEvent!!(DownloadEvent.Failed("a", oldGeneration, false))
+        sys.onEvent!!(DownloadEvent.Finished("a", oldGeneration, 101, old))
+        assertEquals(DlStatus.DOWNLOADING, store.getDownload("a")?.state)
+        assertEquals(listOf("a"), sys.stopped)
+        assertEquals(listOf("a" to 101L), sys.released)
+
+        sys.onEvent!!(DownloadEvent.Finished("a", newGeneration, 102, fresh)); settle()
+        val row = requireNotNull(store.getDownload("a"))
+        assertEquals(DlStatus.DONE, row.state)
+        assertEquals("new", files.absolute(requireNotNull(row.localFile)).readText())
+        assertEquals(listOf("a" to 101L, "a" to 102L), sys.released)
     }
 
     /** 整门课取消：只撤没下完的，下完的和封面留着；整门课删除：音频、记录、封面都清掉 */
@@ -111,7 +136,7 @@ class DownloadManagerDeviceTest {
     fun seriesCancelThenRemove() = onMain {
         dm.enqueue(listOf(item("a"), item("b"), item("c"))); settle()
         val src = File(dir, "a.part").apply { writeBytes(ByteArray(1000)) }
-        sys.onEvent!!(DownloadEvent.Finished("a", src)); settle()
+        sys.onEvent!!(DownloadEvent.Finished("a", sys.generations["a"], 101, src)); settle()
         val cover = File(files.coversDir, fileKey("s") + ".jpg").apply { parentFile?.mkdirs(); writeBytes(ByteArray(10)) }
         val audio = files.absolute(store.getDownload("a")!!.localFile!!)
         dm.cancelSeries("s")
@@ -157,7 +182,7 @@ class DownloadManagerDeviceTest {
     @Test
     fun copyFailureIsNotDiskFull() = onMain {
         dm.enqueue(listOf(item("a"))); settle()
-        sys.onEvent!!(DownloadEvent.Finished("a", File(dir, "missing.part"))); settle()
+        sys.onEvent!!(DownloadEvent.Finished("a", sys.generations["a"], 101, File(dir, "missing.part"))); settle()
         assertNull(dm.items["a"])
         assertEquals(0, diskFull)
         assertEquals(1, batchFailed)
@@ -169,11 +194,11 @@ class DownloadManagerDeviceTest {
         dm.enqueue(listOf(item("a"))); settle()
         dm.pause("a")
         val src = File(dir, "a.part").apply { writeBytes(ByteArray(1000)) }
-        sys.onEvent!!(DownloadEvent.Finished("a", src)); settle()
+        sys.onEvent!!(DownloadEvent.Finished("a", sys.generations["a"], 101, src)); settle()
         assertEquals(DlStatus.PAUSED, dm.items["a"]?.status)
         assertEquals(0, diskFull)
         assertFalse(files.absolute(files.finalRelative("a", "c/s/a.mp3")).exists())
-        assertEquals(listOf("a"), sys.released)
+        assertEquals(listOf("a" to 101L), sys.released)
     }
 
     /** 对账查系统表在前、刚好在这期间把一集交给系统：对账不把它记成暂停 */

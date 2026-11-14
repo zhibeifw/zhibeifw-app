@@ -1,246 +1,176 @@
 import SwiftUI
 
-/// 工具栏中间的播放控制：后退 15、播放暂停、前进 30，旁边是封面小图和集名（点了打开播放页）。
-/// 没有在播的一集时按钮不可用，显示“未在播放”。
-struct MacNowPlayingBar: View {
+/// 播放控制始终留在浏览窗口，附加操作使用系统菜单。
+struct MacMiniPlayer: View {
     @Environment(AppCore.self) private var core
     @Environment(MacModel.self) private var model
-
-    var body: some View {
-        let p = core.player
-        let c = p?.current
-        HStack(spacing: 12) {
-            Button { p?.seek(by: -SEEK_BACK_SECONDS) } label: {
-                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))")
-            }
-            .help("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
-            Button { p?.toggle() } label: {
-                PlaybackLoadingView(loading: p?.loadingPlayback ?? false) {
-                    Image(systemName: p?.looksPlaying == true ? "pause.fill" : "play.fill")
-                }
-            }
-            .help(p?.looksPlaying == true ? "暂停" : "播放")
-            Button { p?.seek(by: SEEK_FORWARD_SECONDS) } label: {
-                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))")
-            }
-            .help("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
-            Button { model.playerOpen = true } label: {
-                HStack(spacing: 8) {
-                    if let c {
-                        CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 4)
-                            .frame(width: 48, height: 27)
-                    }
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text(c?.info.episodeTitle ?? "未在播放").lineLimit(1)
-                        if let c { Text(c.info.seriesTitle).font(.caption).foregroundStyle(.secondary).lineLimit(1) }
-                    }
-                    .frame(width: 220, alignment: .leading)
-                }
-            }
-            .buttonStyle(.plain)
-            .help("显示播放页")
-            .disabled(c == nil)
-        }
-        .disabled(c == nil)
-        .foregroundStyle(c == nil ? .secondary : .primary)
-    }
-}
-
-/// 播放页（点工具栏的集名或按 ⇧⌘P 打开，铺满整个窗口）：左边封面，右边集名、“课程名 ›”、“•••”，进度条（系统滑块），时间，
-/// 控制行：倍速、后退 15、播放暂停、前进 30、睡眠定时。全部是系统组件。窗口变大时整体等比放大，窗口很窄时改成上下排。
-/// 打开时窗口工具栏藏起来，播放页占满整个窗口；左上角圈 X（红黄绿按钮下面）或 Esc 关闭，声音照常播。
-struct MacPlayerView: View {
-    @Environment(AppCore.self) private var core
-    @Environment(MacModel.self) private var model
-
-    var body: some View {
-        GeometryReader { g in
-            ZStack(alignment: .topLeading) {
-                C.background.ignoresSafeArea()
-                Group {
-                    if let p = core.player, let c = p.current {
-                        let wide = g.size.width >= 900
-                        let coverW = wide ? min(g.size.width * 0.42, 720) : min(g.size.width - 80, 560)
-                        let controlsW = wide ? min(g.size.width * 0.34, 520) : coverW
-                        let layout = wide ? AnyLayout(HStackLayout(alignment: .center, spacing: 48)) : AnyLayout(VStackLayout(spacing: 28))
-                        layout {
-                            CoverImage(path: c.info.coverPath, colorId: c.seriesId, radius: 14)
-                                .frame(width: coverW, height: MacLayout.coverHeight(coverW))
-                                .shadow(color: .black.opacity(0.2), radius: 16, y: 6)
-                            MacPlayerControls(player: p, now: c)
-                                .frame(width: controlsW)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        // 睡眠定时的倒计时每秒刷新一次（和 iPhone 一样）
-                        .task {
-                            while !Task.isCancelled {
-                                try? await Task.sleep(nanoseconds: 1_000_000_000)
-                                p.refreshSleepDisplay()
-                            }
-                        }
-                    } else {
-                        Text("还没有在播放的内容").foregroundStyle(.secondary)
-                            .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    }
-                }
-                Button { model.playerOpen = false } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 26))
-                        .symbolRenderingMode(.hierarchical)
-                        .foregroundStyle(.secondary)
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut(.cancelAction)  // Esc
-                .help("关闭播放页 (Esc)")
-                .accessibilityLabel("关闭播放页")
-                .padding(.leading, 20)
-                .padding(.top, 12)
-            }
-        }
-    }
-}
-
-private struct MacPlayerControls: View {
-    @Environment(AppCore.self) private var core
-    @Environment(MacModel.self) private var model
-    let player: PlayerController
-    let now: NowPlaying
     @State private var favorite = false
     @State private var completed = false
-    /// 拖进度条时的位置：拖动中只更新显示，松开才跳过去
-    @State private var dragging: Double?
-
-    private var p: PlayerController { player }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 22) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(now.info.episodeTitle).font(.largeTitle).fontWeight(.bold).lineLimit(2)
-                    Button { model.goToSeries(now.seriesId) } label: {
-                        HStack(spacing: 4) {
-                            Text(now.info.seriesTitle).lineLimit(1)
-                            Image(systemName: "chevron.right").font(.caption)
+        if let p = core.player, let current = p.current {
+            VStack {
+                HStack(spacing: Tok.Component.MacMiniPlayer.controlSpacing) {
+                    Menu {
+                        ForEach(PLAYBACK_RATES, id: \.self) { rate in
+                            Toggle(rateMenuTitle(rate), isOn: Binding(get: { p.rate == rate }, set: { _ in p.setRate(rate) }))
                         }
-                        .foregroundStyle(.secondary)
+                    } label: {
+                        Text(String(format: "%g×", p.rate)).monospacedDigit()
+                            .font(.title3)
+                            .fixedSize(horizontal: true, vertical: false)
                     }
                     .buttonStyle(.plain)
-                    .help("前往课程")
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .accessibilityLabel("播放速度")
+                    .font(.title3)
+                    .frame(width: Tok.Component.MacMiniPlayer.rateWidth, height: Tok.Component.MacMiniPlayer.controlSize)
+                    Button("后退15秒", systemImage: "gobackward.15") { p.seek(by: -SEEK_BACK_SECONDS) }
+                        .frame(width: Tok.Component.MacMiniPlayer.controlSize, height: Tok.Component.MacMiniPlayer.controlSize)
+                    Button {
+                        p.toggle()
+                    } label: {
+                        PlaybackLoadingView(loading: p.loadingPlayback) {
+                            Label(p.looksPlaying ? "暂停" : "播放", systemImage: p.looksPlaying ? "pause.fill" : "play.fill")
+                        }
+                    }
+
+                    .frame(width: Tok.Component.MacMiniPlayer.controlSize, height: Tok.Component.MacMiniPlayer.controlSize)
+                    Button("前进30秒", systemImage: "goforward.30") { p.seek(by: SEEK_FORWARD_SECONDS) }
+                        .frame(width: Tok.Component.MacMiniPlayer.controlSize, height: Tok.Component.MacMiniPlayer.controlSize)
+                    Menu {
+                        ForEach(SLEEP_CHOICES) { choice in
+                            Toggle(
+                                choice.title,
+                                isOn: Binding(
+                                    get: { p.sleep.choiceId == choice.id },
+                                    set: { _ in p.setSleep(sleepSetting(choice)) }
+                                ))
+                        }
+                    } label: {
+                        Image(systemName: p.sleep == .off ? "moon" : "moon.fill")
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .accessibilityLabel("睡眠定时")
+                    .help(p.sleep == .off ? "睡眠定时" : sleepLabel(p.sleep == .end ? nil : p.sleepLeft ?? 0))
+                    .frame(width: Tok.Component.MacMiniPlayer.controlSize, height: Tok.Component.MacMiniPlayer.controlSize)
+                    MacPlaybackInfo(player: p) {
+                        HStack(spacing: Tok.Component.MacMiniPlayer.spacing) {
+                            CoverImage(
+                                path: current.info.coverPath, colorId: current.seriesId, radius: Tok.Component.MacMiniPlayer.infoRadius
+                            )
+                            .frame(width: Tok.Component.MacMiniPlayer.artworkWidth, height: Tok.Component.MacMiniPlayer.artworkHeight)
+                            VStack(alignment: .leading, spacing: 0) {
+                                Button {
+                                    model.goToSeries(current.seriesId)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 0) {
+                                        Text(current.info.episodeTitle).font(.headline).lineLimit(1)
+                                        Text(current.info.seriesTitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
+                                    }
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                }
+                                .help("前往课程")
+
+                            }
+
+                        }
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+                    .padding(.horizontal, Tok.Component.MacMiniPlayer.padding)
+                    .foregroundStyle(.primary)
+                    .frame(maxWidth: Tok.Component.MacMiniPlayer.infoMaxWidth)
+                    Menu {
+                        Button {
+                            core.markCompleted(current.episodeId, seriesId: current.seriesId, completed: !completed)
+                        } label: {
+                            Label(
+                                completed ? "标记为未听完" : "标记为已听完",
+                                systemImage: completed ? "rectangle.badge.minus" : "rectangle.badge.checkmark"
+                            ).labelStyle(.titleAndIcon)
+                        }
+                        Button {
+                            core.toggleFavorite(
+                                current.seriesId, title: current.info.seriesTitle, coverPath: current.info.coverPath)
+                        } label: {
+                            Label(favorite ? "取消收藏课程" : "收藏课程", systemImage: favorite ? "bookmark.fill" : "bookmark").labelStyle(
+                                .titleAndIcon)
+                        }
+                        Button {
+                            model.goToSeries(current.seriesId)
+                        } label: {
+                            Label("前往课程", systemImage: "arrow.forward.circle").labelStyle(.titleAndIcon)
+                        }
+                    } label: {
+                        Label("更多操作", systemImage: "ellipsis")
+                            .font(.system(size: Tok.Component.MacMiniPlayer.controlIconSize, weight: .bold))
+                            .frame(width: Tok.Component.MacMiniPlayer.controlSize, height: Tok.Component.MacMiniPlayer.controlSize)
+                            .contentShape(Rectangle())
+                    }
+                    .menuStyle(.borderlessButton)
+                    .menuIndicator(.hidden)
+
                 }
-                Spacer(minLength: 8)
-                Menu {
-                    Button(completed ? "标记为未听完" : "标记为已听完") {
-                        core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
-                    }
-                    Button(favorite ? "取消收藏课程" : "收藏课程") {
-                        core.toggleFavorite(now.seriesId, title: now.info.seriesTitle, coverPath: now.info.coverPath)
-                    }
-                    Button("前往课程") { model.goToSeries(now.seriesId) }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("更多操作")
-            }
-            if let err = p.error {
-                Text(errorText(err)).foregroundStyle(C.danger)
-                if err == .cannotPlay { Button("重试") { p.retry() } }
-            } else {
-                VStack(spacing: 4) {
-                    Slider(
-                        value: Binding(get: { dragging ?? p.position }, set: { dragging = $0 }),
-                        in: 0...max(p.duration, 1)
-                    ) { editing in
-                        if !editing, let t = dragging { p.seek(to: t); dragging = nil }
-                    }
-                    .disabled(p.duration <= 0)
-                    .accessibilityLabel("播放进度")
+                .font(.system(size: Tok.Component.MacMiniPlayer.controlIconSize))
+                .labelStyle(.iconOnly)
+                .buttonStyle(.plain)
+                if let error = p.error {
                     HStack {
-                        Text(clock(dragging ?? p.position))
-                        Spacer()
-                        Text(rightLabel)
+                        Text(error == .gone ? "这一集已下架" : error == .damaged ? "这一集的文件已损坏" : "暂时无法播放，请检查网络后重试")
+                        if error == .cannotPlay { Button("重试", systemImage: "arrow.clockwise") { p.retry() } }
                     }
-                    .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+                    .foregroundStyle(C.danger)
                 }
-                controlRow
             }
-        }
-        // 收藏、已听完变了（或换了一集）才重读，不在每次进度刷新时读库
-        .task(id: "\(now.episodeId)|\(core.progressVersion)|\(core.favoritesVersion)") {
-            favorite = core.store.isFavorite(now.seriesId)
-            completed = core.store.loadProgress(now.episodeId)?.completed ?? false
+            .padding(.horizontal, Tok.Component.MacMiniPlayer.padding)
+            .padding(.vertical, Tok.Component.MacMiniPlayer.verticalPadding)
+            .frame(maxWidth: Tok.Component.MacMiniPlayer.width)
+            .fixedSize(horizontal: false, vertical: true)
+            .modifier(MacMiniPlayerGlass())
+            .padding(Tok.Component.MacMiniPlayer.padding)
+            .frame(maxWidth: .infinity)
+            .task(id: "\(current.episodeId)|\(core.progressVersion)|\(core.favoritesVersion)") {
+                favorite = core.store.isFavorite(current.seriesId)
+                completed = core.store.loadProgress(current.episodeId)?.completed ?? false
+            }
+            .task {
+                while !Task.isCancelled {
+                    p.refreshSleepDisplay()
+                    try? await Task.sleep(for: .seconds(1))
+                }
+            }
+
         }
     }
+}
 
-    private var rightLabel: String {
-        switch p.sleep {
-        case .end: return sleepLabel(nil)
-        case .timer: return sleepLabel(p.sleepLeft ?? 0)
-        case .off: return p.duration > 0 ? remainingClock(p.position, p.duration) : ""
+private struct MacPlaybackSliderStyle: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.sliderThumbVisibility(.hidden)
+        } else {
+            content
         }
     }
+}
 
-    // 倍速 | 后退 15 | 播放暂停 | 前进 30 | 睡眠定时（和 iPhone 同样的顺序）
-    private var controlRow: some View {
-        HStack {
-            Menu {
-                ForEach(PLAYBACK_RATES, id: \.self) { r in
-                    Toggle(rateMenuTitle(r), isOn: Binding(get: { p.rate == r }, set: { _ in p.setRate(r) }))
-                }
-            } label: {
-                Text(String(format: "%g×", p.rate)).monospacedDigit()
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
-            Spacer()
-            Button { p.seek(by: -SEEK_BACK_SECONDS) } label: {
-                Image(systemName: "gobackward.\(Int(SEEK_BACK_SECONDS))").font(.title2)
-            }
-            .accessibilityLabel("后退 \(Int(SEEK_BACK_SECONDS)) 秒")
-            Spacer()
-            Button { p.toggle() } label: {
-                PlaybackLoadingView(loading: p.loadingPlayback) {
-                    Image(systemName: p.looksPlaying ? "pause.circle.fill" : "play.circle.fill").font(.system(size: 44))
-                }
-            }
-            .accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
-            Spacer()
-            Button { p.seek(by: SEEK_FORWARD_SECONDS) } label: {
-                Image(systemName: "goforward.\(Int(SEEK_FORWARD_SECONDS))").font(.title2)
-            }
-            .accessibilityLabel("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒")
-            Spacer()
-            Menu {
-                ForEach(SLEEP_CHOICES) { ch in
-                    Toggle(ch.title, isOn: Binding(get: { p.sleep.choiceId == ch.id }, set: { _ in p.setSleep(sleepSetting(ch)) }))
-                }
-            } label: {
-                Image(systemName: p.sleep == .off ? "moon" : "moon.fill")
-            }
-            .menuStyle(.borderlessButton)
-            .menuIndicator(.hidden)
-            .fixedSize()
-            .accessibilityLabel("睡眠定时")
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func errorText(_ e: PlayerError) -> String {
-        switch e {
-        case .cannotPlay: "暂时无法播放，请检查网络后重试"
-        case .damaged: "这一集的文件已损坏"
-        case .gone: "这一集已下架"
+private struct MacMiniPlayerGlass: ViewModifier {
+    func body(content: Content) -> some View {
+        if #available(macOS 26.0, *) {
+            content.glassEffect(.regular, in: .capsule)
+        } else {
+            content.background(.regularMaterial, in: Capsule())
         }
     }
 }
 
 let CONTACT_EMAIL = "hello@zhibeifw.com"
 
-/// 关于智悲佛网（App 菜单第一项打开的窗口）：Logo、名字，下面：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
+/// 关于窗口：设置与关于两个分组，下方居中显示应用名称和版本。
 /// Mac 上能打开网页、发邮件：隐私政策、源代码用浏览器打开，联系用邮件 App。官网版最后多一行“检查更新”（和 Android 官网版一样）。
 struct MacAboutView: View {
     @Environment(AppCore.self) private var core
@@ -255,39 +185,43 @@ struct MacAboutView: View {
 
     var body: some View {
         VStack(spacing: 16) {
-            Image("Logo").resizable().scaledToFit().frame(width: 96).accessibilityLabel("智悲佛网 Logo")
-            Text("智悲佛网").font(.title2).fontWeight(.semibold)
             Form {
-                LabeledContent("清除缓存") {
-                    Button(clearing ? "正在清除…" : (clearResult ?? "清除")) { clearCache() }.disabled(clearing)
-                }
-                LabeledContent("刷新网络线路") {
-                    Button(checking ? "正在检测…" : (routeResult ?? "刷新")) { refreshRoutes() }.disabled(checking)
-                }
-                LabeledContent("隐私政策") { Button("打开") { openURL(NetConfig.privacyURL) } }
-                LabeledContent("源代码") { Button("打开") { openURL(NetConfig.sourceURL) } }
-                LabeledContent("联系") {
-                    Button(CONTACT_EMAIL) { if let u = URL(string: "mailto:\(CONTACT_EMAIL)") { openURL(u) } }
-                }
-                // 只有官网版有（App Store 版的更新交给 App Store）
-                if model.updates.channel == .site {
-                    LabeledContent("检查更新") {
-                        Button(checkingUpdate ? "正在检查…" : (updateResult ?? "检查")) {
-                            guard !checkingUpdate else { return }
-                            checkingUpdate = true
-                            Task {
-                                updateResult = await model.updates.check(manual: true)
-                                checkingUpdate = false
+                Section("设置") {
+                    LabeledContent("清除缓存") {
+                        Button(clearing ? "正在清除…" : (clearResult ?? "清除"), systemImage: "internaldrive") { clearCache() }.disabled(clearing)
+                    }
+                    LabeledContent("刷新网络线路") {
+                        Button(checking ? "正在检测…" : (routeResult ?? "刷新"), systemImage: "arrow.clockwise") { refreshRoutes() }.disabled(
+                            checking)
+                    }
+                    if model.updates.channel == .site {
+                        LabeledContent("检查更新") {
+                            Button(checkingUpdate ? "正在检查…" : (updateResult ?? "检查"), systemImage: "arrow.triangle.2.circlepath") {
+                                guard !checkingUpdate else { return }
+                                checkingUpdate = true
+                                Task {
+                                    updateResult = await model.updates.check(manual: true)
+                                    checkingUpdate = false
+                                }
                             }
+                            .disabled(checkingUpdate)
                         }
-                        .disabled(checkingUpdate)
+                    }
+                }
+                Section("关于") {
+                    LabeledContent("联系") {
+                        Button(CONTACT_EMAIL, systemImage: "envelope") { if let u = URL(string: "mailto:\(CONTACT_EMAIL)") { openURL(u) } }
+                    }
+                    LabeledContent("隐私政策") { Button("打开", systemImage: "hand.raised") { openURL(NetConfig.privacyURL) } }
+                    LabeledContent("源代码") {
+                        Button("打开", systemImage: "chevron.left.forwardslash.chevron.right") { openURL(NetConfig.sourceURL) }
                     }
                 }
             }
             .formStyle(.grouped)
             .frame(width: 420)
             VStack(spacing: 4) {
-                Text("智悲佛网 版权所有")
+                Text("智悲佛网")
                 Text("版本 " + AppInfo.version)
             }
             .font(.caption).foregroundStyle(.secondary)
@@ -313,5 +247,62 @@ struct MacAboutView: View {
             defer { checking = false }
             routeResult = await core.refreshRoutes()
         }
+    }
+}
+
+private struct MacPlaybackInfo<Metadata: View>: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let player: PlayerController
+    @ViewBuilder var metadata: Metadata
+    @State private var dragging: Double?
+    @State private var hovering = false
+    @State private var editing = false
+    private var expanded: Bool { hovering || editing }
+
+    var body: some View {
+        ZStack(alignment: .bottom) {
+            metadata
+                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+                .offset(y: Tok.Component.MacMiniPlayer.metadataOffset)
+                .opacity(expanded ? 0 : 1)
+                .allowsHitTesting(!expanded)
+            VStack(spacing: 0) {
+                HStack {
+                    Text(clock(dragging ?? player.position))
+                    Spacer()
+                    Text(remainingClock(dragging ?? player.position, player.duration))
+                }
+                .font(.caption).monospacedDigit().foregroundStyle(.secondary)
+                .opacity(expanded ? 1 : 0)
+                .accessibilityHidden(!expanded)
+                slider
+                    .controlSize(.regular)
+                    .scaleEffect(x: 1, y: expanded ? 1 : Tok.Component.MacMiniPlayer.idleProgressScale)
+                    .onHover { active in
+                        if active { hovering = true }
+                    }
+            }
+            .offset(y: expanded ? -Tok.Component.MacMiniPlayer.progressLift : Tok.Component.MacMiniPlayer.idleTrackOffset)
+        }
+        .frame(height: Tok.Component.MacMiniPlayer.infoHeight)
+        .contentShape(Rectangle())
+        // 滑块动画不改变退出边界，避免展开与收起相互触发。
+        .onHover { if !$0 { hovering = false } }
+        .animation(reduceMotion ? nil : .easeInOut, value: expanded)
+        .onChange(of: player.current?.episodeId) { _, _ in dragging = nil }
+    }
+
+    private var slider: some View {
+        Slider(value: Binding(get: { dragging ?? player.position }, set: { dragging = $0 }), in: 0...max(1, player.duration)) { active in
+            editing = active
+            if !active, let target = dragging {
+                player.seek(to: target)
+                dragging = nil
+            }
+        }
+        .modifier(MacPlaybackSliderStyle())
+        .disabled(player.duration <= 0)
+        .accessibilityLabel("播放进度")
+        .accessibilityValue(clock(dragging ?? player.position) + "，剩余" + remainingClock(dragging ?? player.position, player.duration))
     }
 }

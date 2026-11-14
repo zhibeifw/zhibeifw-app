@@ -3,7 +3,7 @@ import CoreImage.CIFilterBuiltins
 
 let CONTACT_EMAIL = "hello@zhibeifw.com"
 
-/// 关于（标签栏最右边只有 i 图标的标签）：Logo、名字，下面一列：清除缓存、刷新网络线路、隐私政策、源代码、联系，最下面版权和版本。
+/// 关于：设置与关于两个分组，下方居中显示应用名称和版本。
 /// 电视上没有浏览器、也不能发邮件：联系进去显示电邮地址；隐私政策、源代码进去是二维码和网址。
 struct TVAboutView: View {
     @Environment(AppCore.self) private var core
@@ -14,23 +14,19 @@ struct TVAboutView: View {
 
     var body: some View {
         List {
-            Section {
+            Section("设置") {
                 Button { clearCache() } label: { row("清除缓存", clearing ? "正在清除…" : clearResult) }
                 Button { refreshRoutes() } label: { row("刷新网络线路", checking ? "正在检测…" : routeResult) }
+            }
+            Section {
+                NavigationLink(value: TVRoute.contact) { row("联系", CONTACT_EMAIL) }
                 NavigationLink(value: TVRoute.privacy) { row("隐私政策", nil) }
                 NavigationLink(value: TVRoute.source) { row("源代码", nil) }
-                NavigationLink(value: TVRoute.contact) { row("联系", CONTACT_EMAIL) }
             } header: {
-                VStack(spacing: 20) {
-                    Image("Logo").resizable().scaledToFit().frame(width: 160).accessibilityLabel("智悲佛网 Logo")
-                    Text("智悲佛网").font(.title2).fontWeight(.semibold).foregroundStyle(.primary)
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.bottom, 30)
-                .textCase(nil)
+                Text("关于")
             } footer: {
                 VStack(spacing: 8) {
-                    Text("智悲佛网 版权所有")
+                    Text("智悲佛网")
                     Text("版本 " + AppInfo.version)
                 }
                 .font(.caption)

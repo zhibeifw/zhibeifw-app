@@ -390,7 +390,8 @@ final class DownloadManager {
     func cleanupCovers() {
         let names = (try? FileManager.default.contentsOfDirectory(atPath: files.coversDir.path)) ?? []
         let keys = names.filter { $0.hasSuffix(".jpg") }.map { String($0.dropLast(4)) }
-        for k in orphanCoverKeys(keys, seriesWithDownloads: (try? store.seriesIdsWithDownloads()) ?? []) {
+        guard let seriesIDs = try? store.seriesIdsWithDownloads() else { return }
+        for k in orphanCoverKeys(keys, seriesWithDownloads: seriesIDs) {
             try? FileManager.default.removeItem(at: files.coversDir.appendingPathComponent(k + ".jpg"))
         }
     }
@@ -431,7 +432,12 @@ final class DownloadManager {
             set(id, DlProgress(status: .paused, written: written, total: r.total, seriesId: r.seriesId), notify: false)
         }
         // 孤儿临时文件：没有下载记录的续传数据、下完的文件，以及旧版本留下的半截文件和 .tmp
-        let pending = ((try? store.allDownloads()) ?? []).filter { $0.state != .done }
+        defer {
+            finishBatchIfIdle()
+            onChange?()
+        }
+        guard let all = try? store.allDownloads() else { return }
+        let pending = all.filter { $0.state != .done }
         // 续传数据按“没下完”保留，不只看暂停：继续时记录先改成下载中，等线路回来才读续传数据
         let keep = Set(
             pending.map { files.resumeDataFile($0.episodeId).lastPathComponent }
@@ -440,7 +446,6 @@ final class DownloadManager {
             try? FileManager.default.removeItem(at: files.partDir.appendingPathComponent(n))
         }
         // 资料库音频目录里没有下载记录对应的文件（移入资料库到一半被关掉等）
-        let all = (try? store.allDownloads()) ?? []
         let keepAudio = all.map { ($0.localFile ?? files.finalRelative($0.episodeId, audioPath: $0.audioPath)) as NSString }.map {
             $0.lastPathComponent
         }
@@ -450,7 +455,5 @@ final class DownloadManager {
             try? FileManager.default.removeItem(at: files.audioDir.appendingPathComponent(n))
         }
         cleanupCovers()
-        finishBatchIfIdle()
-        onChange?()
     }
 }

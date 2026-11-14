@@ -12,6 +12,7 @@ import android.os.Looper
 import androidx.core.content.ContextCompat
 import com.zhibeifw.app.core.fileKey
 import java.io.File
+import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
@@ -39,6 +40,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     /** 集 ID → 系统的下载编号，和反过来的表（查系统下载表时按编号认集） */
     private val sysIds = ConcurrentHashMap<String, Long>()
     private val idsBySys = ConcurrentHashMap<Long, String>()
+    private val generations = mutableMapOf<Long, Int>()
 
     /** 数据库里没下完的集已经全部登记进 byKey（第一次对账时）：在这之前认不出的一律不当孤儿删 */
     @Volatile
@@ -48,11 +50,14 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private val scanQueued = AtomicBoolean(false)
 
     private fun remember(id: String, sysId: Long) {
-        sysIds.put(id, sysId)?.let { if (it != sysId) idsBySys.remove(it) }
+        sysIds[id] = sysId
         idsBySys[sysId] = id
     }
 
-    private fun forget(id: String): Long? = sysIds.remove(id)?.also { idsBySys.remove(it) }
+    private fun removeTask(id: String, taskId: Long) {
+        sysIds.remove(id, taskId)
+        runCatching { dm.remove(taskId) }
+    }
 
     /** 已经交出“下完 / 失败”的系统编号：等收尾时别重复交 */
     private val reported = ConcurrentHashMap.newKeySet<Long>()
@@ -86,26 +91,29 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
 
     // 交给系统、从系统删掉都是跨进程调用（每集几毫秒），一次几十上百集会卡住主线程；
     // 放到查表用的那条线程上按顺序做：先交后删的顺序不会乱，暂停、取消总能删掉刚交出去的那一个
-    override fun start(id: String, url: String, title: String, description: String) {
-        val name = fileKey(id) + ".part"
+    override fun start(id: String, generation: Int, url: String, title: String, description: String) {
+        val name = "${fileKey(id)}.${UUID.randomUUID()}.part"
         byKey[fileKey(id)] = id
         io.execute {
             runCatching {
-                File(dir(), name).delete() // 同名旧文件在的话系统会另起名字
                 val req = AndroidDownloads.Request(Uri.parse(url))
                     .setTitle(title)
                     .setDescription(description)
                     .setDestinationInExternalFilesDir(ctx, DIR, name)
-                remember(id, dm.enqueue(req))
-            }.onFailure { emit(DownloadEvent.Failed(id, false)) }
+                val taskId = dm.enqueue(req)
+                generations[taskId] = generation
+                remember(id, taskId)
+            }.onFailure { emit(DownloadEvent.Failed(id, generation, false)) }
         }
     }
 
     override fun stop(id: String) {
-        io.execute { forget(id)?.let { runCatching { dm.remove(it) } } }
+        io.execute { sysIds[id]?.let { removeTask(id, it) } }
     }
 
-    override fun release(id: String) = stop(id)
+    override fun release(id: String, taskId: Long) {
+        io.execute { removeTask(id, taskId) }
+    }
 
     override suspend fun activeIds(candidates: Collection<String>): Set<String>? {
         // 登记和查表都在同一条线程上按顺序做：排在前面、还没交给系统的那几集先交出去，查表时就在了；
@@ -136,13 +144,13 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
         val file: File?
     )
 
-    /** 查系统下载表里我们的下载（文件名认得出、却没有对应下载记录的直接删掉：记录已经没了） */
-    /** 查系统下载表；查不了返回 null */
+    /** 查系统下载表并恢复当前任务；查不了返回 null。 */
     private fun rows(): List<Row>? {
         val out = ArrayList<Row>()
         val orphans = ArrayList<Long>()
         val ok = runCatching {
-            dm.query(AndroidDownloads.Query())?.use { c ->
+            val cursor = dm.query(AndroidDownloads.Query()) ?: return null
+            cursor.use { c ->
                 val iId = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_ID)
                 val iStatus = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_STATUS)
                 val iReason = c.getColumnIndexOrThrow(AndroidDownloads.COLUMN_REASON)
@@ -160,12 +168,11 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     val hinted = if (iHint >= 0) c.getString(iHint)?.let(Uri::parse)?.lastPathSegment else null
                     val name = named?.name ?: hinted
                     // 先按本次交给系统时记下的编号认；App 重启后按文件名认
-                    val id = idsBySys[sysId] ?: name?.removeSuffix(".part")?.let { byKey[it] }
+                    val id = idsBySys[sysId] ?: name?.substringBefore('.')?.let { byKey[it] }
                     if (id == null) {
                         if (name != null) orphans.add(sysId); continue
                     }
-                    val file = named ?: if (uri != null) File(dir(), fileKey(id) + ".part") else null
-                    remember(id, sysId)
+                    val file = named ?: if (uri != null && name != null) File(dir(), name) else null
                     out.add(
                         Row(
                             sysId,
@@ -180,8 +187,23 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                 }
             }
         }.isSuccess
+        if (!ok) return null
         if (orphans.isNotEmpty() && candidatesLoaded) runCatching { dm.remove(*orphans.toLongArray()) }
-        return if (ok) out else null
+        val live = out.mapTo(HashSet()) { it.sysId }
+        generations.keys.retainAll(live)
+        idsBySys.keys.retainAll(live)
+        sysIds.entries.removeAll { it.value !in live }
+        // 冷启动按文件名恢复旧任务；同一集如果留有多个任务，只接管最新的。
+        for ((id, tasks) in out.groupBy { it.id }) {
+            if (id !in sysIds.keys) {
+                tasks.filterNot { idsBySys.containsKey(it.sysId) }.maxByOrNull { it.sysId }?.let { remember(id, it.sysId) }
+            }
+            tasks.filter { sysIds[id] != it.sysId }.forEach {
+                idsBySys[it.sysId] = id
+                removeTask(id, it.sysId)
+            }
+        }
+        return out.filter { sysIds[it.id] == it.sysId }
     }
 
     private fun emit(e: DownloadEvent) = main.post { handler?.invoke(e) }
@@ -198,21 +220,24 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
             throttles.keys.retainAll(live)
             for (r in all) when (r.status) {
                 AndroidDownloads.STATUS_SUCCESSFUL ->
-                    if (reported.add(r.sysId)) emit(
-                        if (r.file != null) DownloadEvent.Finished(
-                            r.id,
-                            r.file
-                        ) else DownloadEvent.Failed(r.id, false)
-                    )
+                    if (reported.add(r.sysId)) {
+                        if (r.file != null) {
+                            emit(DownloadEvent.Finished(r.id, generations[r.sysId], r.sysId, r.file))
+                        } else {
+                            emit(DownloadEvent.Failed(r.id, generations[r.sysId], false))
+                            removeTask(r.id, r.sysId)
+                        }
+                    }
 
                 AndroidDownloads.STATUS_FAILED -> if (reported.add(r.sysId)) {
                     emit(
                         DownloadEvent.Failed(
                             r.id,
+                            generations[r.sysId],
                             r.reason == AndroidDownloads.ERROR_INSUFFICIENT_SPACE
                         )
                     )
-                    forget(r.id); runCatching { dm.remove(r.sysId) }
+                    removeTask(r.id, r.sysId)
                 }
 
                 else -> {
@@ -221,6 +246,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     if (th.pass(r.soFar, r.total)) emit(
                         DownloadEvent.Progress(
                             r.id,
+                            generations[r.sysId],
                             r.soFar,
                             r.total
                         )

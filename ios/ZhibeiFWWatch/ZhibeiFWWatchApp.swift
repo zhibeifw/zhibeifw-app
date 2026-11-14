@@ -27,6 +27,7 @@ struct ZhibeiFWWatchApp: App {
 final class WatchModel {
     static let shared = WatchModel()
     let core = AppCore()
+    let upgrade = UpgradeChecker()
     var downloads: DownloadManager?
     var downloadVersion = 0
     var playerOpen = false
@@ -35,7 +36,11 @@ final class WatchModel {
     var versions: [Int] { [core.catalogVersion, core.progressVersion, core.favoritesVersion, downloadVersion] }
 
     init() {
-        core.onReady = { [weak self] in self?.path = [.home] }
+        core.onReady = { [weak self] in
+            guard let self else { return }
+            self.path = [.home]
+            Task { await self.upgrade.check(manual: false) }
+        }
         core.presentPlayer = { [weak self] in self?.playerOpen = true }
         core.onStoreReady = { [weak self] in
             guard let self else { return }

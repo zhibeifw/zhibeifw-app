@@ -316,7 +316,7 @@ struct MacSeriesView: View {
 }
 
 /// 一集（和 iPhone 课程页同样的两行）：第一行集名；第二行左边是播放胶囊（没听过“▶ 70 分钟”，听了一半带进度条“剩 32:21”，
-/// 听完了打勾；在播的是暂停键），右边“•••”（标记已听完）。点整行播放 / 暂停；鼠标移上去整行浅色高亮。
+/// 听完了打勾；播放中显示实际音量声波），右边直接显示标记听完按钮。点整行播放 / 暂停；鼠标移上去整行浅色高亮。
 struct MacEpisodeRow: View {
     @Environment(AppCore.self) private var core
     let episode: EpisodeRow
@@ -336,7 +336,11 @@ struct MacEpisodeRow: View {
                 Button { core.togglePlay(episode.id, ctx: ctx) } label: {
                     HStack(spacing: 6) {
                         PlaybackLoadingView(loading: playing && (p?.loadingPlayback ?? false)) {
-                    Image(systemName: playing ? "pause.fill" : (pill.kind == .done ? "checkmark" : "play.fill"))
+                    if playing, let p {
+                        AudioWaveformIcon(player: p)
+                    } else {
+                        Image(systemName: pill.kind == .done ? "checkmark" : "play.fill")
+                    }
                 }
                             .font(.caption)
                         if pill.kind == .half, let prog {
@@ -349,15 +353,10 @@ struct MacEpisodeRow: View {
                 .buttonBorderShape(.capsule)
                 .accessibilityLabel((playing ? "暂停 " : "播放 ") + episode.title)
                 Spacer()
-                Menu {
-                    MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
-                } label: {
-                    Image(systemName: "ellipsis")
-                }
-                .menuStyle(.borderlessButton)
-                .menuIndicator(.hidden)
-                .fixedSize()
-                .accessibilityLabel("更多操作")
+                MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
+                    .labelStyle(.iconOnly)
+                    .buttonStyle(.borderless)
+                    .help(prog?.completed == true ? "标记为未听完" : "标记为已听完")
             }
         }
         .padding(.vertical, 12)
@@ -366,9 +365,6 @@ struct MacEpisodeRow: View {
         .contentShape(Rectangle())
         .onHover { hovering = $0 }
         .onTapGesture { core.togglePlay(episode.id, ctx: ctx) }
-        .contextMenu {
-            MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
-        }
     }
 }
 
@@ -383,7 +379,7 @@ struct MarkCompletedButton: View {
         Button {
             core.markCompleted(episodeId, seriesId: seriesId, completed: !completed)
         } label: {
-            Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
+            Label(completed ? "标记为未听完" : "标记为已听完", systemImage: completed ? "rectangle.badge.minus" : "rectangle.badge.checkmark")
         }
     }
 }
@@ -396,7 +392,7 @@ func progressText(_ p: Prog?, knownDuration: Double?) -> String {
     return ""
 }
 
-/// 最近播放：点一集接着播；右键：标记已听完、前往课程、删除记录。工具栏里有“清空”。
+/// 最近播放：点一集接着播；右键：标记已听完、前往课程。工具栏里有“清空”。
 struct MacRecentView: View {
     @Environment(AppCore.self) private var core
     @Environment(MacModel.self) private var model
@@ -442,29 +438,38 @@ struct MacRecentView: View {
         let prog = liveProgress(
             currentId: p?.current?.episodeId, position: p?.position ?? 0, duration: p?.duration ?? 0,
             active: p?.looksPlaying ?? false, episodeId: r.episodeId, fromDb: r.progress)
-        return Button {
-            core.playFromRecent(r, open: false)
-        } label: {
-            HStack(spacing: 14) {
-                CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 6)
-                    .frame(width: 96, height: MacLayout.coverHeight(96))
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(r.epTitle).lineLimit(2)
-                    Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+        return HStack {
+            Button {
+                core.playFromRecent(r, open: false)
+            } label: {
+                HStack(spacing: 14) {
+                    CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 6)
+                        .frame(width: 96, height: MacLayout.coverHeight(96))
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(r.epTitle).lineLimit(2)
+                        Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
+                        .foregroundStyle(.secondary).monospacedDigit()
                 }
-                Spacer()
-                Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
-                    .foregroundStyle(.secondary).monospacedDigit()
+                .padding(.vertical, 10)
+                .contentShape(Rectangle())
             }
-            .padding(.vertical, 10)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .contextMenu {
-            MarkCompletedButton(episodeId: r.episodeId, seriesId: r.seriesId, completed: prog?.completed ?? false)
-            Button { model.goToSeries(r.seriesId) } label: { Label("前往课程", systemImage: "arrow.forward.circle") }
-            Divider()
-            Button(role: .destructive) { core.hideRecent(r.episodeId) } label: { Label("删除记录", systemImage: "trash") }
+            .buttonStyle(.plain)
+            .contextMenu {
+                MarkCompletedButton(episodeId: r.episodeId, seriesId: r.seriesId, completed: prog?.completed ?? false)
+                Button { model.goToSeries(r.seriesId) } label: { Label("前往课程", systemImage: "arrow.forward.circle") }
+            }
+            Button {
+                model.goToSeries(r.seriesId)
+            } label: {
+                Label("前往课程", systemImage: "arrow.forward.circle")
+                    .labelStyle(.iconOnly)
+            }
+            .buttonStyle(.borderless)
+            .help("前往课程")
+            .accessibilityLabel("前往课程，" + r.seriesTitle)
         }
     }
 

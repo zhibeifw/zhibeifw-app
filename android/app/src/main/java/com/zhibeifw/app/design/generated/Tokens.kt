@@ -24,6 +24,7 @@ object Tok {
             val iconDisabled = ZColor(light = 0xFF8E8E93, dark = 0xFF636366)
             val danger = ZColor(light = 0xFFD70015, dark = 0xFFFF6961)
         }
+        val compactPlayerInfo = ZColor(light = 0xFF626262, dark = 0xFF626262)
     }
     object ContentPalette {
         val colors: List<ZColor> = listOf(ZColor.both(0xFFD9691F), ZColor.both(0xFF3D7EBF), ZColor.both(0xFF6B4FA0), ZColor.both(0xFFD65C7A), ZColor.both(0xFF3F8F8F), ZColor.both(0xFF7A8B3C), ZColor.both(0xFF3F8F6B), ZColor.both(0xFF7A3B36))
@@ -331,6 +332,82 @@ object Tok {
             const val spinnerGap: Float = 16f
             const val lineGap: Float = 8f
         }
+        object Vision {
+            const val pageMargin: Float = 24f
+            const val sectionGap: Float = 32f
+            const val cardGap: Float = 20f
+            const val largeCardWidth: Float = 320f
+            const val cardWidth: Float = 240f
+            const val categoryMinWidth: Float = 240f
+            const val categoryAspectRatio: Float = 1.7777777778f
+            const val categoryIconSize: Float = 64f
+            const val playerCoverWidth: Float = 320f
+            const val miniPlayerWidth: Float = 600f
+            const val hitSize: Float = 60f
+            const val hitGap: Float = 8f
+            const val playerInfoHeight: Float = 134f
+            const val actionsWidth: Float = 320f
+            const val playerWindowGap: Float = 16f
+        }
+        object MacMiniPlayer {
+            const val width: Float = 700f
+            const val artworkWidth: Float = 60f
+            const val artworkHeight: Float = 34f
+            const val spacing: Float = 12f
+            const val padding: Float = 12f
+            const val verticalPadding: Float = 4f
+            const val infoRadius: Float = 6f
+            const val controlSpacing: Float = 12f
+            const val controlSize: Float = 28f
+            const val rateWidth: Float = 64f
+            const val controlIconSize: Float = 20f
+            const val infoMaxWidth: Float = 680f
+            const val infoHeight: Float = 52f
+            const val idleProgressScale: Float = 0.35f
+            const val progressLift: Float = 12f
+            const val idleTrackOffset: Float = 4f
+            const val metadataOffset: Float = 4f
+        }
+        object CompactPlayer {
+            const val width: Float = 1080f
+            const val artworkWidth: Float = 96f
+            const val artworkHeight: Float = 54f
+            const val spacing: Float = 12f
+            const val padding: Float = 12f
+            const val infoRadius: Float = 6f
+            const val minWidth: Float = 480f
+            const val controlSpacing: Float = 24f
+            const val controlSize: Float = 48f
+            const val controlIconSize: Float = 28f
+            const val infoMaxWidth: Float = 680f
+            const val infoHeight: Float = 80f
+            const val idleProgressScale: Float = 0.12f
+            const val progressLift: Float = 16f
+            const val activeProgressScale: Float = 0.35f
+            const val timeProgressGap: Float = -8f
+            const val roundTrackHeight: Float = 8f
+            const val roundTrackIdleScale: Float = 0.375f
+            const val nativeSliderOpacity: Float = 0.01f
+            const val idleTrackOffset: Float = 14f
+            const val rateWidth: Float = 80f
+            const val leadingInset: Float = 12f
+            const val verticalPadding: Float = 4f
+            const val metadataOffset: Float = 6f
+        }
+        object WatchPlayer {
+            const val spacing: Float = 8f
+            const val playSize: Float = 72f
+            const val skipSize: Float = 44f
+            const val actionHeight: Float = 36f
+        }
+        object AudioWaveform {
+            const val width: Float = 16f
+            const val height: Float = 14f
+            const val barWidth: Float = 2.5f
+            const val spacing: Float = 2f
+            const val spectrumGain: Float = 5f
+            const val spectrumExponent: Float = 0.5f
+        }
     }
     object Motion {
         const val pressedOpacity: Float = 0.7f
@@ -345,5 +422,7 @@ object Tok {
         const val playProgressDiameter: Float = 32f
         const val latestPlayProgressDiameter: Float = 24f
         const val gaugeNative: Float = 52f
+        const val visionHitSize: Float = 60f
+        const val visionHitGap: Float = 8f
     }
 }

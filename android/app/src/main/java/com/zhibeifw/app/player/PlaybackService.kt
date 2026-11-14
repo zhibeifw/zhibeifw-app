@@ -16,14 +16,19 @@ import com.zhibeifw.app.MainActivity
 import com.zhibeifw.app.design.generated.Tok
 
 /** 整个 App 只有一个 ExoPlayer（播放状态的唯一来源）。 */
+@OptIn(UnstableApi::class)
 object PlayerHolder {
+    val waveform = AudioWaveform()
     @Volatile
     private var p: ExoPlayer? = null
     val SEEK_BACK_MS = (Tok.Player.seekBackSeconds * 1000).toLong()
     val SEEK_FORWARD_MS = (Tok.Player.seekForwardSeconds * 1000).toLong()
 
     fun get(ctx: Context): ExoPlayer = p ?: synchronized(this) {
-        p ?: ExoPlayer.Builder(ctx.applicationContext)
+        p ?: ExoPlayer.Builder(ctx.applicationContext, object : androidx.media3.exoplayer.DefaultRenderersFactory(ctx.applicationContext) {
+            override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
+                super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)?.let { WaveformAudioSink(it, waveform) }
+        })
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA)
                     .setContentType(C.AUDIO_CONTENT_TYPE_SPEECH).build(), true

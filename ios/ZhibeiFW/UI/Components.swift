@@ -276,6 +276,7 @@ struct ListRowView: View {
 // MARK: - 播放胶囊
 
 struct PlayPill: View {
+    @Environment(AppModel.self) private var model
     var state: PillState
     var ratio: Double
     var playing: Bool
@@ -288,7 +289,7 @@ struct PlayPill: View {
             Button(action: onIcon) {
                 PlaybackLoadingView(loading: loading) {
                     if playing {
-                        ZIcon(name: "pause", size: CP.EpisodeRow.playIcon)
+                        if let player = model.player { AudioWaveformIcon(player: player) }
                     } else if state.kind == .done {
                         ZIcon(name: "refresh", size: CP.EpisodeRow.replayIcon)
                     } else {

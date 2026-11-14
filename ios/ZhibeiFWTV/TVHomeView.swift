@@ -13,11 +13,16 @@ enum TVLayout {
 /// 主页：新课程、编辑精选、各分类，每行横向滚动。
 struct TVHomeView: View {
     @Environment(AppCore.self) private var core
+    @Environment(TVModel.self) private var model
 
     var body: some View {
         let home = core.home
         ScrollView(.vertical) {
             LazyVStack(alignment: .leading, spacing: 60) {
+                if model.upgrade.showsNotice {
+                    StoreUpgradeNotice(checker: model.upgrade)
+                        .padding(.horizontal, TVLayout.pageMargin)
+                }
                 if core.syncFailed {
                     Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
                         .padding(.horizontal, TVLayout.pageMargin)

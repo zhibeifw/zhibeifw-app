@@ -200,6 +200,9 @@ final class AppCore {
         home = (try? store.loadHome()) ?? HomeData()
         catalogVersion += 1
         prefetchHomeCovers?(home)
+        #if !os(tvOS) && !os(macOS)
+        ListeningShortcuts.updateAppShortcutParameters()
+        #endif
     }
 
     /// 同步目录。userInitiated：主页下拉刷新。有新内容就立刻换上主页。

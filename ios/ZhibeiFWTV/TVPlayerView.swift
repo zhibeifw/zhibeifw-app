@@ -172,7 +172,8 @@ private struct TVPlayerControls: View {
                 Button(checked(ch.title, p.sleep.choiceId == ch.id)) { p.setSleep(sleepSetting(ch)) }
             }
         case .more:
-            Button(completed ? "标记为未听完" : "标记为已听完") {
+            Button(completed ? "标记为未听完" : "标记为已听完",
+                           systemImage: completed ? "rectangle.badge.minus" : "rectangle.badge.checkmark") {
                 core.markCompleted(now.episodeId, seriesId: now.seriesId, completed: !completed)
             }
             Button(favorite ? "取消收藏课程" : "收藏课程") {

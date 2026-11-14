@@ -26,13 +26,13 @@ struct WatchRecentView: View {
                 WatchEpisodeRow(
                     id: row.id, series: row.seriesId, title: row.epTitle, scope: .recent,
                     progress: row.progress, duration: row.epDuration ?? 0, subtitle: row.seriesTitle,
-                    play: { core.playFromRecent(row, open: false) }, compactPlayback: true)
+                    play: { core.playFromRecent(row, open: true) }, compactPlayback: true)
             }
         }
         .navigationTitle("最近播放")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Button("清空", role: .destructive) {
+                Button("清空", systemImage: "trash", role: .destructive) {
                     model.confirm("清空最近列表？", message: "保留收听进度、已听完标记和下载。") { core.clearRecent() }
                 }.disabled(rows.isEmpty)
             }
@@ -128,19 +128,19 @@ struct WatchBatchDownloadButton: View {
         let states = ids.map { model.downloads?.items[$0]?.status ?? core.store.getDownload($0)?.state }
         Group {
             if states.contains(.queued) || states.contains(.downloading) {
-                Button("暂停全部下载") { model.downloads?.pauseAll(seriesId: series) }
+                Button("暂停全部下载", systemImage: "pause.circle") { model.downloads?.pauseAll(seriesId: series) }
             } else if states.contains(.paused) {
-                Button("继续下载") { model.resumeDownloads(seriesId: series) }
+                Button("继续下载", systemImage: "arrow.down.circle") { model.resumeDownloads(seriesId: series) }
             } else if !states.isEmpty && states.allSatisfy({ $0 == .done }) {
                 if series != nil {
-                    Button("删除这门课的所有下载", role: .destructive) {
+                    Button("删除这门课的所有下载", systemImage: "trash", role: .destructive) {
                         model.confirm("删除这门课的所有下载？", message: "不会删除收藏和收听进度。") {
                             model.deleteDownloads(Set(ids))
                         }
                     }
                 }
             } else if series != nil {
-                Button("下载全部") { model.download(Set(ids)) }.disabled(ids.isEmpty)
+                Button("下载全部", systemImage: "arrow.down.circle") { model.download(Set(ids)) }.disabled(ids.isEmpty)
             }
         }
         .swipeActions {
@@ -170,19 +170,17 @@ struct WatchEpisodeActionsView: View {
         List {
             Text(title).font(.headline)
             if info != nil {
-                Button("播放") { core.playAndOpen(id, ctx: scope.context(series)) }
+                Button("播放", systemImage: "play.fill") { core.playAndOpen(id, ctx: scope.context(series)) }
             }
-            NavigationLink("前往课程", value: WatchRoute.series(series))
-            Button(progress?.completed == true ? "标记为未听完" : "标记为已听完") {
+            NavigationLink(value: WatchRoute.series(series)) {
+                Label("前往课程", systemImage: "arrow.forward.circle")
+            }
+            Button(progress?.completed == true ? "标记为未听完" : "标记为已听完",
+                   systemImage: progress?.completed == true ? "rectangle.badge.minus" : "rectangle.badge.checkmark") {
                 core.markCompleted(id, seriesId: series, completed: progress?.completed != true)
             }
             WatchDownloadActionRows(id: id, download: download, canDownload: info != nil) {
                 model.confirm("删除此下载？") { model.deleteDownloads([id]) }
-            }
-            if scope == .recent {
-                Button("从最近列表移除", role: .destructive) {
-                    core.hideRecent(id); dismiss()
-                }
             }
         }
         .navigationTitle("更多操作")

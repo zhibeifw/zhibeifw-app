@@ -268,7 +268,7 @@ fun ZIcon(name: String, size: Dp, color: Color, modifier: Modifier = Modifier) {
 }
 
 /** 后退 15 / 前进 30 秒：用系统媒体库 Media3 自带的图标（和锁屏、通知栏同一套）。 */
-@OptIn(UnstableApi::class)
+@androidx.annotation.OptIn(markerClass = [UnstableApi::class])
 @Composable
 fun SeekIcon(forward: Boolean, size: Dp, color: Color) {
     val icon = if (forward) CommandButton.ICON_SKIP_FORWARD_30 else CommandButton.ICON_SKIP_BACK_15

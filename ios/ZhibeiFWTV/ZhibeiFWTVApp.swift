@@ -1,10 +1,13 @@
 import SwiftUI
 import Observation
+import UIKit
+import Intents
 
 /// Apple TV 版入口。共用的状态与动作在 AppCore（ios/Shared/App）；电视自己的界面状态在 TVModel。
 @main
 struct ZhibeiFWTVApp: App {
-    @State private var model = TVModel()
+    @UIApplicationDelegateAdaptor(TVSiriDelegate.self) private var delegate
+    @State private var model = TVModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
@@ -12,7 +15,12 @@ struct ZhibeiFWTVApp: App {
             TVRootView()
                 .environment(model)
                 .environment(model.core)
-                .task { await model.core.boot() }
+                .task {
+                    await model.core.boot()
+                    if INPreferences.siriAuthorizationStatus() == .notDetermined {
+                        INPreferences.requestSiriAuthorization { _ in }
+                    }
+                }
                 .onChange(of: scenePhase) { _, p in
                     if p == .active { model.core.onForeground() }
                     if p == .background { model.core.onBackground() }
@@ -36,6 +44,8 @@ enum TVRoute: Hashable {
 @MainActor
 @Observable
 final class TVModel {
+    static let shared = TVModel()
+    @ObservationIgnored let upgrade = UpgradeChecker()
     @ObservationIgnored let core: AppCore
     var tab: TVTab = .home {
         didSet { if tab != .nowPlaying { browseTab = tab } }
@@ -65,6 +75,9 @@ final class TVModel {
 
     init() {
         core = AppCore()
+        core.onReady = { [weak self] in
+            Task { await self?.upgrade.check(manual: false) }
+        }
         // 选一集开始播放：切到“正在播放”标签（不另弹全屏播放页，和系统“音乐”App 一样）
         core.presentPlayer = { [weak self] in
             guard let self, self.core.player.current != nil else { return }
@@ -75,5 +88,12 @@ final class TVModel {
             let cards = home.ongoing + home.featured + home.categories.flatMap { $0.series.prefix(5) }
             ImageLoader.shared.prefetch(cards.map { (path: $0.coverPath, requested: COVER_THUMB_WIDTHS.last!) })
         }
+    }
+}
+
+final class TVSiriDelegate: NSObject, UIApplicationDelegate {
+    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
+        guard intent is INPlayMediaIntent else { return nil }
+        return SiriMediaHandler.shared
     }
 }

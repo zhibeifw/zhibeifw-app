@@ -22,6 +22,7 @@ enum Tok {
             static let iconDisabled = ZColor(light: 0xFF8E8E93, dark: 0xFF636366)
             static let danger = ZColor(light: 0xFFD70015, dark: 0xFFFF6961)
         }
+        static let compactPlayerInfo = ZColor(light: 0xFF626262, dark: 0xFF626262)
     }
     enum ContentPalette {
         static let colors: [ZColor] = [ZColor(both: 0xFFD9691F), ZColor(both: 0xFF3D7EBF), ZColor(both: 0xFF6B4FA0), ZColor(both: 0xFFD65C7A), ZColor(both: 0xFF3F8F8F), ZColor(both: 0xFF7A8B3C), ZColor(both: 0xFF3F8F6B), ZColor(both: 0xFF7A3B36)]
@@ -329,6 +330,82 @@ enum Tok {
             static let spinnerGap: CGFloat = 16
             static let lineGap: CGFloat = 8
         }
+        enum Vision {
+            static let pageMargin: CGFloat = 24
+            static let sectionGap: CGFloat = 32
+            static let cardGap: CGFloat = 20
+            static let largeCardWidth: CGFloat = 320
+            static let cardWidth: CGFloat = 240
+            static let categoryMinWidth: CGFloat = 240
+            static let categoryAspectRatio: CGFloat = 1.7777777778
+            static let categoryIconSize: CGFloat = 64
+            static let playerCoverWidth: CGFloat = 320
+            static let miniPlayerWidth: CGFloat = 600
+            static let hitSize: CGFloat = 60
+            static let hitGap: CGFloat = 8
+            static let playerInfoHeight: CGFloat = 134
+            static let actionsWidth: CGFloat = 320
+            static let playerWindowGap: CGFloat = 16
+        }
+        enum MacMiniPlayer {
+            static let width: CGFloat = 700
+            static let artworkWidth: CGFloat = 60
+            static let artworkHeight: CGFloat = 34
+            static let spacing: CGFloat = 12
+            static let padding: CGFloat = 12
+            static let verticalPadding: CGFloat = 4
+            static let infoRadius: CGFloat = 6
+            static let controlSpacing: CGFloat = 12
+            static let controlSize: CGFloat = 28
+            static let rateWidth: CGFloat = 64
+            static let controlIconSize: CGFloat = 20
+            static let infoMaxWidth: CGFloat = 680
+            static let infoHeight: CGFloat = 52
+            static let idleProgressScale: CGFloat = 0.35
+            static let progressLift: CGFloat = 12
+            static let idleTrackOffset: CGFloat = 4
+            static let metadataOffset: CGFloat = 4
+        }
+        enum CompactPlayer {
+            static let width: CGFloat = 1080
+            static let artworkWidth: CGFloat = 96
+            static let artworkHeight: CGFloat = 54
+            static let spacing: CGFloat = 12
+            static let padding: CGFloat = 12
+            static let infoRadius: CGFloat = 6
+            static let minWidth: CGFloat = 480
+            static let controlSpacing: CGFloat = 24
+            static let controlSize: CGFloat = 48
+            static let controlIconSize: CGFloat = 28
+            static let infoMaxWidth: CGFloat = 680
+            static let infoHeight: CGFloat = 80
+            static let idleProgressScale: CGFloat = 0.12
+            static let progressLift: CGFloat = 16
+            static let activeProgressScale: CGFloat = 0.35
+            static let timeProgressGap: CGFloat = -8
+            static let roundTrackHeight: CGFloat = 8
+            static let roundTrackIdleScale: CGFloat = 0.375
+            static let nativeSliderOpacity: CGFloat = 0.01
+            static let idleTrackOffset: CGFloat = 14
+            static let rateWidth: CGFloat = 80
+            static let leadingInset: CGFloat = 12
+            static let verticalPadding: CGFloat = 4
+            static let metadataOffset: CGFloat = 6
+        }
+        enum WatchPlayer {
+            static let spacing: CGFloat = 8
+            static let playSize: CGFloat = 72
+            static let skipSize: CGFloat = 44
+            static let actionHeight: CGFloat = 36
+        }
+        enum AudioWaveform {
+            static let width: CGFloat = 16
+            static let height: CGFloat = 14
+            static let barWidth: CGFloat = 2.5
+            static let spacing: CGFloat = 2
+            static let spectrumGain: CGFloat = 5
+            static let spectrumExponent: CGFloat = 0.5
+        }
     }
     enum Motion {
         static let pressedOpacity: CGFloat = 0.7
@@ -343,5 +420,7 @@ enum Tok {
         static let playProgressDiameter: CGFloat = 32
         static let latestPlayProgressDiameter: CGFloat = 24
         static let gaugeNative: CGFloat = 52
+        static let visionHitSize: CGFloat = 60
+        static let visionHitGap: CGFloat = 8
     }
 }

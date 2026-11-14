@@ -2,8 +2,13 @@ import SwiftUI
 
 struct WatchHomeView: View {
     @Environment(AppCore.self) private var core
+    @Environment(WatchModel.self) private var model
     var body: some View {
         List {
+            if model.upgrade.showsNotice {
+                StoreUpgradeNotice(checker: model.upgrade)
+                    .listRowBackground(Color.clear)
+            }
             if core.autoUpdating { ProgressView("正在更新") }
             if core.syncFailed { Text("无法更新，显示上次内容").font(.footnote).foregroundStyle(.secondary) }
             if !core.home.ongoing.isEmpty {
@@ -65,7 +70,14 @@ struct WatchCategoryView: View {
                         subtitle: seriesStatusText(card.status))
                 }
             }
-            if hasMore { Button("加载更多") { load() } }
+            if hasMore { Button("加载更多", systemImage: "chevron.down") { load() } }
+        }
+        .overlay {
+            if courses.isEmpty && !hasMore {
+                Text("暂无课程")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
         }
         .navigationTitle(title)
         .task(id: core.catalogVersion) {
@@ -134,9 +146,9 @@ struct WatchSeriesView: View {
                     title: header.title, cover: header.coverPath, id: id,
                     subtitle: seriesInfoText(category: false, count: episodes.count, status: header.status))
                 if let text = header.description, !text.isEmpty {
-                    NavigationLink("课程简介") {
+                    NavigationLink {
                         ScrollView { Text(text).font(.body).padding() }.navigationTitle("课程简介")
-                    }
+                    } label: { Label("课程简介", systemImage: "text.alignleft") }
                 }
                 Section("全部课程") {
                     ForEach(oldestFirst ? episodes : episodes.reversed()) { row in
@@ -175,25 +187,35 @@ struct WatchSeriesActionsView: View {
     @Environment(AppCore.self) private var core
     @Environment(WatchModel.self) private var model
     @State private var header: SeriesHeader?
+    @State private var categoryIcon: String?
 
     var body: some View {
         List {
             if let header {
+                NavigationLink { WatchSeriesDownloadsView(series: id) } label: {
+                    Label("下载", systemImage: "arrow.down.circle")
+                }
                 Button {
                     core.toggleFavorite(id, title: header.title, coverPath: header.coverPath)
                 } label: {
                     Label(header.favorited ? "取消收藏" : "收藏", systemImage: header.favorited ? "bookmark.fill" : "bookmark")
                 }
-                Toggle("从新到旧排序", isOn: Binding(get: { !oldestFirst }, set: { oldestFirst = !$0 }))
-                NavigationLink("下载") { WatchSeriesDownloadsView(series: id) }
+                Button {
+                    oldestFirst.toggle()
+                } label: {
+                    Label(oldestFirst ? "从新到旧排序" : "从旧到新排序", systemImage: "arrow.up.arrow.down")
+                }
                 if let category = header.categoryName {
-                    NavigationLink(category) { WatchCategoryView(id: header.categoryId, title: category) }
+                    NavigationLink { WatchCategoryView(id: header.categoryId, title: category) } label: {
+                        Label(category, systemImage: SymbolName.all[resolveCategoryIcon(categoryIcon, id: header.categoryId)] ?? SymbolName.all[DEFAULT_ICON]!)
+                    }
                 }
             }
         }
         .navigationTitle("课程选项")
         .task(id: model.versions) {
             header = try? core.store.loadSeriesHeader(id)
+            categoryIcon = (try? core.store.loadCategories())?.first { $0.id == header?.categoryId }?.icon
         }
     }
 
@@ -220,7 +242,10 @@ struct WatchSeriesDownloadsView: View {
                 Text("暂无下载")
             }
             ForEach(rows) { row in
-                WatchDownloadActionRows(id: row.id, download: downloads[row.id], title: row.title) {
+                WatchDownloadActionRows(
+                    id: row.id, download: downloads[row.id], title: row.title,
+                    playDownloaded: { core.playAndOpen(row.id, ctx: .library(series)) }
+                ) {
                     model.confirm("删除此下载？", message: "保留收听进度；若正在播放此下载，将停止播放。") {
                         model.deleteDownloads([row.id])
                     }

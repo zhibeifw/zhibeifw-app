@@ -29,7 +29,16 @@
       shouldUseLaunchSchemeArgsEnv = "YES"
       shouldAutocreateTestPlan = "YES">
       <Testables>
-         <TestableReference skipped="NO"><BuildableReference BuildableIdentifier="primary" BlueprintIdentifier="A20000000000000000000026" BuildableName="ZhibeiFWWatchTests.xctest" BlueprintName="ZhibeiFWWatchTests" ReferencedContainer="container:ZhibeiFW.xcodeproj" /></TestableReference>
+         <TestableReference
+            skipped = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A20000000000000000000026"
+               BuildableName = "ZhibeiFWWatchTests.xctest"
+               BlueprintName = "ZhibeiFWWatchTests"
+               ReferencedContainer = "container:ZhibeiFW.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

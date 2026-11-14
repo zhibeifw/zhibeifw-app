@@ -12,37 +12,30 @@ struct AboutView: View {
     @State private var safari: URL?
 
     var body: some View {
-        // 顶部不放标题，只有返回键：下面的 Logo 和“智悲佛网”已经说明这是哪一页
-        PageScaffold(title: "", largeTitle: false, centeredTitle: true) {
-            VStack(spacing: 0) {
-                Image("Logo").resizable().scaledToFit().frame(width: CP.About.logoWidth)
-                    .padding(.top, CP.About.logoTop)
-                    .accessibilityLabel("智悲佛网 Logo")
-                Text("智悲佛网").zFont(S.aboutName).foregroundStyle(C.labelPrimary).padding(.top, CP.About.nameTop)
-                    .accessibilityAddTraits(.isHeader)  // 顶部没有标题了，读屏把这一行当作页面标题
-                VStack(spacing: 0) {
-                    row(title: "联系", value: "hello@zhibeifw.com", selectable: true)
-                    Separator().padding(.horizontal, Tok.Space.pageMargin)
-                    row(title: "隐私政策", arrow: true) { openWeb(NetConfig.privacyURL) }
-                    Separator().padding(.horizontal, Tok.Space.pageMargin)
-                    row(title: "源代码", arrow: true) { openWeb(NetConfig.sourceURL) }
-                    Separator().padding(.horizontal, Tok.Space.pageMargin)
-                    row(title: "清除缓存", value: clearing ? "正在清除…" : clearResult) { clearCache() }
-                    Separator().padding(.horizontal, Tok.Space.pageMargin)
-                    row(title: "刷新网络线路", value: checking ? "正在检测…" : routeResult) { refreshRoutes() }
-                }
-                .padding(.top, CP.About.rowsTop)
-                footer.padding(.top, CP.About.footerTop)
+        List {
+            Section("设置") {
+                row(title: "清除缓存", value: clearing ? "正在清除…" : clearResult) { clearCache() }
+                row(title: "刷新网络线路", value: checking ? "正在检测…" : routeResult) { refreshRoutes() }
             }
-            .frame(maxWidth: Tok.Player.portraitMaxWidth)
-            .frame(maxWidth: .infinity)
+            Section {
+                row(title: "联系", value: "hello@zhibeifw.com", selectable: true)
+                row(title: "隐私政策", arrow: true) { openWeb(NetConfig.privacyURL) }
+                row(title: "源代码", arrow: true) { openWeb(NetConfig.sourceURL) }
+            } header: {
+                Text("关于")
+            } footer: {
+                footer.frame(maxWidth: .infinity).multilineTextAlignment(.center).padding(.vertical)
+            }
         }
+        .listStyle(.insetGrouped)
+        .navigationTitle("关于")
+        .navigationBarTitleDisplayMode(.inline)
         .sheet(item: $safari) { SafariView(url: $0).ignoresSafeArea() }
     }
 
     private var footer: some View {
         VStack(spacing: CP.About.footerGap) {
-            Text("智悲佛网 版权所有").zFont(S.caption).foregroundStyle(C.labelSecondary)
+            Text("智悲佛网").zFont(S.caption).foregroundStyle(C.labelSecondary)
             Text("版本 " + AppInfo.version).zFont(S.caption).foregroundStyle(C.labelTertiary)
         }
     }
@@ -63,7 +56,6 @@ struct AboutView: View {
             }
             if arrow { ZIcon(name: "chevron-forward", size: CP.SectionTitle.arrowSize, color: C.labelTertiary) }
         }
-        .padding(.horizontal, Tok.Space.pageMargin)
         .frame(minHeight: CP.About.rowMinHeight)
         .contentShape(Rectangle())
         if let action { Button(action: action) { content }.buttonStyle(PressableStyle()) } else { content }

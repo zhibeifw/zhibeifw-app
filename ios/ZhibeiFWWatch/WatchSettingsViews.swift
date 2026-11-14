@@ -24,7 +24,7 @@ struct WatchSettingsView: View {
                     }
                 } label: {
                     VStack(alignment: .leading) {
-                        Text("清除缓存")
+                        Label("清除缓存", systemImage: "internaldrive")
                         if let clearResult { Text(clearResult).font(.footnote).foregroundStyle(.secondary) }
                     }
                 }
@@ -39,7 +39,7 @@ struct WatchSettingsView: View {
                     }
                 } label: {
                     VStack(alignment: .leading) {
-                        Text("刷新网络线路")
+                        Label("刷新网络线路", systemImage: "arrow.clockwise")
                         if checkingRoutes {
                             Text("正在检测…").font(.footnote).foregroundStyle(.secondary)
                         } else if let routeResult {
@@ -49,9 +49,9 @@ struct WatchSettingsView: View {
                 }
             }
             Section {
-                NavigationLink("联系", value: WatchRoute.contact)
-                NavigationLink("隐私政策", value: WatchRoute.privacy)
-                NavigationLink("源代码", value: WatchRoute.source)
+                NavigationLink(value: WatchRoute.contact) { Label("联系", systemImage: "envelope") }
+                NavigationLink(value: WatchRoute.privacy) { Label("隐私政策", systemImage: "hand.raised") }
+                NavigationLink(value: WatchRoute.source) { Label("源代码", systemImage: "chevron.left.forwardslash.chevron.right") }
             } header: {
                 Text("关于")
             } footer: {

@@ -70,6 +70,10 @@
         "light": "#D70015",
         "dark": "#FF6961"
       }
+    },
+    "compactPlayerInfo": {
+      "light": "#626262",
+      "dark": "#626262"
     }
   },
   "contentPalette": {
@@ -552,6 +556,85 @@
     "init": {
       "spinnerGap": 16,
       "lineGap": 8
+    },
+    "vision": {
+      "_来源": "Vision Pro窗口式听课界面：大封面栏目与系统底部播放栏；沿用课程封面16:9。",
+      "pageMargin": 24,
+      "sectionGap": 32,
+      "cardGap": 20,
+      "largeCardWidth": 320,
+      "cardWidth": 240,
+      "categoryMinWidth": 240,
+      "categoryAspectRatio": 1.7777777778,
+      "categoryIconSize": 64,
+      "playerCoverWidth": 320,
+      "miniPlayerWidth": 600,
+      "hitSize": 60,
+      "hitGap": 8,
+      "playerInfoHeight": 134,
+      "actionsWidth": 320,
+      "playerWindowGap": 16
+    },
+    "macMiniPlayer": {
+      "_来源": "按打开的 Apple Podcasts 实际界面：内容区底部浮动胶囊，倍速与睡眠在左侧控制组，封面和标题下方为进度。",
+      "width": 700,
+      "artworkWidth": 60,
+      "artworkHeight": 34,
+      "spacing": 12,
+      "padding": 12,
+      "verticalPadding": 4,
+      "infoRadius": 6,
+      "controlSpacing": 12,
+      "controlSize": 28,
+      "rateWidth": 64,
+      "controlIconSize": 20,
+      "infoMaxWidth": 680,
+      "infoHeight": 52,
+      "idleProgressScale": 0.35,
+      "progressLift": 12,
+      "idleTrackOffset": 4,
+      "metadataOffset": 4
+    },
+    "compactPlayer": {
+      "_来源": "用户要求对照 CNET Vision Pro Apple Music 实机播放栏：单行、中央信息区及无独立底框的两侧控制。 用户要求加宽播放栏、放大封面和文字以提高可读性。",
+      "width": 1080,
+      "artworkWidth": 96,
+      "artworkHeight": 54,
+      "spacing": 12,
+      "padding": 12,
+      "infoRadius": 6,
+      "minWidth": 480,
+      "controlSpacing": 24,
+      "controlSize": 48,
+      "controlIconSize": 28,
+      "infoMaxWidth": 680,
+      "infoHeight": 80,
+      "idleProgressScale": 0.12,
+      "progressLift": 16,
+      "activeProgressScale": 0.35,
+      "timeProgressGap": -8,
+      "roundTrackHeight": 8,
+      "roundTrackIdleScale": 0.375,
+      "nativeSliderOpacity": 0.01,
+      "idleTrackOffset": 14,
+      "rateWidth": 80,
+      "leadingInset": 12,
+      "verticalPadding": 4,
+      "metadataOffset": 6
+    },
+    "watchPlayer": {
+      "spacing": 8,
+      "playSize": 72,
+      "skipSize": 44,
+      "actionHeight": 36
+    },
+    "audioWaveform": {
+      "width": 16,
+      "height": 14,
+      "barWidth": 2.5,
+      "spacing": 2,
+      "spectrumGain": 5,
+      "spectrumExponent": 0.5
     }
   },
   "motion": {
@@ -570,6 +653,8 @@
     "_来源": "Apple小组件的系统Gauge等比适配现有播放按钮区域，不自绘圆环。",
     "playProgressDiameter": 32,
     "latestPlayProgressDiameter": 24,
-    "gaugeNative": 52
+    "gaugeNative": 52,
+    "visionHitSize": 60,
+    "visionHitGap": 8
   }
 }

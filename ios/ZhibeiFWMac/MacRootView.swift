@@ -1,7 +1,7 @@
 import SwiftUI
 
 /// Mac 的根视图：启动、首次准备内容、出错；准备好以后是系统的侧边栏布局（左边侧边栏，右边内容），
-/// 工具栏中间是播放控制。和 Mac 上的“播客”“音乐”一样，全部用系统组件。播放页打开时铺满整个窗口（和 iPhone、Apple TV 一样）。
+/// 底部播放栏使用系统控件与材质，浏览内容为它预留空间。
 struct MacRootView: View {
     @Environment(AppCore.self) private var core
 
@@ -46,8 +46,8 @@ private struct MacInitView: View {
             if failed {
                 Text("暂时无法连接").font(.title3)
                 HStack {
-                    Button("重试") { Task { await core.runInitialization() } }
-                    Button(refreshing ? "正在检测…" : "刷新网络线路") {
+                    Button("重试", systemImage: "arrow.clockwise") { Task { await core.runInitialization() } }
+                    Button(refreshing ? "正在检测…" : "刷新网络线路", systemImage: "arrow.clockwise") {
                         guard !refreshing else { return }
                         refreshing = true
                         Task {
@@ -73,28 +73,20 @@ private struct MacMainView: View {
     @Environment(MacModel.self) private var model
 
     var body: some View {
-        // 播放页打开时直接换掉整个窗口内容（不是盖在侧边栏布局上面）：
-        // 盖在上面时，缩放窗口、关播放页同时进课程页，下面的布局会跟着变、露出来或和上一页叠在一起。
-        // 侧边栏选中项、页面栈、搜索词、侧边栏开没开都存在 MacModel 里，关掉播放页后原样回来
-        Group {
-            if model.playerOpen {
-                MacPlayerView()
-            } else {
-                splitView
+        splitView
+            // 官网版有新版本：和 Android 官网版同样的文字
+            .alert(
+                "发现新版本 \(model.updates.dialog?.version ?? "")",
+                isPresented: Binding(
+                    get: { model.updates.dialog != nil },
+                    set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } }
+                )
+            ) {
+                Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
+                Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
+            } message: {
+                Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
             }
-        }
-        // 官网版有新版本：和 Android 官网版同样的文字
-        .alert(
-            "发现新版本 \(model.updates.dialog?.version ?? "")",
-            isPresented: Binding(get: { model.updates.dialog != nil }, set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } })
-        ) {
-            Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
-            Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
-        } message: {
-            Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
-        }
-        // 播放页打开时藏起整个工具栏，播放页占满窗口；关闭用播放页左上角的圈 X（或 Esc）
-        .toolbar(model.playerOpen ? .hidden : .visible, for: .windowToolbar)
     }
 
     private var splitView: some View {
@@ -125,10 +117,11 @@ private struct MacMainView: View {
                         }
                     }
                 }
+                .modifier(MacPlaybackInset())
                 .navigationDestination(for: MacRoute.self) { r in
                     switch r {
-                    case .series(let id): MacSeriesView(seriesId: id)
-                    case .category(let id): MacCategoryView(categoryId: id)
+                    case .series(let id): MacSeriesView(seriesId: id).modifier(MacPlaybackInset())
+                    case .category(let id): MacCategoryView(categoryId: id).modifier(MacPlaybackInset())
                     }
                 }
             }
@@ -139,8 +132,13 @@ private struct MacMainView: View {
             // 打字时回到搜索结果；清空时不动（“前往课程”“进分类”会先清空搜索词，再进页面）
             if !v.isEmpty { model.path = [] }
         }
-        .toolbar {
-            ToolbarItem(placement: .principal) { MacNowPlayingBar() }
+    }
+}
+
+private struct MacPlaybackInset: ViewModifier {
+    func body(content: Content) -> some View {
+        content.safeAreaInset(edge: .bottom, spacing: 0) {
+            MacMiniPlayer()
         }
     }
 }

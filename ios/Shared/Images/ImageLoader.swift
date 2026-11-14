@@ -1,6 +1,7 @@
 import SwiftUI
 import ImageIO
 import CryptoKit
+import OSLog
 
 // 封面图加载（“封面图”：自己写，不用 SDWebImage）。
 // 按相对路径作缓存键（换域名不失效）；内存缓存 NSCache（按解码后字节数限额）+ 磁盘缓存（系统缓存目录，可被系统清掉，不设上限）；
@@ -8,6 +9,14 @@ import CryptoKit
 // ：列表里的小图先下发布脚本生成的 320 / 640 小图（coverSourcePath），服务器上没有就改用原图。
 final class ImageLoader: @unchecked Sendable {
     static let shared = ImageLoader()
+
+    private static let logger = Logger(subsystem: "com.zhibeifw.app", category: "CoverImage")
+
+    private static func logFailure(_ stage: String, path: String, detail: String = "") {
+        #if DEBUG
+        logger.notice("封面失败 stage=\(stage, privacy: .public) key=\(diskName(path), privacy: .public) detail=\(detail, privacy: .public)")
+        #endif
+    }
 
     private let memory = NSCache<NSString, PlatformImage>()
     let diskDir: URL
@@ -75,6 +84,7 @@ final class ImageLoader: @unchecked Sendable {
         // 用它确保在磁盘上的那个文件（小图不存在时是原图），不再算一次：中间开关可能被别的线程改了
         guard let src = await ensureOnDisk(path, requested), !Task.isCancelled else { return nil }
         guard let img = Self.downsample(diskFile(src), maxPixel: px) else {
+            Self.logFailure("decode", path: src)
             try? FileManager.default.removeItem(at: diskFile(src)); return nil
         }
         store(img, memKey(src, px), path)
@@ -113,22 +123,41 @@ final class ImageLoader: @unchecked Sendable {
         let task: Task<Fetch, Never> = lock.withLock {
             if let t = inflight[src] { return t }
             let t = Task { [session] () -> Fetch in
-                guard let url = await Network.shared.ensureRoutes().flatMap({ buildUrl($0, src) }) else { return .failed }
-                guard let (tmp, resp) = try? await session.download(from: url) else { return .failed }
+                guard let url = await Network.shared.ensureRoutes().flatMap({ buildUrl($0, src) }) else {
+                    Self.logFailure("route-or-url", path: src)
+                    return .failed
+                }
+                let tmp: URL
+                let resp: URLResponse
+                do {
+                    (tmp, resp) = try await session.download(from: url)
+                } catch {
+                    let error = error as NSError
+                    Self.logFailure("network", path: src, detail: "\(error.domain):\(error.code)")
+                    return .failed
+                }
                 // 异步下载交回的临时文件系统不会自己删：没挪走的都删掉
                 defer { try? FileManager.default.removeItem(at: tmp) }
                 let code = (resp as? HTTPURLResponse)?.statusCode ?? 0
+                if code != 200 { Self.logFailure("http", path: src, detail: String(code)) }
                 if code == 404 || code == 403 { return .notFound }  // R2 公开桶不存在的文件回 404（个别配置回 403）
                 guard code == 200 else { return .failed }
                 guard let size = (try? tmp.resourceValues(forKeys: [.fileSizeKey]))?.fileSize, size <= FileKind.cover.limit else {
+                    Self.logFailure("file-size", path: src)
                     return .failed
                 }
                 // rename(2) 覆盖旧文件是原子的：不会有“旧的删了、新的还没到”的一瞬间让读文件的地方扑空
                 // 缓存目录可能被系统清理空间时整个删掉：没有就重建，否则以后每张都失败
                 if rename(tmp.path, file.path) != 0 {
-                    guard errno == ENOENT else { return .failed }
+                    guard errno == ENOENT else {
+                        Self.logFailure("cache-write", path: src, detail: String(errno))
+                        return .failed
+                    }
                     try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-                    guard rename(tmp.path, file.path) == 0 else { return .failed }
+                    guard rename(tmp.path, file.path) == 0 else {
+                        Self.logFailure("cache-recreate", path: src, detail: String(errno))
+                        return .failed
+                    }
                 }
                 return .ok
             }

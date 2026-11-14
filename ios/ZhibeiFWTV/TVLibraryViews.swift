@@ -11,7 +11,7 @@ struct TVLibraryHubView: View {
     }
 }
 
-/// 最近收听：选一集接着播；长按：标记已听完、前往课程、删除记录。上面有“清空”。
+/// 最近收听：选一集接着播，行末前往课程；上方可清空列表。
 struct TVRecentView: View {
     @Environment(AppCore.self) private var core
     @Environment(TVModel.self) private var model
@@ -54,33 +54,31 @@ struct TVRecentView: View {
         let prog = liveProgress(
             currentId: p?.current?.episodeId, position: p?.position ?? 0, duration: p?.duration ?? 0,
             active: p?.looksPlaying ?? false, episodeId: r.episodeId, fromDb: r.progress)
-        return Button {
-            core.playFromRecent(r, open: true)
-        } label: {
-            HStack(spacing: 32) {
-                CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 8)
-                    .frame(width: 192, height: TVLayout.coverHeight(192))
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(r.epTitle).lineLimit(2)
-                    Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+        return HStack {
+            Button {
+                core.playFromRecent(r, open: true)
+            } label: {
+                HStack(spacing: 32) {
+                    CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 8)
+                        .frame(width: 192, height: TVLayout.coverHeight(192))
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(r.epTitle).lineLimit(2)
+                        Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                    }
+                    Spacer()
+                    Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
+                        .font(.callout).foregroundStyle(.secondary)
                 }
-                Spacer()
-                Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
-                    .font(.callout).foregroundStyle(.secondary)
             }
-        }
-        .contextMenu {
-            MarkCompletedButton(episodeId: r.episodeId, seriesId: r.seriesId, completed: prog?.completed ?? false)
+            .buttonStyle(.bordered)
             Button {
                 model.goToSeries(r.seriesId)
             } label: {
-                Label("前往课程", systemImage: "arrow.forward.circle")
+                Label("前往课程", systemImage: "arrow.right")
+                    .labelStyle(.iconOnly)
             }
-            Button(role: .destructive) {
-                core.hideRecent(r.episodeId)
-            } label: {
-                Label("删除记录", systemImage: "trash")
-            }
+            .buttonStyle(.bordered)
+            .accessibilityLabel("前往课程，" + r.seriesTitle)
         }
     }
 

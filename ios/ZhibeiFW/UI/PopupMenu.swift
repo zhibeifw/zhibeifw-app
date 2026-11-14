@@ -65,6 +65,8 @@ func sfSymbol(_ name: String?) -> String? {
     case "close-circle-outline": "xmark.circle"
     case "trash-outline": "trash"
     case "checkmark-circle-outline": "checkmark.circle"
+    case "rectangle.badge.checkmark": "rectangle.badge.checkmark"
+    case "rectangle.badge.minus": "rectangle.badge.minus"
     case "arrow-forward-circle-outline": "arrow.forward.circle"
     case "bookmark": "bookmark.fill"
     case "bookmark-outline": "bookmark"

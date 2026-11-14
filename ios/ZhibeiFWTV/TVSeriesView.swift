@@ -77,7 +77,7 @@ struct TVSeriesView: View {
     }
 }
 
-/// 一集的行：集名，右边是进度（正在播放的用播放器的实时位置）。
+/// 一集的行：播放状态、集名，右边是实时进度与听完标记按钮。
 struct TVEpisodeRow: View {
     @Environment(AppCore.self) private var core
     let episode: EpisodeRow
@@ -89,23 +89,28 @@ struct TVEpisodeRow: View {
             currentId: p?.current?.episodeId, position: p?.position ?? 0, duration: p?.duration ?? 0,
             active: p?.looksPlaying ?? false, episodeId: episode.id, fromDb: episode.progress)
         let isCurrent = p?.current?.episodeId == episode.id
-        Button {
-            core.playAndOpen(episode.id, ctx: ctx)
-        } label: {
-            HStack(spacing: 24) {
-                if isCurrent {
-                    PlaybackLoadingView(loading: p?.loadingPlayback ?? false) {
-                        Image(systemName: (p?.looksPlaying ?? false) ? "speaker.wave.2.fill" : "pause.fill")
+        HStack {
+            Button {
+                core.playAndOpen(episode.id, ctx: ctx)
+            } label: {
+                HStack(spacing: 24) {
+                    PlaybackLoadingView(loading: isCurrent && (p?.loadingPlayback ?? false)) {
+                        if isCurrent, let p, p.looksPlaying {
+                            AudioWaveformIcon(player: p)
+                        } else {
+                            Image(systemName: prog?.completed == true ? "arrow.clockwise" : "play.fill")
+                        }
                     }
+                    .accessibilityHidden(true)
+                    Text(episode.title).lineLimit(2)
+                    Spacer()
+                    Text(progressText(prog, knownDuration: episode.epDuration)).font(.callout).foregroundStyle(.secondary)
                 }
-                Text(episode.title).lineLimit(2)
-                Spacer()
-                Text(progressText(prog, knownDuration: episode.epDuration)).font(.callout).foregroundStyle(.secondary)
             }
-        }
-        // 长按确认键：和 iPhone 的“•••”菜单同样的文字
-        .contextMenu {
+            .buttonStyle(.bordered)
             MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
+                .labelStyle(.iconOnly)
+                .buttonStyle(.bordered)
         }
     }
 }
@@ -121,7 +126,7 @@ struct MarkCompletedButton: View {
         Button {
             core.markCompleted(episodeId, seriesId: seriesId, completed: !completed)
         } label: {
-            Label(completed ? "标记为未听完" : "标记为已听完", systemImage: "checkmark.circle")
+            Label(completed ? "标记为未听完" : "标记为已听完", systemImage: completed ? "rectangle.badge.minus" : "rectangle.badge.checkmark")
         }
     }
 }

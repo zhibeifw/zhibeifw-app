@@ -21,6 +21,7 @@ struct WatchRootView: View {
     @Environment(WatchModel.self) private var model
     @Environment(AppCore.self) private var core
     @State private var continuation: RecentRow?
+    @State private var refreshingRoutes = false
 
     var body: some View {
         @Bindable var model = model
@@ -33,9 +34,22 @@ struct WatchRootView: View {
                 case .initializing(_, true):
                     VStack {
                         Text("暂时无法连接")
-                        Button("重试") { Task { await core.runInitialization() } }
+                        Button("重试", systemImage: "arrow.clockwise") { Task { await core.runInitialization() } }
+                            .disabled(refreshingRoutes)
+                        Button(refreshingRoutes ? "正在检测…" : "刷新网络线路", systemImage: "network") {
+                            refreshingRoutes = true
+                            Task {
+                                _ = await Network.shared.refreshRoutes()
+                                await core.runInitialization()
+                                refreshingRoutes = false
+                            }
+                        }
+                        .disabled(refreshingRoutes)
                     }
-                default: ProgressView("载入课程")
+                default:
+                    Text("载入课程")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
             }
             .navigationTitle("智悲佛网")
@@ -76,7 +90,7 @@ struct WatchRootView: View {
         }
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                NavigationLink(value: WatchRoute.settings) { Image(systemName: "gearshape") }
+                NavigationLink(value: WatchRoute.settings) { Image(systemName: "info.circle") }
                     .accessibilityLabel("设置与关于")
             }
             ToolbarItem(placement: .topBarTrailing) {
@@ -166,7 +180,7 @@ struct WatchEpisodeLabel: View {
                     } else {
                         Image(
                             systemName: p.current?.episodeId == id && p.looksPlaying
-                                ? (compactPlayback ? "pause.circle" : "waveform")
+                                ? "waveform"
                                 : (state.kind == .done ? (compactPlayback ? "arrow.clockwise" : "checkmark.circle") : "play.circle"))
                     }
                 }
@@ -179,7 +193,7 @@ struct WatchEpisodeLabel: View {
             .accessibilityElement(children: .combine)
             .accessibilityLabel(
                 p.current?.episodeId == id && p.looksPlaying
-                    ? "暂停，\(state.text)"
+                    ? "正在播放，点按打开播放界面，\(state.text)"
                     : state.kind == .done && compactPlayback ? "已听完，点按重新播放，\(state.text)" : state.text)
             if !compactPlayback, let live, live.duration > 0, !live.completed {
                 ProgressView(value: progressRatio(live.position, live.duration))
@@ -204,8 +218,6 @@ struct WatchEpisodeRow: View {
         Button {
             if let play {
                 play()
-            } else if compactPlayback {
-                core.togglePlay(id, ctx: scope.context(series))
             } else {
                 core.playAndOpen(id, ctx: scope.context(series))
             }
@@ -226,7 +238,7 @@ struct WatchEpisodeRow: View {
                 } label: {
                     Label(
                         progress?.completed == true ? "标记为未听完" : "标记为已听完",
-                        systemImage: progress?.completed == true ? "arrow.uturn.backward" : "checkmark")
+                        systemImage: progress?.completed == true ? "rectangle.badge.minus" : "rectangle.badge.checkmark")
                 }.tint(.gray)
                 let downloaded = (model.downloads?.items[id]?.status ?? core.store.getDownload(id)?.state) == .done
                 Button(role: downloaded ? .destructive : nil) {
@@ -243,11 +255,6 @@ struct WatchEpisodeRow: View {
                     model.showSeries(series)
                 } label: {
                     Label("前往课程", systemImage: "arrow.right")
-                }.tint(.gray)
-                Button {
-                    core.hideRecent(id)
-                } label: {
-                    Label("移除记录", systemImage: "xmark")
                 }.tint(.gray)
             } else {
                 Button {
@@ -308,6 +315,8 @@ struct WatchArtwork: View {
     let id: String
     @Environment(AppCore.self) private var core
     @State private var image: PlatformImage?
+    @State private var loadedKey: [String] = []
+    @ObservedObject private var origin = OriginWatcher.shared
     var body: some View {
         Group {
             if let image {
@@ -317,12 +326,16 @@ struct WatchArtwork: View {
             }
         }
         .accessibilityHidden(true)
-        .task(id: [path, id]) {
+        .task(id: [path, id, String(origin.version)]) {
+            let key = [path, id]
+            if loadedKey == key, image != nil { return }
+            if loadedKey != key { image = nil }
             let file = core.files.coverFile(seriesId: id)
             let loaded = await ImageLoader.shared.load(
                 path.isEmpty ? "local:" + id : path,
                 maxPixel: COVER_THUMB_WIDTHS.first!, localFile: file)
             guard !Task.isCancelled else { return }
+            loadedKey = key
             image = loaded
         }
     }

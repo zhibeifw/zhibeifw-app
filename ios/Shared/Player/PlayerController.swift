@@ -1,5 +1,6 @@
 import AVFoundation
 import MediaPlayer
+import OSLog
 #if os(macOS)
 import AppKit
 #else
@@ -50,6 +51,10 @@ final class PlayerController {
     var looksPlaying: Bool { isPlaying || systemWantsPlay || pendingStart }
     var loadingPlayback: Bool { looksPlaying && (pendingStart || buffering) }
 
+    #if !os(watchOS)
+    @ObservationIgnored var audioWaveform = AudioWaveform()
+    @ObservationIgnored private var waveformTask: Task<Void, Never>?
+    #endif
     @ObservationIgnored let player = AVPlayer()
     @ObservationIgnored private let store: Store
     @ObservationIgnored private let files: AppFiles
@@ -128,13 +133,13 @@ final class PlayerController {
         #endif
         nc.addObserver(forName: AVPlayerItem.didPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] n in
             MainActor.assumeIsolated {
-                guard let self, (n.object as? AVPlayerItem) === self.player.currentItem else { return }
+                guard let self, let item = n.object as? AVPlayerItem, item === self.player.currentItem else { return }
                 self.onFinished()
             }
         }
         nc.addObserver(forName: AVPlayerItem.failedToPlayToEndTimeNotification, object: nil, queue: .main) { [weak self] n in
             MainActor.assumeIsolated {
-                guard let self, (n.object as? AVPlayerItem) === self.player.currentItem else { return }
+                guard let self, let item = n.object as? AVPlayerItem, item === self.player.currentItem else { return }
                 self.armStall()
             }
         }
@@ -269,6 +274,10 @@ final class PlayerController {
     func play(_ info: EpisodeInfo, ctx: PlayContext) {
         dropExpiredSleep()
         wantsPlay = true
+        #if !os(watchOS)
+        waveformTask?.cancel()
+        waveformTask = nil
+        #endif
         generation += 1
         let gen = generation
         if let prev = current, positionKnown, !markedDone { save(position, duration, for: prev) }
@@ -278,6 +287,9 @@ final class PlayerController {
         clearStall()
         pendingSeek = nil
         player.pause()
+        itemObserver = nil
+        player.replaceCurrentItem(with: nil)
+        needsReload = false
         current = NowPlaying(info: info, ctx: ctx)
         position = 0; duration = 0; error = nil; buffering = true
         pendingStart = true
@@ -309,7 +321,6 @@ final class PlayerController {
             self.streaming = !isLocal
             self.position = startAt
             self.duration = known
-            self.positionKnown = true
             #if os(watchOS)
             do { try await AVAudioSession.sharedInstance().activate(options: []) } catch {
                 guard gen == self.generation else { return }
@@ -319,6 +330,12 @@ final class PlayerController {
             #endif
             let item = AVPlayerItem(url: url)
             item.audioTimePitchAlgorithm = .timeDomain
+            #if !os(watchOS)
+            let waveform = AudioWaveform()
+            self.audioWaveform = waveform
+            // 声波读取不阻塞播放启动，让播放器照常处理缓冲、失败和超时。
+            self.waveformTask = Task { await waveform.attach(to: item) }
+            #endif
             self.itemObserver = item.observe(\.status, options: [.initial, .new]) { [weak self] it, _ in
                 guard it.status == .failed else { return }
                 Task { @MainActor in
@@ -327,6 +344,7 @@ final class PlayerController {
                 }
             }
             self.player.replaceCurrentItem(with: item)
+            self.positionKnown = true
             if startAt > 1 {
                 var ok = await self.player.seek(
                     to: CMTime(seconds: startAt, preferredTimescale: 600), toleranceBefore: .zero, toleranceAfter: .zero)
@@ -355,7 +373,11 @@ final class PlayerController {
         guard let c = current else { return }
         dropExpiredSleep()
         wantsPlay = true
-        if needsReload || player.currentItem == nil { play(c.info, ctx: c.ctx); return }
+        if needsReload { play(c.info, ctx: c.ctx); return }
+        if player.currentItem == nil {
+            pendingStart = true
+            return
+        }
         #if os(watchOS)
         let gen = generation
         Task {
@@ -413,6 +435,16 @@ final class PlayerController {
         updateNowPlayingRate()
     }
 
+    func handleRemoteRate(_ requested: Float) -> MPRemoteCommandHandlerStatus {
+        guard current != nil else { return .noSuchContent }
+        guard let value = PLAYBACK_RATES.first(where: { Float($0) == requested }) else { return .commandFailed }
+        setRate(value)
+        #if DEBUG
+        Logger(subsystem: "com.zhibeifw.app", category: "SiriControls").notice("remoteRate applied=\(value)")
+        #endif
+        return .success
+    }
+
     func setSleep(_ s: SleepSetting) {
         sleep = s
         sleepLeft = s.secondsLeft(now: sleepClock())
@@ -448,6 +480,10 @@ final class PlayerController {
     @discardableResult
     func stopAsCompleted(_ episodeId: String) -> Bool {
         guard current?.episodeId == episodeId else { return false }
+        #if !os(watchOS)
+        waveformTask?.cancel()
+        waveformTask = nil
+        #endif
         generation += 1
         markedDone = true
         positionKnown = false
@@ -463,6 +499,10 @@ final class PlayerController {
     /// 正在播放的这一集的下载被删除：停掉并清空。
     func stopIfCurrent(_ episodeId: String) {
         guard current?.episodeId == episodeId else { return }
+        #if !os(watchOS)
+        waveformTask?.cancel()
+        waveformTask = nil
+        #endif
         generation += 1
         positionKnown = false
         markedDone = false
@@ -530,6 +570,16 @@ final class PlayerController {
             guard let e = e as? MPChangePlaybackPositionCommandEvent else { return .commandFailed }
             let t = e.positionTime
             Task { @MainActor in self?.seek(to: t) }
+            return .success
+        }
+        // Siri 的倍速请求走系统媒体控制通道，使用与 App 相同的可选值。
+        cc.changePlaybackRateCommand.supportedPlaybackRates = PLAYBACK_RATES.map { NSNumber(value: $0) }
+        cc.changePlaybackRateCommand.isEnabled = true
+        cc.changePlaybackRateCommand.addTarget { [weak self] event in
+            guard let event = event as? MPChangePlaybackRateCommandEvent,
+                  PLAYBACK_RATES.contains(where: { Float($0) == event.playbackRate }) else { return .commandFailed }
+            let requested = event.playbackRate
+            Task { @MainActor in _ = self?.handleRemoteRate(requested) }
             return .success
         }
         // 不放“上一集 / 下一集”

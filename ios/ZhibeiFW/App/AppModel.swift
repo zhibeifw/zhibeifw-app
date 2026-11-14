@@ -7,6 +7,8 @@ import Observation
 @MainActor
 @Observable
 final class AppModel {
+    static let shared = AppModel()
+
     @ObservationIgnored let core: AppCore
     private(set) var downloads: DownloadManager!
     /// 下载状态（排队、下载中、暂停、已下载、删除）
@@ -24,7 +26,7 @@ final class AppModel {
     var searchQuery = ""
     var searchSubmitted = 0
 
-    init() {
+    private init() {
         core = AppCore()
         core.onStoreReady = { [weak self] in await self?.setUpDownloads() }
         core.onReady = { [weak self] in
@@ -48,34 +50,30 @@ final class AppModel {
             await self.core.syncCatalog(userInitiated: false)
             await self.widgets.writeNow()
         }
-        connectWidgetButtons()
     }
 
     // MARK: 小组件
 
-    /// 小组件上的播放按钮（系统在 App 的进程里执行；App 没开着时在后台启动，这时界面还没起来，要自己先启动）
-    private func connectWidgetButtons() {
-        // 打开：播这一集（不是当前这一集就换成它）；关上：暂停当前这一集
-        WidgetBridge.setPlaying = { [weak self] id, on in
-            WidgetLog.note("按钮：\(id) play=\(on)")
-            guard let self, await self.readyForWidget() else { WidgetLog.note("按钮：App 没准备好"); return }
-            if self.player.current?.episodeId == id {
-                if on && !self.player.looksPlaying { self.player.resume() }
-                if !on && self.player.looksPlaying { self.player.pause() }
-            } else if on {
-                self.player.start(id, ctx: .single)
-            }
-            // 先按要切到的状态写，按钮马上变
-            self.widgets.quickUpdateNowPlaying(playing: on)
-            // 播放：等声音真的出来（或出错、最多 10 秒）再结束这个动作。苹果对音频动作的要求：动作结束前要开始出声，
-            // 否则 App 在后台被叫起来时，动作一结束就被挂起，播放起不来（小组件上又变回播放键）
-            guard on else { return }
-            for _ in 0..<100 where !self.player.isPlaying && self.player.error == nil {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            WidgetLog.note("按钮：出声=\(self.player.isPlaying) 出错=\(self.player.error != nil)")
-            if !self.player.isPlaying { self.widgets.quickUpdateNowPlaying(playing: false) }
+    /// 小组件在后台冷启动时也通过同一个 App 模型播放。
+    func togglePlaybackFromWidget(_ id: String) async {
+        guard await readyForWidget(), let player = core.player else { return }
+        let on = player.current?.episodeId != id || !player.looksPlaying
+        if player.current?.episodeId == id {
+            if on && !player.looksPlaying { player.resume() }
+            if !on && player.looksPlaying { player.pause() }
+        } else if on {
+            player.start(id, ctx: .single)
         }
+        // 先按要切到的状态写，按钮马上变
+        widgets.quickUpdateNowPlaying(playing: on)
+        // 播放：等声音真的出来（或出错、最多 10 秒）再结束这个动作。苹果对音频动作的要求：动作结束前要开始出声，
+        // 否则 App 在后台被叫起来时，动作一结束就被挂起，播放起不来（小组件上又变回播放键）
+        guard on else { return }
+        for _ in 0..<100 where !player.isPlaying && player.error == nil {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        WidgetLog.note("按钮：出声=\(player.isPlaying) 出错=\(player.error != nil)")
+        if !player.isPlaying { widgets.quickUpdateNowPlaying(playing: false) }
     }
 
     /// 启动只做一次：界面那边已经在启动时，这里的 boot() 直接返回，要等它做完（最多约 10 秒）

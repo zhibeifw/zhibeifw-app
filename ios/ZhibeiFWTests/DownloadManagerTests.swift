@@ -379,6 +379,30 @@ final class DownloadManagerTests: XCTestCase {
     }
 
     /// 对账清掉资料库里没有下载记录对应的音频
+    func testReconcilePreservesFilesWhenDownloadQueryFails() throws {
+        let downloads = [item("a", 0), item("b", 1), item("c", 2)]
+        try store.startDownloads(downloads, ids: downloads.map(\.episodeId))
+        let rel = files.finalRelative("a", audioPath: downloads[0].audioPath)
+        try store.setDlDone("a", localFile: rel)
+        try store.setDlPaused("b", bytes: 3)
+        let audio = files.absolute(rel)
+        let cover = files.coverFile(seriesId: "s")
+        let resume = files.resumeDataFile("b")
+        let pending = files.doneFile("c")
+        for url in [audio, cover, resume, pending] { try Data([1]).write(to: url) }
+
+        try store.db.exec("ALTER TABLE user_download RENAME TO unavailable_download")
+        XCTAssertThrowsError(try store.allDownloads())
+        dm.cleanupCovers()
+        dm.reconcile(active: ["c": 1])
+        try store.db.exec("ALTER TABLE unavailable_download RENAME TO user_download")
+
+        for url in [audio, cover, resume, pending] {
+            XCTAssertTrue(FileManager.default.fileExists(atPath: url.path), url.lastPathComponent)
+        }
+        XCTAssertEqual(store.getDownload("a")?.state, .done)
+    }
+
     func testReconcileRemovesOrphanAudio() throws {
         try store.queuedMany([item("a", 0)])
         try store.setDlDone("a", localFile: "audio/a.mp3")

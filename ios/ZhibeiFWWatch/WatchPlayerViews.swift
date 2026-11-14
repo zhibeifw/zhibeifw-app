@@ -3,22 +3,133 @@ import WatchKit
 
 struct WatchPlayerView: View {
     @Environment(\.dismiss) private var dismiss
+    @Environment(AppCore.self) private var core
+
     var body: some View {
-        NowPlayingView()
-            .navigationTitle("")
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("关闭", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    NavigationLink {
-                        WatchPlayerActionsView()
-                    } label: {
-                        Image(systemName: "ellipsis")
+        ScrollView {
+            if let p = core.player, let current = p.current {
+                VStack(spacing: Tok.Component.WatchPlayer.spacing) {
+                    VStack(alignment: .leading) {
+                        Text(current.info.episodeTitle).font(.headline).lineLimit(1)
+                        Text(current.info.seriesTitle).font(.subheadline).foregroundStyle(.secondary).lineLimit(1)
                     }
-                    .accessibilityLabel("更多播放选项")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    HStack(spacing: Tok.Component.WatchPlayer.spacing) {
+                        Button {
+                            p.seek(by: -SEEK_BACK_SECONDS)
+                        } label: {
+                            Image(systemName: "gobackward.15")
+                                .frame(width: Tok.Component.WatchPlayer.skipSize, height: Tok.Component.WatchPlayer.skipSize)
+                        }.buttonStyle(.bordered).buttonBorderShape(.circle).accessibilityLabel("后退15秒")
+                        Button {
+                            p.toggle()
+                        } label: {
+                            Gauge(value: p.duration > 0 ? min(1, max(0, p.position / p.duration)) : 0) {
+                                Text("播放进度")
+                            } currentValueLabel: {
+                                PlaybackLoadingView(loading: p.loadingPlayback) {
+                                    Image(systemName: p.looksPlaying ? "pause.fill" : "play.fill").font(.title2)
+                                }
+                            }
+                            .gaugeStyle(.accessoryCircularCapacity)
+                            .tint(.primary)
+                            .frame(width: Tok.Component.EpisodeRow.gaugeNative, height: Tok.Component.EpisodeRow.gaugeNative)
+                            .scaleEffect(Tok.Component.WatchPlayer.playSize / Tok.Component.EpisodeRow.gaugeNative)
+                            .frame(width: Tok.Component.WatchPlayer.playSize, height: Tok.Component.WatchPlayer.playSize)
+                            .contentShape(Circle())
+                        }.buttonStyle(.plain).accessibilityLabel(p.looksPlaying ? "暂停" : "播放")
+                        Button {
+                            p.seek(by: SEEK_FORWARD_SECONDS)
+                        } label: {
+                            Image(systemName: "goforward.30")
+                                .frame(width: Tok.Component.WatchPlayer.skipSize, height: Tok.Component.WatchPlayer.skipSize)
+                        }.buttonStyle(.bordered).buttonBorderShape(.circle).accessibilityLabel("前进30秒")
+                    }
+                    .font(.title2)
+                    HStack {
+                        NavigationLink {
+                            WatchPlaybackRateView()
+                        } label: {
+                            Text(String(format: "%g×", p.rate)).monospacedDigit()
+                                .fixedSize().frame(maxWidth: .infinity)
+                        }.accessibilityLabel("播放速度，\(p.rate)倍")
+                        NavigationLink {
+                            WatchPlayerActionsView()
+                        } label: {
+                            Image(systemName: "ellipsis").frame(maxWidth: .infinity)
+                        }.accessibilityLabel("更多播放选项")
+                        NavigationLink {
+                            WatchSleepTimerView()
+                        } label: {
+                            Image(systemName: p.sleep == .off ? "moon" : "moon.fill")
+                                .frame(maxWidth: .infinity)
+                        }.accessibilityLabel(p.sleep == .off ? "睡眠定时，关闭" : "睡眠定时，已启用")
+                    }
+                    .font(.callout)
+                    .buttonStyle(.plain)
+                    .frame(minHeight: Tok.Component.WatchPlayer.actionHeight)
+                    if p.error != nil {
+                        Button("重试播放", systemImage: "arrow.clockwise") { p.retry() }
+                    }
+                }
+            } else {
+                ContentUnavailableView("尚未播放", systemImage: "play.circle", description: Text("选择一节课开始收听"))
+            }
+        }
+        .navigationTitle("")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) {
+                Button("关闭", systemImage: "xmark") { dismiss() }.labelStyle(.iconOnly)
+            }
+        }
+        .task {
+            while !Task.isCancelled {
+                core.player?.refreshSleepDisplay()
+                try? await Task.sleep(for: .seconds(1))
+            }
+        }
+    }
+}
+
+private struct WatchPlaybackRateView: View {
+    @Environment(AppCore.self) private var core
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        List {
+            ForEach(PLAYBACK_RATES, id: \.self) { rate in
+                Button {
+                    core.player.setRate(rate)
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(rateMenuTitle(rate))
+                        Spacer()
+                        if core.player.rate == rate { Image(systemName: "checkmark") }
+                    }
                 }
             }
+        }.navigationTitle("播放速度")
+    }
+}
+
+private struct WatchSleepTimerView: View {
+    @Environment(AppCore.self) private var core
+    @Environment(\.dismiss) private var dismiss
+    var body: some View {
+        List {
+            ForEach(SLEEP_CHOICES) { choice in
+                Button {
+                    core.player.setSleep(sleepSetting(choice))
+                    dismiss()
+                } label: {
+                    HStack {
+                        Text(choice.title)
+                        Spacer()
+                        if core.player.sleep.choiceId == choice.id { Image(systemName: "checkmark") }
+                    }
+                }
+            }
+        }.navigationTitle("睡眠定时")
     }
 }
 
@@ -36,19 +147,25 @@ struct WatchPlayerActionsView: View {
     var body: some View {
         List {
             if let current = core.player.current {
-                if core.player.error != nil { Button("重试播放") { core.player.retry() } }
-                Button("前往课程") { model.showSeries(current.seriesId) }
-                Button(favorite ? "取消收藏这门课" : "收藏这门课") {
-                    core.toggleFavorite(current.seriesId, title: current.info.seriesTitle, coverPath: current.info.coverPath)
-                }
-                Button(completed ? "标记为未听完" : "标记为已听完") {
-                    core.markCompleted(current.episodeId, seriesId: current.seriesId, completed: !completed)
-                }
+                if core.player.error != nil { Button("重试播放", systemImage: "arrow.clockwise") { core.player.retry() } }
                 WatchDownloadActionRows(id: current.episodeId, download: download) {
                     model.confirm("删除此下载？", message: "将停止当前播放，保留收听进度。") {
                         model.deleteDownloads([current.episodeId])
                     }
                 }
+                Button(
+                    completed ? "标记为未听完" : "标记为已听完",
+                    systemImage: completed ? "rectangle.badge.minus" : "rectangle.badge.checkmark"
+                ) {
+                    core.markCompleted(current.episodeId, seriesId: current.seriesId, completed: !completed)
+                }
+                Button(
+                    favorite ? "取消收藏这门课" : "收藏这门课",
+                    systemImage: favorite ? "bookmark.fill" : "bookmark"
+                ) {
+                    core.toggleFavorite(current.seriesId, title: current.info.seriesTitle, coverPath: current.info.coverPath)
+                }
+                Button("前往课程", systemImage: "arrow.forward.circle") { model.showSeries(current.seriesId) }
             }
         }
         .navigationTitle("更多操作")
@@ -67,6 +184,7 @@ struct WatchDownloadActionRows: View {
     let download: DlRow?
     var canDownload = true
     var title: String? = nil
+    var playDownloaded: (() -> Void)? = nil
     let delete: () -> Void
     @Environment(WatchModel.self) private var model
 
@@ -74,20 +192,27 @@ struct WatchDownloadActionRows: View {
         switch model.downloads?.items[id]?.status ?? download?.state {
         case .done:
             if let title {
-                HStack {
-                    Text(title)
-                    Spacer()
-                    Image(systemName: "arrow.down.circle.fill")
+                Button {
+                    playDownloaded?()
+                } label: {
+                    HStack {
+                        Text(title)
+                        Spacer()
+                        Image(systemName: "arrow.down.circle.fill")
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
-                .accessibilityElement(children: .combine)
-                .accessibilityLabel("\(title)，已下载")
+                .accessibilityLabel("播放\(title)，已下载")
                 .swipeActions {
                     Button(role: .destructive, action: delete) {
                         Label("删除下载", systemImage: "trash")
                     }
                 }
             } else {
-                Button("删除下载", role: .destructive, action: delete)
+                Button(role: .destructive, action: delete) {
+                    Label("删除下载", systemImage: "trash")
+                }
             }
         case .queued, .downloading, .paused:
             let paused = (model.downloads?.items[id]?.status ?? download?.state) == .paused
@@ -133,9 +258,14 @@ struct WatchDownloadActionRows: View {
                 Button {
                     model.download(Set([id]))
                 } label: {
-                    HStack {
-                        Text(title ?? "下载这一集")
-                        if title != nil { Spacer(); Image(systemName: "arrow.down.circle") }
+                    if let title {
+                        HStack {
+                            Text(title)
+                            Spacer()
+                            Image(systemName: "arrow.down.circle")
+                        }
+                    } else {
+                        Label("下载这一集", systemImage: "arrow.down.circle")
                     }
                 }.accessibilityLabel("下载\(title ?? "这一集")")
             }

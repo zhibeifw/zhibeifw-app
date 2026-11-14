@@ -1,17 +1,23 @@
 import SwiftUI
 import UIKit
+import Intents
 
 @main
 struct ZhibeiFWApp: App {
     @UIApplicationDelegateAdaptor(AppDelegate.self) var delegate
-    @State private var model = AppModel()
+    private let model = AppModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(model)
-                .task { await model.boot() }
+                .task {
+                    await model.boot()
+                    if INPreferences.siriAuthorizationStatus() == .notDetermined {
+                        INPreferences.requestSiriAuthorization { _ in }
+                    }
+                }
                 .onOpenURL { model.openWidgetLink($0) }
                 .task { WidgetLog.note("App 界面起来了 phase=\(model.phase)") }
                 .onChange(of: scenePhase) { _, p in
@@ -25,6 +31,12 @@ struct ZhibeiFWApp: App {
 final class AppDelegate: NSObject, UIApplicationDelegate {
     static var backgroundCompletion: (() -> Void)?
 
+    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
+        guard intent is INPlayMediaIntent else { return nil }
+        SiriMediaHandler.log.notice("系统交付 INPlayMediaIntent")
+        return SiriMediaHandler.shared
+    }
+
     func application(
         _ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
@@ -34,6 +46,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate {
         BackgroundRefresh.register()
         BackgroundRefresh.schedule()
         return true
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        AppModel.shared.widgets.quickUpdateNowPlaying(playing: false)
     }
 
     /// 场景用自己的代理，才能收到长按 App 图标菜单的点击（QuickActionSceneDelegate）

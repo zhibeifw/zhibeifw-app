@@ -212,13 +212,7 @@ fun RecentRowView(model: AppModel, row: RecentRow) {
                             model.downloadItems(it) + listOf(
                                 model.markItem(it),
                                 model.goCourseItem(row.seriesId)
-                            ),
-                            listOf(
-                                MenuItem(
-                                    "删除记录",
-                                    "trash-outline",
-                                    destructive = true
-                                ) { model.hideRecent(row.episodeId) })
+                            )
                         )
                     }
                 }

@@ -5,7 +5,8 @@ import Observation
 /// 只有一个主窗口（和 Mac 上的“播客”“音乐”一样），另有“关于智悲佛网”窗口；菜单栏多一个“控制”菜单。
 @main
 struct ZhibeiFWMacApp: App {
-    @State private var model = MacModel()
+    @NSApplicationDelegateAdaptor(MacAppDelegate.self) private var delegate
+    private let model = MacModel.shared
 
     var body: some Scene {
         Window("智悲佛网", id: "main") {
@@ -42,6 +43,13 @@ struct ZhibeiFWMacApp: App {
     }
 }
 
+@MainActor
+final class MacAppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillTerminate(_ notification: Notification) {
+        MacModel.shared.widgets.quickUpdateNowPlaying(playing: false)
+    }
+}
+
 /// 侧边栏的一项：主页、分类、最近播放、收藏（分类只有一个入口，点进去是分类磁贴，和 iPhone、Apple TV 一样）。
 enum MacSection: Hashable {
     case home, categories, recent, favorites
@@ -53,10 +61,12 @@ enum MacRoute: Hashable {
     case category(String)
 }
 
-/// Mac 版的 App 模型：AppCore 加上 Mac 自己的界面状态（侧边栏选中项、页面栈、搜索词、播放页）。
+/// Mac 版的 App 模型：AppCore 加上 Mac 自己的界面状态（侧边栏选中项、页面栈与搜索词）。
 @MainActor
 @Observable
 final class MacModel {
+    static let shared = MacModel()
+
     @ObservationIgnored let core: AppCore
     /// 检查更新（官网版提示新版本，App Store 版只提示过旧）
     let updates = MacUpdateChecker()
@@ -74,7 +84,6 @@ final class MacModel {
     /// 侧边栏开着还是收起：放在模型里，打开、关掉播放页时保持原样
     var columns: NavigationSplitViewVisibility = .all
     var query = ""
-    var playerOpen = false
 
     /// 进一个分类的全部课程（主页分类行的标题、课程页的分类名）：切到侧边栏的“分类”，再进这个分类。
     func openCategory(_ categoryId: String) {
@@ -83,17 +92,16 @@ final class MacModel {
         path = [.category(categoryId)]
     }
 
-    /// “前往课程”：收起播放页，在当前内容区里进这门课；最上面已经是这门课就不再进一层。
+    /// “前往课程”：在当前内容区里进这门课；最上面已经是这门课就不再进一层。
     func goToSeries(_ seriesId: String) {
-        playerOpen = false
         query = ""
         let r = MacRoute.series(seriesId)
         if path.last != r { path.append(r) }
     }
 
-    init() {
+    private init() {
         core = AppCore()
-        // Mac 上选一集只开始播放、不弹播放页（和 Mac 上的“播客”一样）；点工具栏里的集名打开播放页
+        // 选集在底部播放栏播放，保留当前浏览页面。
         core.presentPlayer = nil
         widgets = WidgetFeeder(core: core)
         core.onReady = { [weak self] in
@@ -102,7 +110,6 @@ final class MacModel {
             if let u = self.pendingLink { self.pendingLink = nil; self.openWidgetLink(u) }
             self.startRefresher()
         }
-        connectWidgetButtons()
         core.prefetchHomeCovers = { home in
             let cards = home.ongoing + home.featured + home.categories.flatMap { $0.series.prefix(6) }
             ImageLoader.shared.prefetch(cards.map { (path: $0.coverPath, requested: COVER_THUMB_WIDTHS.last!) })
@@ -111,25 +118,22 @@ final class MacModel {
 }
 
 extension MacModel {
-    /// 小组件上的播放按钮（系统在 App 的进程里执行；App 没开着时在后台启动它，这时窗口还没起来，要自己先启动）。
-    /// 打开：播这一集（不是当前这一集就换成它）；关上：暂停。播放要等真的出声再结束（苹果对音频动作的要求）
-    fileprivate func connectWidgetButtons() {
-        WidgetBridge.setPlaying = { [weak self] id, on in
-            WidgetLog.note("按钮：\(id) play=\(on)")
-            guard let self, await self.readyForWidget(), let p = self.core.player else { return }
-            if p.current?.episodeId == id {
-                if on && !p.looksPlaying { p.resume() }
-                if !on && p.looksPlaying { p.pause() }
-            } else if on {
-                p.start(id, ctx: .single)
-            }
-            self.widgets.quickUpdateNowPlaying(playing: on)
-            guard on else { return }
-            for _ in 0..<100 where !p.isPlaying && p.error == nil {
-                try? await Task.sleep(nanoseconds: 100_000_000)
-            }
-            if !p.isPlaying { self.widgets.quickUpdateNowPlaying(playing: false) }
+    /// 小组件在后台启动时也使用主 App 的播放器。
+    func togglePlaybackFromWidget(_ id: String) async {
+        guard await readyForWidget(), let p = core.player else { return }
+        let on = p.current?.episodeId != id || !p.looksPlaying
+        if p.current?.episodeId == id {
+            if on && !p.looksPlaying { p.resume() }
+            if !on && p.looksPlaying { p.pause() }
+        } else if on {
+            p.start(id, ctx: .single)
         }
+        widgets.quickUpdateNowPlaying(playing: on)
+        guard on else { return }
+        for _ in 0..<100 where !p.isPlaying && p.error == nil {
+            try? await Task.sleep(nanoseconds: 100_000_000)
+        }
+        if !p.isPlaying { widgets.quickUpdateNowPlaying(playing: false) }
     }
 
     fileprivate func startRefresher() {
@@ -158,16 +162,15 @@ extension MacModel {
         return core.phase == .ready
     }
 
-    /// 点小组件打开 App：进课程页，或打开播放页（App 里已经不是这一集了就进课程页）
+    /// 点小组件内容进入对应课程页。
     func openWidgetLink(_ url: URL) {
         guard let link = WidgetLink(url) else { return }
         guard core.phase == .ready else { pendingLink = url; return }
         switch link {
         case .player(let seriesId):
-            if core.player?.current != nil { playerOpen = true } else { openWidgetLink(WidgetLink.series(seriesId).url) }
+            openWidgetLink(WidgetLink.series(seriesId).url)
         case .series(let id):
             // 一律回到侧边栏的主页、只留这门课一页（和 iPhone 一样）
-            playerOpen = false
             query = ""
             section = .home
             path = [.series(id)]
@@ -182,7 +185,7 @@ struct MacCommands: Commands {
 
     var body: some Commands {
         CommandGroup(replacing: .appInfo) {
-            Button("关于智悲佛网") { openWindow(id: "about") }
+            Button("关于智悲佛网", systemImage: "info.circle") { openWindow(id: "about") }
         }
         // 只有一个主窗口：去掉“新建窗口”
         CommandGroup(replacing: .newItem) {}
@@ -199,31 +202,35 @@ private struct MacControlMenu: View {
 
     var body: some View {
         let has = p?.current != nil
-        Button(p?.looksPlaying == true ? "暂停" : "播放") { p?.toggle() }
+        Button(p?.looksPlaying == true ? "暂停" : "播放", systemImage: p?.looksPlaying == true ? "pause.fill" : "play.fill") { p?.toggle() }
             .keyboardShortcut(.space, modifiers: [])
             .disabled(!has)
-        Button("后退 \(Int(SEEK_BACK_SECONDS)) 秒") { p?.seek(by: -SEEK_BACK_SECONDS) }
+        Button("后退 \(Int(SEEK_BACK_SECONDS)) 秒", systemImage: "gobackward.\(Int(SEEK_BACK_SECONDS))") { p?.seek(by: -SEEK_BACK_SECONDS) }
             .keyboardShortcut(.leftArrow, modifiers: .command)
             .disabled(!has)
-        Button("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒") { p?.seek(by: SEEK_FORWARD_SECONDS) }
-            .keyboardShortcut(.rightArrow, modifiers: .command)
-            .disabled(!has)
+        Button("前进 \(Int(SEEK_FORWARD_SECONDS)) 秒", systemImage: "goforward.\(Int(SEEK_FORWARD_SECONDS))") {
+            p?.seek(by: SEEK_FORWARD_SECONDS)
+        }
+        .keyboardShortcut(.rightArrow, modifiers: .command)
+        .disabled(!has)
         Divider()
-        Menu("播放速度") {
+        Menu("播放速度", systemImage: "speedometer") {
             ForEach(PLAYBACK_RATES, id: \.self) { r in
                 Toggle(rateMenuTitle(r), isOn: Binding(get: { p?.rate == r }, set: { _ in p?.setRate(r) }))
             }
         }
         .disabled(!has)
-        Menu("睡眠定时") {
+        Menu("睡眠定时", systemImage: "moon") {
             ForEach(SLEEP_CHOICES) { ch in
                 Toggle(ch.title, isOn: Binding(get: { p?.sleep.choiceId == ch.id }, set: { _ in p?.setSleep(sleepSetting(ch)) }))
             }
         }
         .disabled(!has)
         Divider()
-        Button("显示播放页") { model.playerOpen = true }
-            .keyboardShortcut("p", modifiers: [.command, .shift])
-            .disabled(!has)
+        Button("前往正在播放的课程", systemImage: "arrow.forward.circle") {
+            if let current = p?.current { model.goToSeries(current.seriesId) }
+        }
+        .keyboardShortcut("p", modifiers: [.command, .shift])
+        .disabled(!has)
     }
 }

@@ -50,31 +50,16 @@ fun AboutView(model: AppModel) {
     var clearResult by remember { mutableStateOf<String?>(null) }
     var routeResult by remember { mutableStateOf<String?>(null) }
     var updateResult by remember { mutableStateOf<String?>(null) }
-    // 顶部不放标题，只有返回键：下面的 Logo 和“智悲佛网”已经说明这是哪一页
-    PageScaffold(model, "", largeTitle = false, centeredTitle = true) {
+    PageScaffold(model, "关于", largeTitle = false, centeredTitle = true) {
         item("body") {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
                     Modifier.widthIn(max = Tok.Player.portraitMaxWidth.d),
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Image(
-                        painterResource(R.drawable.logo), "智悲佛网 Logo",
-                        Modifier.padding(top = CP.About.logoTop.d).width(CP.About.logoWidth.d)
-                    )
-                    Txt(
-                        "智悲佛网",
-                        S.aboutName,
-                        C.labelPrimary(),
-                        Modifier.padding(top = CP.About.nameTop.d)
-                            .semantics { heading() }) // 读屏把这一行当作页面标题
                     Column(Modifier.padding(top = CP.About.rowsTop.d)) {
-                        Row("联系", value = "hello@zhibeifw.com")
-                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
-                        Row("隐私政策", arrow = true) { model.openExternal(NetConfig.PRIVACY_URL) }
-                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
-                        Row("源代码", arrow = true) { model.openExternal(NetConfig.SOURCE_URL) }
-                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
+                        Txt("设置", S.body, C.labelSecondary(),
+                            Modifier.padding(horizontal = Tok.Space.pageMargin.d).semantics { heading() })
                         Row(
                             "清除缓存",
                             value = if (clearing) "正在清除…" else clearResult,
@@ -124,6 +109,14 @@ fun AboutView(model: AppModel) {
                                 }
                             }
                         }
+                        Txt("关于", S.body, C.labelSecondary(),
+                            Modifier.padding(top = CP.About.rowsTop.d)
+                                .padding(horizontal = Tok.Space.pageMargin.d).semantics { heading() })
+                        Row("联系", value = "hello@zhibeifw.com")
+                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
+                        Row("隐私政策", arrow = true) { model.openExternal(NetConfig.PRIVACY_URL) }
+                        Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
+                        Row("源代码", arrow = true) { model.openExternal(NetConfig.SOURCE_URL) }
                     }
                     // 页脚
                     Column(
@@ -131,7 +124,7 @@ fun AboutView(model: AppModel) {
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.spacedBy(CP.About.footerGap.d)
                     ) {
-                        Txt("智悲佛网 版权所有", S.caption, C.labelSecondary())
+                        Txt("智悲佛网", S.caption, C.labelSecondary())
                         Txt(
                             "版本 " + model.versionName,
                             S.caption,

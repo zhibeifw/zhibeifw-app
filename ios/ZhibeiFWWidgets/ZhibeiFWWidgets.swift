@@ -62,11 +62,17 @@ struct NowPlayingWidget: Widget {
     var body: some WidgetConfiguration {
         StaticConfiguration(kind: WidgetKinds.nowPlaying, provider: SnapshotProvider()) { e in
             NowPlayingView(np: e.snap.nowPlaying)
+                #if os(visionOS)
+                .padding(WidgetDesign.visionHitGap)
+                #endif
                 .containerBackground(for: .widget) { Color.widgetBackground }
         }
         .configurationDisplayName("继续播放")
         .description("接着听正在播放的一集。")
         .supportedFamilies([.systemSmall])
+        #if os(visionOS)
+        .contentMarginsDisabled()
+        #endif
     }
 }
 
@@ -77,6 +83,7 @@ struct NowPlayingView: View {
         if let np {
             VStack(alignment: .leading, spacing: 6) {
                 Cover(item: np.item, radius: 10)
+                    .frame(maxWidth: .infinity, alignment: .center)
                 Spacer(minLength: 0)
                 HStack(spacing: 6) {
                     VStack(alignment: .leading, spacing: 2) {
@@ -101,6 +108,7 @@ struct PlayButton: View {
     var body: some View {
         Button(intent: SetPlayingIntent(episodeId: np.item.episodeId ?? "", play: !np.playing)) {
             PlayProgressSymbol(playing: np.playing, progress: progressRatio(np.position, np.duration))
+                .modifier(VisionWidgetHitTarget())
         }
         .buttonStyle(.plain)
         .accessibilityLabel(np.playing ? "暂停" : "播放")
@@ -150,15 +158,23 @@ struct LatestView: View {
     let nowPlaying: WidgetNowPlaying?
     @Environment(\.widgetFamily) private var family
 
+    private var rowSpacing: CGFloat {
+        #if os(visionOS)
+        WidgetDesign.visionHitGap
+        #else
+        family == .systemLarge ? 8 : 6
+        #endif
+    }
+
     private func rows(_ n: Int) -> some View {
-        VStack(spacing: family == .systemLarge ? 8 : 6) {
+        VStack(spacing: rowSpacing) {
             ForEach(items.prefix(n), id: \.self) { i in
                 // 正在播的那一集显示暂停，点了暂停；点别的行开始播那一集
                 let id = i.episodeId ?? ""
                 let on = nowPlaying.map { $0.loaded && $0.playing && $0.item.episodeId == id } ?? false
                 let current = nowPlaying.flatMap { $0.item.episodeId == id ? $0 : nil }
                 let progress = current.map { progressRatio($0.position, $0.duration) } ?? i.progress ?? 0
-                Button(intent: SetPlayingIntent(episodeId: id, play: !on)) { LatestRow(item: i, playing: on, progress: progress) }
+                Button(intent: SetPlayingIntent(episodeId: id, play: !on)) { LatestRow(item: i, playing: on, progress: progress).modifier(VisionWidgetHitTarget()) }
                     .buttonStyle(.plain)
             }
         }
@@ -276,5 +292,16 @@ extension Color {
         self.init(
             red: Double((argb >> 16) & 0xFF) / 255, green: Double((argb >> 8) & 0xFF) / 255, blue: Double(argb & 0xFF) / 255,
             opacity: Double((argb >> 24) & 0xFF) / 255)
+    }
+}
+
+private struct VisionWidgetHitTarget: ViewModifier {
+    func body(content: Content) -> some View {
+        #if os(visionOS)
+        content.frame(minWidth: WidgetDesign.visionHitSize, minHeight: WidgetDesign.visionHitSize)
+            .contentShape(Rectangle())
+        #else
+        content
+        #endif
     }
 }

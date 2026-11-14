@@ -615,7 +615,7 @@ fun PlayPill(
         ) {
             when {
                 loading -> CircularProgressIndicator(Modifier.size(CP.EpisodeRow.playIcon.d), color = C.labelPrimary(), strokeWidth = CP.EpisodeRow.ringLine.d)
-                playing -> ZIcon("pause", CP.EpisodeRow.playIcon.d, C.labelPrimary())
+                playing -> AudioWaveformIcon()
                 state.kind == PillKind.DONE -> ZIcon(
                     "refresh",
                     CP.EpisodeRow.replayIcon.d,
@@ -765,7 +765,7 @@ fun Fade(visible: Boolean, content: @Composable () -> Unit) =
 
 @Composable
 fun widthOf(maxW: Float, content: @Composable () -> Unit) =
-    BoxWithConstraints(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
         Box(Modifier.widthIn(max = maxW.d)) { content() }
     }
 

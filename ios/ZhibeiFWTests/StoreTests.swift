@@ -1,4 +1,7 @@
 import XCTest
+#if os(iOS)
+import Intents
+#endif
 #if os(watchOS)
 @testable import ZhibeiFWWatch
 #else
@@ -42,6 +45,66 @@ final class StoreTests: XCTestCase {
                     updatedAt: nil)
             }, featured: featured)
     }
+
+    #if !os(tvOS)
+    func testSiriEpisodeUsesTitleNotListPosition() throws {
+        try store.replaceIndex(index([("论语", "儒学", "ongoing", ["导言", "第10课", "第100课"])]))
+        XCTAssertEqual(try store.siriEpisodes(matching: "论语 第10课").map(\.id), ["论语_2"])
+        XCTAssertEqual(try store.siriEpisodes(matching: "论语第十集").map(\.id), ["论语_2"])
+        XCTAssertEqual(try store.siriEpisodes(matching: "论语010").map(\.id), ["论语_2"])
+        XCTAssertTrue(try store.siriEpisodes(matching: "论语第2集").isEmpty)
+        XCTAssertTrue(try store.siriEpisodes(matching: "论语第1课").isEmpty)
+        XCTAssertTrue(try store.siriEpisodes(matching: "另一门课第10课").isEmpty)
+        XCTAssertTrue(try store.siriEpisodes(matching: "").isEmpty)
+    }
+
+    func testSiriAmbiguousEpisodeKeepsAllMatches() throws {
+        try store.replaceIndex(index([("论语", "儒学", "ongoing", ["第1课", "第1课"])]))
+        XCTAssertEqual(try store.siriEpisodes(matching: "论语第1课").count, 2)
+    }
+    #endif
+
+    #if os(iOS)
+    private func mediaIntent(_ title: String? = nil, id: String? = nil) -> INPlayMediaIntent {
+        let items = title == nil && id == nil ? nil : [INMediaItem(identifier: id, title: title, type: .unknown, artwork: nil)]
+        return INPlayMediaIntent(mediaItems: items, mediaContainer: nil, playShuffled: nil,
+                                 playbackRepeatMode: .none, resumePlayback: nil,
+                                 playbackQueueLocation: .now, playbackSpeed: nil, mediaSearch: nil)
+    }
+
+    func testMediaIntentRequiresEpisodeForCourseName() throws {
+        try store.replaceIndex(index([("论语", "儒学", "ongoing", ["第1课", "第10课"])]))
+        guard case .items(let items, let needsChoice) = try SiriMediaSelection.resolve(mediaIntent("论语"), store: store)
+        else { return XCTFail("应该询问集数") }
+        XCTAssertTrue(needsChoice)
+        XCTAssertEqual(items.count, 2)
+        guard case .items(let selected, let more) = try SiriMediaSelection.resolve(mediaIntent(id: items[1].identifier), store: store)
+        else { return XCTFail("应解析用户选中的集") }
+        XCTAssertFalse(more)
+        XCTAssertEqual(selected.first?.identifier, "episode:论语_2")
+    }
+
+    func testMediaIntentExplicitEpisodeAndResume() throws {
+        try store.replaceIndex(index([("论语", "儒学", "ongoing", ["第1课", "第10课"])]))
+        guard case .items(let items, let needsChoice) = try SiriMediaSelection.resolve(mediaIntent("论语第十集"), store: store)
+        else { return XCTFail("应解析指定集数") }
+        XCTAssertFalse(needsChoice)
+        XCTAssertEqual(items.first?.identifier, "episode:论语_2")
+        guard case .resume = try SiriMediaSelection.resolve(mediaIntent(), store: store)
+        else { return XCTFail("无指定内容时继续播放") }
+        guard case .missing = try SiriMediaSelection.resolve(mediaIntent("论语第999集"), store: store)
+        else { return XCTFail("不存在的集数不能换播另一集") }
+        guard case .missing = try SiriMediaSelection.resolve(mediaIntent(id: "unknown"), store: store)
+        else { return XCTFail("无效标识不能变成继续播放") }
+    }
+
+    func testMediaIntentSingleEpisodeCourseStillAsks() throws {
+        try store.replaceIndex(index([("论语", "儒学", "ongoing", ["第1课"])]))
+        guard case .items(_, let needsChoice) = try SiriMediaSelection.resolve(mediaIntent("论语"), store: store)
+        else { return XCTFail("应询问用户") }
+        XCTAssertTrue(needsChoice)
+    }
+    #endif
 
     func testMigrateFreshAndIdempotent() throws {
         XCTAssertEqual(db.userVersion, 3)

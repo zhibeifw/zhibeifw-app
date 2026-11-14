@@ -33,12 +33,12 @@ import kotlinx.coroutines.withContext
 //  - 存储空间不足：提示一次。
 
 /** 系统交回来的下载事件（在主线程上处理）。 */
-sealed class DownloadEvent {
-    data class Progress(val id: String, val written: Long, val total: Long) : DownloadEvent()
+sealed class DownloadEvent(val id: String, val generation: Int?) {
+    class Progress(id: String, generation: Int?, val written: Long, val total: Long) : DownloadEvent(id, generation)
 
     /** 下完：系统下好的文件，复制进资料库后交还系统删掉 */
-    data class Finished(val id: String, val file: File) : DownloadEvent()
-    data class Failed(val id: String, val diskFull: Boolean) : DownloadEvent()
+    class Finished(id: String, generation: Int?, val taskId: Long, val file: File) : DownloadEvent(id, generation)
+    class Failed(id: String, generation: Int?, val diskFull: Boolean) : DownloadEvent(id, generation)
 }
 
 /** 系统的下载服务（测试或换实现时可替换）。 */
@@ -46,13 +46,13 @@ interface SystemDownloads {
     fun setHandler(h: (DownloadEvent) -> Unit)
 
     /** 交给系统下载（标题、说明显示在系统通知栏里）。 */
-    fun start(id: String, url: String, title: String, description: String)
+    fun start(id: String, generation: Int, url: String, title: String, description: String)
 
     /** 停下并从系统里删掉（暂停、取消都用它；系统没有公开的暂停）。 */
     fun stop(id: String)
 
     /** 下完的文件已复制进资料库：交还系统删掉。 */
-    fun release(id: String)
+    fun release(id: String, taskId: Long)
 
     /** 系统里还在下（含排队、等网络、刚下完待收尾）的集；candidates 是数据库里没下完的集，用来认出系统里的下载。查不了返回 null。 */
     suspend fun activeIds(candidates: Collection<String>): Set<String>?
@@ -121,6 +121,7 @@ class DownloadManager(
 
     /** 每集的代号：开始、暂停、取消都换一个。等线路回来时代号变了（期间暂停过、又继续了），这一轮就不再交给系统，免得交两次 */
     private val gen = HashMap<String, Int>()
+    private val staging = mutableSetOf<File>()
     private fun bump(id: String): Int = ((gen[id] ?: 0) + 1).also { gen[id] = it }
     private var failedInBatch = 0
     private var diskFullShown = false
@@ -181,7 +182,7 @@ class DownloadManager(
                 if (gen[it.episodeId] != tokens[it.episodeId]) continue
                 starting.remove(it.episodeId)
                 // 交给系统是在另一条线程上排队做的：换一个代号，正在查系统表的对账（查表可能早于交出）看到代号变了就不碰这一集
-                bump(it.episodeId)
+                val generation = bump(it.episodeId)
                 if (items[it.episodeId]?.status != DlStatus.DOWNLOADING) continue
                 if (o == null) {
                     // 线路暂时都连不上：本来是暂停的退回暂停，不删下载记录；新加的才回到未下载
@@ -195,6 +196,7 @@ class DownloadManager(
                 runCatching {
                     system.start(
                         it.episodeId,
+                        generation,
                         buildUrl(o, it.audioPath),
                         it.episodeTitle,
                         it.seriesTitle
@@ -207,6 +209,10 @@ class DownloadManager(
     }
 
     private fun handle(e: DownloadEvent) {
+        if (gen[e.id] != e.generation) {
+            if (e is DownloadEvent.Finished) system.release(e.id, e.taskId)
+            return
+        }
         when (e) {
             is DownloadEvent.Progress -> {
                 if (items[e.id]?.status != DlStatus.DOWNLOADING) return
@@ -215,7 +221,11 @@ class DownloadManager(
             }
 
             is DownloadEvent.Finished -> {
-                scope.launch { finish(e.id, e.file); finishBatchIfIdle() }; return
+                scope.launch {
+                    finish(e)
+                    finishBatchIfIdle()
+                }
+                return
             }
 
             is DownloadEvent.Failed -> if (e.diskFull) diskFullFail(e.id)
@@ -224,47 +234,45 @@ class DownloadManager(
         finishBatchIfIdle()
     }
 
-    private suspend fun finish(id: String, file: File) {
+    private suspend fun finish(event: DownloadEvent.Finished) {
+        val id = event.id
+        if (gen[id] != event.generation) {
+            system.release(id, event.taskId)
+            return
+        }
         val r = runCatching { store.getDownload(id) }.getOrNull()
         if (r == null || r.state == DlStatus.DONE) {
-            system.release(id)
+            system.release(id, event.taskId)
             // 记录没了：内存里也别再挂着“下载中”
             if (r == null && items[id]?.status != DlStatus.DONE) set(id, null)
             return
         }
         // 用户已经暂停了：下完的文件不要，让系统删掉（多半暂停时已删过；启动对账记为暂停的那种系统里还留着）
         if (r.state == DlStatus.PAUSED || items[id]?.status == DlStatus.PAUSED) {
-            system.release(id); return
+            system.release(id, event.taskId); return
         }
-        val g = gen[id]
         val rel = files.finalRelative(id, r.audioPath)
         val final = files.absolute(rel)
-        // 复制成功：true；空间不足：null；其它错误：false
-        val ok: Boolean? = withContext(Dispatchers.IO) {
-            try {
-                file.copyTo(final, overwrite = true)
-                final.length() > 0
-            } catch (e: Exception) {
-                final.delete()
-                if (isNoSpaceError(e)) null else false
+        // 每个系统任务写自己的暂存文件。最终文件只在主线程确认代号后发布。
+        val temp = File(final.parentFile, "${final.name}.${event.taskId}.tmp")
+        if (!staging.add(temp)) return
+        try {
+            val copied = withContext(Dispatchers.IO) {
+                runCatching { event.file.copyTo(temp, overwrite = true).length() > 0 }
             }
-        }
-        // 复制期间被暂停或取消了：复制出来的文件不要，状态保持用户点的那样
-        if (gen[id] != g) {
-            if (ok == true) withContext(Dispatchers.IO) { final.delete() }
-            return
-        }
-        system.release(id)
-        when (ok) {
-            null -> diskFullFail(id)
-            false -> {
-                final.delete(); fail(id)
-            }
-
-            true -> {
+            if (gen[id] != event.generation) return
+            if (copied.getOrNull() == true && temp.renameTo(final)) {
                 runCatching { store.setDlDone(id, rel) }
                 set(id, DlProgress(DlStatus.DONE, 1, 1, r.seriesId))
+            } else if (copied.exceptionOrNull()?.let(::isNoSpaceError) == true) {
+                diskFullFail(id)
+            } else {
+                fail(id)
             }
+        } finally {
+            staging.remove(temp)
+            temp.delete()
+            system.release(id, event.taskId)
         }
     }
 
@@ -401,11 +409,14 @@ class DownloadManager(
         }
         // 旧版本自己下载时留下的半截文件；资料库里没有下载记录对应的音频（复制到一半被关掉等）
         // 要留的文件现查一次库：上面等系统表期间可能有新记录
-        val keepAudio = (runCatching { store.allDownloads() }.getOrNull() ?: all)
-            .map { (it.localFile ?: files.finalRelative(it.episodeId, it.audioPath)).substringAfterLast('/') }
-        withContext(Dispatchers.IO) {
+        val onDisk = withContext(Dispatchers.IO) {
             files.partDir.listFiles()?.forEach { it.delete() }
-            val onDisk = files.audioDir.listFiles()?.filter { it.isFile }?.map { it.name } ?: emptyList()
+            files.audioDir.listFiles()?.filter { it.isFile }?.map { it.name }.orEmpty()
+        }
+        runCatching { store.allDownloads() }.getOrNull()?.let { downloads ->
+            val keepAudio = downloads.map {
+                (it.localFile ?: files.finalRelative(it.episodeId, it.audioPath)).substringAfterLast('/')
+            } + staging.map { it.name }
             for (n in orphanAudioNames(onDisk, keepAudio)) File(files.audioDir, n).delete()
         }
         cleanupCovers()

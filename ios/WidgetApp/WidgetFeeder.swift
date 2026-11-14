@@ -29,7 +29,7 @@ final class WidgetFeeder {
         started = true
         // 启动时让系统重画一次：数据没变时不会刷新，App 升级后桌面上会一直是旧版画出来的样子（按钮还连着旧版的动作）。
         // App 在前台时刷新不占系统给的刷新次数
-        WidgetCenter.shared.reloadAllTimelines()
+        if #available(visionOS 26.0, *) { WidgetCenter.shared.reloadAllTimelines() }
         track()
         schedule()
     }
@@ -81,8 +81,8 @@ final class WidgetFeeder {
         let changed = WidgetStore.write(snap)
         WidgetLog.note("按钮后写：\(i.seriesId) / \(i.episodeId) playing=\(playing) 变了=\(changed)")
         if changed {
-            WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.nowPlaying)
-            WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.latest)
+            if #available(visionOS 26.0, *) { WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.nowPlaying) }
+            if #available(visionOS 26.0, *) { WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.latest) }
         }
         schedule()
     }
@@ -126,7 +126,7 @@ final class WidgetFeeder {
         WidgetLog.note(
             "App 写：在播 \(snap.nowPlaying?.item.seriesId ?? "无") / \(snap.nowPlaying?.item.episodeId ?? "无") playing=\(snap.nowPlaying?.playing ?? false) 变了=\(changed)"
         )
-        if changed { WidgetCenter.shared.reloadAllTimelines() }
+        if changed { if #available(visionOS 26.0, *) { WidgetCenter.shared.reloadAllTimelines() } }
     }
 
     private func playbackProgress(_ player: PlayerController) -> (position: Double, duration: Double) {

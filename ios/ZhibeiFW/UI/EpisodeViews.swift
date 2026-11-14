@@ -57,7 +57,7 @@ extension AppModel {
 
     func markItem(_ e: EpisodeItem) -> MenuItem {
         let done = completedNow(e)
-        return MenuItem(title: done ? "标记为未听完" : "标记为已听完", icon: "checkmark-circle-outline") { [weak self] in
+        return MenuItem(title: done ? "标记为未听完" : "标记为已听完", icon: done ? "rectangle.badge.minus" : "rectangle.badge.checkmark") { [weak self] in
             self?.markCompleted(e.episodeId, seriesId: e.seriesId, completed: !done)
         }
     }
@@ -150,7 +150,6 @@ struct RecentRowView: View {
                         MoreButton {
                             [
                                 model.downloadItems(for: it) + [model.markItem(it), model.goCourseItem(row.seriesId)],
-                                [MenuItem(title: "删除记录", icon: "trash-outline", destructive: true) { model.hideRecent(row.episodeId) }],
                             ]
                         }
                     }

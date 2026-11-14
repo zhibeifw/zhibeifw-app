@@ -1,5 +1,6 @@
 import AVFoundation
 import XCTest
+import MediaPlayer
 @testable import ZhibeiFW
 
 // 播放控制器。用真的系统播放器放测试里现生成的几秒静音 WAV（已下载的集走本地文件），
@@ -73,6 +74,90 @@ final class PlayerControllerTests: XCTestCase {
     }
 
     private func pause(_ sec: Double) async { try? await Task.sleep(nanoseconds: UInt64(sec * 1e9)) }
+
+    func testOldItemEndDoesNotOverwriteNewEpisodeWhileWaitingForRoute() async throws {
+        try download(1, wav(seconds: 30))
+        try store.recordPlayback(episodeId: "课_2", seriesId: "课", position: 1200, duration: 1800)
+        var route: CheckedContinuation<String?, Never>?
+        let p = make(routes: { await withCheckedContinuation { route = $0 } })
+        XCTAssertTrue(p.start("课_1", ctx: .single))
+        await until("第一集媒体项已装入") { p.player.currentItem != nil }
+        let old = try XCTUnwrap(p.player.currentItem)
+        XCTAssertTrue(p.start("课_2", ctx: .series("课")))
+        await until("第二集正在等线路") { route != nil }
+        defer { route?.resume(returning: nil) }
+
+        NotificationCenter.default.post(name: AVPlayerItem.didPlayToEndTimeNotification, object: old)
+
+        XCTAssertEqual(p.current?.episodeId, "课_2")
+        XCTAssertEqual(store.loadProgress("课_2")?.position, 1200)
+        XCTAssertNil(p.player.currentItem)
+    }
+
+    #if !os(watchOS)
+    func testWaveformStillReceivesAudioAfterPlaybackStarts() async throws {
+        var data = wav(seconds: 8)
+        for sample in 0..<(8000 * 8) {
+            var value = Int16(sin(2 * Double.pi * 500 * Double(sample) / 8000) * 8000).littleEndian
+            let offset = 44 + sample * 2
+            withUnsafeBytes(of: &value) { data.replaceSubrange(offset..<(offset + 2), with: $0) }
+        }
+        try download(1, data)
+        let p = make()
+        defer { p.pause() }
+        p.start("课_1", ctx: .single)
+        await until("播放已启动") { p.isPlaying }
+        await until("声波取得实际音频") {
+            p.audioWaveform.levels(at: p.player.currentTime().seconds).contains { $0 > 0.01 }
+        }
+    }
+    #endif
+
+    func testRemoteRateUsesSupportedValuesWithoutResumingPausedAudio() async throws {
+        let player = make()
+        XCTAssertEqual(player.handleRemoteRate(1.5), .noSuchContent)
+        try download(1, wav(seconds: 12))
+        try await SiriPlayback.start(player, episodeID: "课_1", context: .single)
+        defer { player.pause() }
+        XCTAssertEqual(player.handleRemoteRate(1.5), .success)
+        XCTAssertEqual(player.rate, 1.5)
+        XCTAssertTrue(player.isPlaying)
+        player.pause()
+        await until("系统报告暂停") { !player.looksPlaying }
+        XCTAssertEqual(player.handleRemoteRate(1.3), .success)
+        await pause(0.1)
+        XCTAssertEqual(player.rate, 1.3)
+        XCTAssertFalse(player.looksPlaying)
+        XCTAssertEqual(player.handleRemoteRate(3), .commandFailed)
+        XCTAssertEqual(player.rate, 1.3)
+        XCTAssertEqual(MPRemoteCommandCenter.shared().changePlaybackRateCommand.supportedPlaybackRates,
+                       PLAYBACK_RATES.map { NSNumber(value: $0) })
+    }
+
+    func testSiriPlayDoesNotTogglePlayingAudioOff() async throws {
+        try download(1, wav(seconds: 12))
+        let player = make()
+        defer { player.pause() }
+        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
+        XCTAssertTrue(player.isPlaying)
+        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
+        XCTAssertTrue(player.isPlaying)
+        XCTAssertEqual(player.current?.episodeId, "课_1")
+        player.pause()
+        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
+        XCTAssertTrue(player.isPlaying)
+    }
+
+    func testSiriRejectsUnavailableEpisode() async throws {
+        let player = make()
+        do {
+            try await SiriPlayback.start(player, episodeID: "missing", context: .single)
+            XCTFail("不应播放不存在的一集")
+        } catch {
+            XCTAssertTrue(error is SiriPlaybackError)
+        }
+        XCTAssertNil(player.current)
+    }
 
     // MARK: 开始播放、续播
 
