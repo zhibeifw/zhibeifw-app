@@ -33,7 +33,11 @@ struct SnapshotProvider: TimelineProvider {
     func getTimeline(in context: Context, completion: @escaping (Timeline<SnapshotEntry>) -> Void) {
         Task {
             var s = WidgetStore.read()
-            if WidgetCatalog.due(s), let fresh = await WidgetCatalog.refresh(s) { s = fresh }
+            if WidgetCatalog.due(s) {
+                _ = await WidgetCatalog.refresh(s)
+                // 等待目录期间播放状态可能已改变，304和失败时也必须重读。
+                s = WidgetStore.read()
+            }
             WidgetLog.note(
                 "小组件读到：在播 \(s.nowPlaying?.item.seriesId ?? "无") / \(s.nowPlaying?.item.episodeId ?? "无") playing=\(s.nowPlaying?.playing ?? false)，最新 \(s.latest.count)"
             )

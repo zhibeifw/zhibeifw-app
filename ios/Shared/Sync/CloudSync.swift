@@ -17,22 +17,24 @@ import Foundation
 final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     private static let zoneName = "UserData"
     #if DEBUG
-    private static let log = Logger(subsystem: "com.zhibeifw.app", category: "CloudSync")
+        private static let log = Logger(subsystem: "com.zhibeifw.app", category: "CloudSync")
     #endif
     private static let stateKey = "cloud.state"
     private static let outboxKey = "cloud.outbox"
+    private static let inboxKey = "cloud.pendingRemote"
 
     private let store: Store
     private let zoneID = CKRecordZone.ID(zoneName: CloudSync.zoneName)
-    private let defaults = UserDefaults.standard
-    private let lock = NSLock()
+    private let defaults: UserDefaults
+    private let lock = NSRecursiveLock()
     private var engine: CKSyncEngine!
 
     /// iCloud 下来的改动已经写进本机数据库：哪种数据变了（进度、收藏），页面据此重读。
     var onRemoteChange: (@MainActor (_ progress: Bool, _ favorites: Bool) -> Void)?
 
-    init(store: Store, containerIdentifier: String) {
+    init(store: Store, containerIdentifier: String, defaults: UserDefaults = .standard, automaticallySync: Bool = true) {
         self.store = store
+        self.defaults = defaults
         try? store.db.exec(
             "CREATE TABLE IF NOT EXISTS cloud_record (name TEXT PRIMARY KEY, modified INTEGER NOT NULL DEFAULT 0, system_fields TEXT)")
         let saved = defaults.data(forKey: Self.stateKey).flatMap {
@@ -40,20 +42,23 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         }
         let container = CKContainer(identifier: containerIdentifier)
         var config = CKSyncEngine.Configuration(database: container.privateCloudDatabase, stateSerialization: saved, delegate: self)
-        config.automaticallySync = true
+        config.automaticallySync = automaticallySync
         engine = CKSyncEngine(config)
         store.onUserChange = { [weak self] change in self?.noteLocalChange(change) }
+        retryPendingRemoteChanges()
     }
 
     // MARK: 主动同步
 
     /// 回到前台：主动去取别的设备的改动（只靠 iCloud 推送不稳，Mac 上尤其可能收不到）。
     func fetchNow() {
+        retryPendingRemoteChanges()
         Task { try? await engine.fetchChanges() }
     }
 
     /// 退到后台：马上把还没传的改动传上去，别的设备才能尽快看到。
     func sendNow() {
+        retryPendingRemoteChanges()
         Task { try? await engine.sendChanges() }
     }
 
@@ -115,16 +120,17 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     private func localModified(_ name: String) -> Int64? {
         ((try? store.db.first("SELECT modified FROM cloud_record WHERE name = ?", [name])) ?? nil)?.int("modified")
     }
-    private func setLocalModified(_ name: String, _ m: Int64) {
-        _ = try? store.db.run(
-            "INSERT INTO cloud_record (name, modified) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET modified = excluded.modified", [name, m])
+    private func setLocalModified(_ name: String, _ m: Int64) throws {
+        _ = try store.db.run(
+            "INSERT INTO cloud_record (name, modified) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET modified = excluded.modified",
+            [name, m])
     }
     /// 服务器那份记录的系统字段（变更标记等）：下次改这一条时带上，服务器才认得是同一份、不报冲突
-    private func saveSystemFields(_ rec: CKRecord) {
+    private func saveSystemFields(_ rec: CKRecord) throws {
         let coder = NSKeyedArchiver(requiringSecureCoding: true)
         rec.encodeSystemFields(with: coder)
         coder.finishEncoding()
-        _ = try? store.db.run(
+        _ = try store.db.run(
             "INSERT INTO cloud_record (name, system_fields) VALUES (?, ?) ON CONFLICT(name) DO UPDATE SET system_fields = excluded.system_fields",
             [rec.recordID.recordName, coder.encodedData.base64EncodedString()])
     }
@@ -132,7 +138,8 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         _ = try? store.db.run("UPDATE cloud_record SET system_fields = NULL WHERE name = ?", [name])
     }
     private func newOrKnownRecord(_ id: CKRecord.ID, type: String) -> CKRecord {
-        if let b64 = ((try? store.db.first("SELECT system_fields FROM cloud_record WHERE name = ?", [id.recordName])) ?? nil)?.optStr("system_fields"),
+        if let b64 = ((try? store.db.first("SELECT system_fields FROM cloud_record WHERE name = ?", [id.recordName])) ?? nil)?.optStr(
+            "system_fields"),
             let data = Data(base64Encoded: b64), let coder = try? NSKeyedUnarchiver(forReadingFrom: data)
         {
             coder.requiresSecureCoding = true
@@ -172,11 +179,11 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     private func enqueue(_ entries: [(String, Fields)]) {
         guard !entries.isEmpty else { return }
         #if DEBUG
-        for (name, f) in entries {
-            Self.log.notice("待上传 \(name, privacy: .public) modified=\(Self.int(f, "modified")) present=\(Self.int(f, "present"))")
-        }
+            for (name, f) in entries {
+                Self.log.notice("待上传 \(name, privacy: .public) modified=\(Self.int(f, "modified")) present=\(Self.int(f, "present"))")
+            }
         #endif
-        for (name, f) in entries { setLocalModified(name, Self.int(f, "modified")) }
+        for (name, f) in entries { try? setLocalModified(name, Self.int(f, "modified")) }
         updateOutbox { o in for (name, f) in entries { o[name] = f } }
         engine.state.add(pendingRecordZoneChanges: entries.map { .saveRecord(recordID($0.0)) })
     }
@@ -201,45 +208,93 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
 
     /// 换了账户、退出登录、iCloud 上的数据被删了：清掉同步状态（本机数据留着）
     private func resetCloudState() {
+        lock.lock(); defer { lock.unlock() }
         _ = try? store.db.run("DELETE FROM cloud_record")
         updateOutbox { $0.removeAll() }
+        defaults.removeObject(forKey: Self.inboxKey)
     }
 
     // MARK: iCloud 下来的改动 → 本机
 
-    /// 比本机新（或 force）才写进本机。返回哪种数据变了。
+    private func pendingRemote() -> [String: Data] {
+        defaults.dictionary(forKey: Self.inboxKey) as? [String: Data] ?? [:]
+    }
+
+    private func decodeRemote(_ data: Data) -> CKRecord? {
+        try? NSKeyedUnarchiver.unarchivedObject(ofClass: CKRecord.self, from: data)
+    }
+
+    private func finishRemote(_ name: String, through modified: Int64) {
+        var pending = pendingRemote()
+        if let data = pending[name], let record = decodeRemote(data),
+            (record["modified"] as? NSNumber)?.int64Value ?? 0 <= modified
+        {
+            pending[name] = nil
+            defaults.set(pending, forKey: Self.inboxKey)
+        }
+    }
+
+    /// 引擎可以继续保存下载游标，尚未成功落库的记录留到启动、前台或后续同步时处理。
+    func retryPendingRemoteChanges() {
+        lock.lock(); defer { lock.unlock() }
+        var progress = false, favorites = false
+        for data in pendingRemote().values {
+            guard let record = decodeRemote(data) else { continue }
+            let result = applyRemote(record, force: true)
+            progress = progress || result.progress; favorites = favorites || result.favorites
+        }
+        notify(progress, favorites)
+    }
+
+    /// 用户记录和服务器版本在一个事务中落库，成功后才清理待发内容。
     @discardableResult
-    private func applyRemote(_ rec: CKRecord, force: Bool = false) -> (progress: Bool, favorites: Bool) {
-        guard let f = Self.fields(of: rec) else { return (false, false) }
+    func applyRemote(_ rec: CKRecord, force: Bool = false) -> (progress: Bool, favorites: Bool) {
+        lock.lock(); defer { lock.unlock() }
+        guard let fields = Self.fields(of: rec) else { return (false, false) }
+        let isProgress = rec.recordType == Self.progressSchema.type
+        guard !Self.str(fields, isProgress ? "episodeId" : "seriesId").isEmpty else { return (false, false) }
         let name = rec.recordID.recordName
-        saveSystemFields(rec)
-        let remote = Self.int(f, "modified")
-        #if DEBUG
-        // 开发版的诊断日志：收到的是哪一条、两边的修改时间、收藏的 present，用没用（正式版不编进去）
-        let local = localModified(name)
-        Self.log.notice(
-            "收到 \(name, privacy: .public) remote=\(remote) local=\(local ?? -1) present=\(Self.int(f, "present")) force=\(force) 采用=\(force || remote > (local ?? -1))")
-        #endif
-        guard force || remote > (localModified(name) ?? -1) else { return (false, false) }
-        setLocalModified(name, remote)
-        // 本机还没传上去的那份更旧：不要了
-        updateOutbox { o in if let mine = o[name], Self.int(mine, "modified") <= remote { o[name] = nil } }
-        if rec.recordType == Self.progressSchema.type {
-            let p = Store.ProgressRecord(
-                episodeId: Self.str(f, "episodeId"), seriesId: Self.str(f, "seriesId"), position: Self.dbl(f, "position"),
-                duration: Self.dbl(f, "duration"), completed: Self.int(f, "completed") != 0, hidden: Self.int(f, "hidden") != 0,
-                lastPlayed: Self.int(f, "lastPlayed"), updated: Self.int(f, "updated"), seriesTitle: Self.str(f, "seriesTitle"),
-                episodeTitle: Self.str(f, "episodeTitle"), coverPath: Self.str(f, "coverPath"))
-            guard !p.episodeId.isEmpty else { return (false, false) }
-            try? store.applyProgressRecord(p)
-            return (true, false)
-        } else {
-            let fav = Store.FavoriteRecord(
-                seriesId: Self.str(f, "seriesId"), present: Self.int(f, "present") != 0, added: Self.int(f, "added"),
-                seriesTitle: Self.str(f, "seriesTitle"), coverPath: Self.str(f, "coverPath"))
-            guard !fav.seriesId.isEmpty else { return (false, false) }
-            try? store.applyFavoriteRecord(fav)
-            return (false, true)
+        let remote = Self.int(fields, "modified")
+        do {
+            var pending = pendingRemote()
+            let queued = pending[name].flatMap(decodeRemote).flatMap { $0["modified"] as? NSNumber }?.int64Value ?? -1
+            if remote >= queued {
+                pending[name] = try NSKeyedArchiver.archivedData(withRootObject: rec, requiringSecureCoding: true)
+                defaults.set(pending, forKey: Self.inboxKey)
+            }
+            let applied = try store.db.transaction {
+                let local = try store.db.first("SELECT modified FROM cloud_record WHERE name = ?", [name])?.int("modified") ?? -1
+                guard remote > local || (force && remote == local) else { return false }
+                if isProgress {
+                    try store.applyProgressRecord(
+                        Store.ProgressRecord(
+                            episodeId: Self.str(fields, "episodeId"), seriesId: Self.str(fields, "seriesId"),
+                            position: Self.dbl(fields, "position"), duration: Self.dbl(fields, "duration"),
+                            completed: Self.int(fields, "completed") != 0, hidden: Self.int(fields, "hidden") != 0,
+                            lastPlayed: Self.int(fields, "lastPlayed"), updated: Self.int(fields, "updated"),
+                            seriesTitle: Self.str(fields, "seriesTitle"), episodeTitle: Self.str(fields, "episodeTitle"),
+                            coverPath: Self.str(fields, "coverPath")))
+                } else {
+                    try store.applyFavoriteRecord(
+                        Store.FavoriteRecord(
+                            seriesId: Self.str(fields, "seriesId"), present: Self.int(fields, "present") != 0,
+                            added: Self.int(fields, "added"), seriesTitle: Self.str(fields, "seriesTitle"),
+                            coverPath: Self.str(fields, "coverPath")))
+                }
+                try setLocalModified(name, remote)
+                try saveSystemFields(rec)
+                return true
+            }
+            if applied {
+                updateOutbox { outbox in
+                    if let mine = outbox[name], Self.int(mine, "modified") <= remote { outbox[name] = nil }
+                }
+            }
+            finishRemote(name, through: remote)
+            return (applied && isProgress, applied && !isProgress)
+        } catch {
+            NSLog("iCloud 本地写入失败，保留待处理记录：\(error)")
+            return (false, false)
         }
     }
 
@@ -253,6 +308,7 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
     func handleEvent(_ event: CKSyncEngine.Event, syncEngine: CKSyncEngine) async {
         switch event {
         case .stateUpdate(let e):
+            retryPendingRemoteChanges()
             if let data = try? JSONEncoder().encode(e.stateSerialization) { defaults.set(data, forKey: Self.stateKey) }
 
         case .accountChange(let e):
@@ -276,16 +332,18 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
 
         case .sentRecordZoneChanges(let e):
             #if DEBUG
-            for rec in e.savedRecords { Self.log.notice("已上传 \(rec.recordID.recordName, privacy: .public)") }
-            for x in e.failedRecordSaves {
-                Self.log.notice("上传失败 \(x.record.recordID.recordName, privacy: .public) \(x.error.code.rawValue)")
-            }
+                for rec in e.savedRecords { Self.log.notice("已上传 \(rec.recordID.recordName, privacy: .public)") }
+                for x in e.failedRecordSaves {
+                    Self.log.notice("上传失败 \(x.record.recordID.recordName, privacy: .public) \(x.error.code.rawValue)")
+                }
             #endif
             for rec in e.savedRecords {
-                saveSystemFields(rec)
+                try? saveSystemFields(rec)
                 let sent = (rec["modified"] as? NSNumber)?.int64Value ?? 0
                 // 发出去以后本机又改了的，留着下次发
-                updateOutbox { o in if let mine = o[rec.recordID.recordName], Self.int(mine, "modified") <= sent { o[rec.recordID.recordName] = nil } }
+                updateOutbox { o in
+                    if let mine = o[rec.recordID.recordName], Self.int(mine, "modified") <= sent { o[rec.recordID.recordName] = nil }
+                }
             }
             var p = false, f = false
             for failed in e.failedRecordSaves {
@@ -297,7 +355,7 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
                     let theirs = (server["modified"] as? NSNumber)?.int64Value ?? 0
                     let mine = outbox()[id.recordName].map { Self.int($0, "modified") } ?? localModified(id.recordName) ?? 0
                     if mine > theirs {
-                        saveSystemFields(server)
+                        try? saveSystemFields(server)
                         syncEngine.state.add(pendingRecordZoneChanges: [.saveRecord(id)])
                     } else {
                         let r = applyRemote(server, force: true)
@@ -322,7 +380,9 @@ final class CloudSync: CKSyncEngineDelegate, @unchecked Sendable {
         }
     }
 
-    func nextRecordZoneChangeBatch(_ context: CKSyncEngine.SendChangesContext, syncEngine: CKSyncEngine) async
+    func nextRecordZoneChangeBatch(
+        _ context: CKSyncEngine.SendChangesContext, syncEngine: CKSyncEngine
+    ) async
         -> CKSyncEngine.RecordZoneChangeBatch?
     {
         let pending = syncEngine.state.pendingRecordZoneChanges.filter { context.options.scope.contains($0) }

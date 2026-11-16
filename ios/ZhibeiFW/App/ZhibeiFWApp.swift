@@ -1,6 +1,5 @@
 import SwiftUI
 import UIKit
-import Intents
 
 @main
 struct ZhibeiFWApp: App {
@@ -12,12 +11,7 @@ struct ZhibeiFWApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .task {
-                    await model.boot()
-                    if INPreferences.siriAuthorizationStatus() == .notDetermined {
-                        INPreferences.requestSiriAuthorization { _ in }
-                    }
-                }
+                .task { await model.boot() }
                 .onOpenURL { model.openWidgetLink($0) }
                 .task { WidgetLog.note("App 界面起来了 phase=\(model.phase)") }
                 .onChange(of: scenePhase) { _, p in
@@ -30,12 +24,6 @@ struct ZhibeiFWApp: App {
 
 final class AppDelegate: NSObject, UIApplicationDelegate {
     static var backgroundCompletion: (() -> Void)?
-
-    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
-        guard intent is INPlayMediaIntent else { return nil }
-        SiriMediaHandler.log.notice("系统交付 INPlayMediaIntent")
-        return SiriMediaHandler.shared
-    }
 
     func application(
         _ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil

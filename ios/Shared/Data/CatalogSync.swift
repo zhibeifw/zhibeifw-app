@@ -7,7 +7,7 @@ enum FileStatus: Equatable { case updated, unchanged, invalid, failed, missing }
 
 struct SyncSummary: Equatable {
     var index: FileStatus
-    var failed: Bool { index == .failed }
+    var failed: Bool { index == .failed || index == .missing }
     var changed: Bool { index == .updated }
 }
 

@@ -1,22 +1,15 @@
 import SwiftUI
 import Observation
 import UIKit
-import Intents
 
 @main
 struct ZhibeiFWVisionApp: App {
-    @UIApplicationDelegateAdaptor(VisionSiriDelegate.self) private var delegate
     @State private var model = VisionModel.shared
     @Environment(\.scenePhase) private var phase
     var body: some Scene {
         WindowGroup {
             VisionRootView().environment(model).environment(model.core)
-                .task {
-                    await model.core.boot()
-                    if INPreferences.siriAuthorizationStatus() == .notDetermined {
-                        INPreferences.requestSiriAuthorization { _ in }
-                    }
-                }
+                .task { await model.core.boot() }
                 .onOpenURL { model.openWidgetLink($0) }
                 .onChange(of: phase) { _, phase in
                     if phase == .active { model.core.onForeground() }
@@ -186,12 +179,5 @@ struct VisionRootView: View {
         } message: { spec in
             if let message = spec.message { Text(message) }
         }
-    }
-}
-
-final class VisionSiriDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
-        guard intent is INPlayMediaIntent else { return nil }
-        return SiriMediaHandler.shared
     }
 }

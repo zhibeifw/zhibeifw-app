@@ -14,6 +14,7 @@ final class WidgetFeeder {
     private let core: AppCore
     private var pending: Task<Void, Never>?
     private var started = false
+    private var writeGeneration = 0
 
     /// 每种列表最多几条：大号小组件放得下的数量
     private static let latestLimit = 7
@@ -52,6 +53,7 @@ final class WidgetFeeder {
 
     func schedule() {
         guard started else { return }
+        writeGeneration += 1
         pending?.cancel()
         pending = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 1_000_000_000)
@@ -68,17 +70,17 @@ final class WidgetFeeder {
     /// 下一次点又会发出同一个动作，看起来像坏了
     func quickUpdateNowPlaying(playing: Bool) {
         guard started, let p = core.player, let c = p.current else { return }
-        var snap = WidgetStore.read()
+        writeGeneration += 1
         let i = c.info
         let name = ImageLoader.diskName(i.coverPath) + ".jpg"
         let cover = WidgetStore.coverURL(name).map { FileManager.default.fileExists(atPath: $0.path) } == true ? name : nil
         let progress = playbackProgress(p)
-        snap.nowPlaying = WidgetNowPlaying(
+        let nowPlaying = WidgetNowPlaying(
             item: WidgetItem(
                 seriesId: i.seriesId, seriesTitle: i.seriesTitle, episodeId: i.episodeId, episodeTitle: i.episodeTitle,
                 cover: cover, color: placeholderColor(i.seriesId).light),
             position: progress.position, duration: progress.duration, playing: playing, loaded: true)
-        let changed = WidgetStore.write(snap)
+        let changed = WidgetStore.update { $0.nowPlaying = nowPlaying }
         WidgetLog.note("按钮后写：\(i.seriesId) / \(i.episodeId) playing=\(playing) 变了=\(changed)")
         if changed {
             if #available(visionOS 26.0, *) { WidgetCenter.shared.reloadTimelines(ofKind: WidgetKinds.nowPlaying) }
@@ -95,11 +97,14 @@ final class WidgetFeeder {
 
     private func write() async {
         guard core.phase == .ready, let store = core.store else { return }
+        writeGeneration += 1
+        let generation = writeGeneration
+        let original = WidgetStore.read()
         var snap = WidgetSnapshot()
         snap.nowPlaying = nowPlaying(store)
         snap.origin = Network.shared.currentOrigin ?? Prefs.d.string(forKey: Prefs.kLastService)
         snap.catalogCheckedAt = core.lastSyncAt > 0 ? core.lastSyncAt : nil
-        let old = WidgetStore.read()
+        let old = original
         if let w = old.latestFromWidgetAt, w > core.lastSyncAt {
             // 小组件自己取到的新课程比 App 上次同步还新（App 很久没打开）：先用它，等 App 同步后再换成自己的
             snap.latest = old.latest
@@ -121,8 +126,10 @@ final class WidgetFeeder {
             }
             return item
         }
-        await prepareCovers(&snap)
-        let changed = WidgetStore.write(snap)
+        let covers = await prepareCovers(&snap)
+        // 新任务或播放按钮已经接管，旧封面任务不再写回。
+        guard generation == writeGeneration else { return }
+        let changed = WidgetStore.update(covers: covers) { $0.mergeApp(snap, basedOn: original) }
         WidgetLog.note(
             "App 写：在播 \(snap.nowPlaying?.item.seriesId ?? "无") / \(snap.nowPlaying?.item.episodeId ?? "无") playing=\(snap.nowPlaying?.playing ?? false) 变了=\(changed)"
         )
@@ -172,20 +179,23 @@ final class WidgetFeeder {
     }
 
     /// 把用到的封面缩小存进共享目录（已有的跳过），删掉不再用的；取不到的封面留空，小组件显示占位色
-    private func prepareCovers(_ snap: inout WidgetSnapshot) async {
-        guard let dir = WidgetStore.coversDir else { return }
+    private func prepareCovers(_ snap: inout WidgetSnapshot) async -> [String: Data] {
+        guard let dir = WidgetStore.coversDir else { return [:] }
         let fm = FileManager.default
         try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
         var names: [String: String?] = [:]
+        var covers: [String: Data] = [:]
         let paths = Set(([snap.nowPlaying?.item].compactMap { $0 } + snap.latest).compactMap(\.cover))
         for path in paths {
+            if !path.contains("/"), let data = try? Data(contentsOf: dir.appendingPathComponent(path)) {
+                names[path] = path; covers[path] = data; continue
+            }
             let name = ImageLoader.diskName(path) + ".jpg"
             let f = dir.appendingPathComponent(name)
-            if fm.fileExists(atPath: f.path) { names[path] = name; continue }
-            if let img = await ImageLoader.shared.load(path, maxPixel: Self.coverPx), let d = Self.jpeg(img),
-                (try? d.write(to: f, options: .atomic)) != nil
-            {
+            if let data = try? Data(contentsOf: f) { names[path] = name; covers[name] = data; continue }
+            if let img = await ImageLoader.shared.load(path, maxPixel: Self.coverPx), let d = Self.jpeg(img) {
                 names[path] = name
+                covers[name] = d
             } else {
                 names[path] = .some(nil)
             }
@@ -197,9 +207,6 @@ final class WidgetFeeder {
         }
         if let np = snap.nowPlaying { snap.nowPlaying?.item = fix(np.item) }
         snap.latest = snap.latest.map(fix)
-        let keep = Set(names.values.compactMap { $0 })
-        for f in (try? fm.contentsOfDirectory(atPath: dir.path)) ?? [] where !keep.contains(f) {
-            try? fm.removeItem(at: dir.appendingPathComponent(f))
-        }
+        return covers
     }
 }

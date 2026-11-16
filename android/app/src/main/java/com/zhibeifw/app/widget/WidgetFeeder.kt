@@ -61,7 +61,7 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
                 // 写按钮要切到的状态：刚发出暂停 / 播放时播放器的状态还没变过来
                 p.position, p.duration, playing, true,
             )
-            WidgetStore.write(ctx, WidgetStore.read(ctx).copy(nowPlaying = np))
+            WidgetStore.update(ctx) { it.copy(nowPlaying = np) }
         }
         if (changed) {
             NowPlayingWidget().refreshAll(ctx)
@@ -77,8 +77,9 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
     private suspend fun write() = lock.withLock {
         if (model.phase != Phase.Ready) return@withLock
         try {
+            val original = withContext(Dispatchers.IO) { WidgetStore.read(ctx) }
             val snap = withCovers(build())
-            if (withContext(Dispatchers.IO) { WidgetStore.write(ctx, snap) }) updateAllWidgets(ctx)
+            if (withContext(Dispatchers.IO) { WidgetStore.writePrepared(ctx, snap, original) }) updateAllWidgets(ctx)
         } catch (e: Exception) {
             Log.w("WidgetFeeder", "写小组件数据出错", e)
         }
@@ -131,8 +132,6 @@ class WidgetFeeder(private val ctx: Context, private val model: AppModel, privat
             }
         }
         fun fix(i: WidgetItem) = i.copy(cover = i.cover?.let { names[it] })
-        val keep = names.values.filterNotNull().toSet()
-        withContext(Dispatchers.IO) { dir.listFiles()?.forEach { if (it.name !in keep) it.delete() } }
         return s.copy(
             nowPlaying = s.nowPlaying?.let { it.copy(item = fix(it.item)) },
             latest = s.latest.map(::fix),

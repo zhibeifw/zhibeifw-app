@@ -1,12 +1,10 @@
 import SwiftUI
 import Observation
 import UIKit
-import Intents
 
 /// Apple TV 版入口。共用的状态与动作在 AppCore（ios/Shared/App）；电视自己的界面状态在 TVModel。
 @main
 struct ZhibeiFWTVApp: App {
-    @UIApplicationDelegateAdaptor(TVSiriDelegate.self) private var delegate
     @State private var model = TVModel.shared
     @Environment(\.scenePhase) private var scenePhase
 
@@ -15,12 +13,7 @@ struct ZhibeiFWTVApp: App {
             TVRootView()
                 .environment(model)
                 .environment(model.core)
-                .task {
-                    await model.core.boot()
-                    if INPreferences.siriAuthorizationStatus() == .notDetermined {
-                        INPreferences.requestSiriAuthorization { _ in }
-                    }
-                }
+                .task { await model.core.boot() }
                 .onChange(of: scenePhase) { _, p in
                     if p == .active { model.core.onForeground() }
                     if p == .background { model.core.onBackground() }
@@ -88,12 +81,5 @@ final class TVModel {
             let cards = home.ongoing + home.featured + home.categories.flatMap { $0.series.prefix(5) }
             ImageLoader.shared.prefetch(cards.map { (path: $0.coverPath, requested: COVER_THUMB_WIDTHS.last!) })
         }
-    }
-}
-
-final class TVSiriDelegate: NSObject, UIApplicationDelegate {
-    func application(_ application: UIApplication, handlerFor intent: INIntent) -> Any? {
-        guard intent is INPlayMediaIntent else { return nil }
-        return SiriMediaHandler.shared
     }
 }

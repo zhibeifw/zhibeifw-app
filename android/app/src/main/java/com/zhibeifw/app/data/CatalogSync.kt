@@ -15,7 +15,7 @@ import kotlinx.coroutines.withContext
 enum class FileStatus { UPDATED, UNCHANGED, INVALID, FAILED, MISSING }
 
 data class SyncSummary(val index: FileStatus) {
-    val failed get() = index == FileStatus.FAILED
+    val failed get() = index == FileStatus.FAILED || index == FileStatus.MISSING
     val changed get() = index == FileStatus.UPDATED
 }
 

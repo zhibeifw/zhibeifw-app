@@ -61,7 +61,7 @@ struct TVCardRow: View {
                             Image(systemName: "chevron.right").font(.callout).foregroundStyle(.secondary)
                         }
                     }
-                    .buttonStyle(.borderless)
+                    .buttonStyle(.bordered)
                 } else {
                     Text(title)
                 }

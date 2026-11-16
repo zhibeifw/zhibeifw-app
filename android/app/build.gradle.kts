@@ -39,7 +39,7 @@ android {
         versionName = appVersionName
         // 渠道：site＝官网 APK（有“检查更新”）；以后 Google Play 版设为 store
         buildConfigField("String", "CHANNEL", "\"site\"")
-        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "com.zhibeifw.app.RegressionTestRunner"
     }
 
     signingConfigs {

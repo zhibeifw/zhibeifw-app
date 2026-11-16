@@ -117,7 +117,8 @@ final class PlayerControllerTests: XCTestCase {
         let player = make()
         XCTAssertEqual(player.handleRemoteRate(1.5), .noSuchContent)
         try download(1, wav(seconds: 12))
-        try await SiriPlayback.start(player, episodeID: "课_1", context: .single)
+        XCTAssertTrue(player.start("课_1", ctx: .single))
+        await until("本地音频开始播放") { player.isPlaying }
         defer { player.pause() }
         XCTAssertEqual(player.handleRemoteRate(1.5), .success)
         XCTAssertEqual(player.rate, 1.5)
@@ -132,31 +133,6 @@ final class PlayerControllerTests: XCTestCase {
         XCTAssertEqual(player.rate, 1.3)
         XCTAssertEqual(MPRemoteCommandCenter.shared().changePlaybackRateCommand.supportedPlaybackRates,
                        PLAYBACK_RATES.map { NSNumber(value: $0) })
-    }
-
-    func testSiriPlayDoesNotTogglePlayingAudioOff() async throws {
-        try download(1, wav(seconds: 12))
-        let player = make()
-        defer { player.pause() }
-        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
-        XCTAssertTrue(player.isPlaying)
-        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
-        XCTAssertTrue(player.isPlaying)
-        XCTAssertEqual(player.current?.episodeId, "课_1")
-        player.pause()
-        try await SiriPlayback.start(player, episodeID: "课_1", context: .series("课"))
-        XCTAssertTrue(player.isPlaying)
-    }
-
-    func testSiriRejectsUnavailableEpisode() async throws {
-        let player = make()
-        do {
-            try await SiriPlayback.start(player, episodeID: "missing", context: .single)
-            XCTFail("不应播放不存在的一集")
-        } catch {
-            XCTAssertTrue(error is SiriPlaybackError)
-        }
-        XCTAssertNil(player.current)
     }
 
     // MARK: 开始播放、续播

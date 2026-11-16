@@ -103,14 +103,22 @@ private struct TVPlayerControls: View {
     }
 
     // 倍速 | 后退 15 | 播放暂停 | 前进 30 | 睡眠定时（和 iPhone 同样的顺序）
-    // 全部是系统的圆形带底按钮（和右上角的“•••”一样）；倍速最长“0.8×”四个字符，圆形放得下。
+    // 全部是系统的圆形带底按钮；倍速按完整的小数标签预留宽度。
     // 不用无边框样式：纯文字的无边框按钮在 tvOS 上选中时看不出来，一行里混用两种样式又不统一
     private var controlRow: some View {
         HStack {
             Button { dialog = .rate } label: {
-                // 和旁边的图标一样大的方框里放文字：几个圆形按钮大小一致
-                Text(String(format: "%g×", p.rate)).font(.headline).monospacedDigit().minimumScaleFactor(0.7)
-                    .frame(width: 48, height: 48)
+                // 用最长标签的自然宽度占位，切换倍速时按钮不改变大小。
+                Text("0.8×")
+                    .hidden()
+                    .overlay {
+                        Text(String(format: "%g×", p.rate))
+                    }
+                    .font(.callout)
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+                    .frame(minWidth: 48, minHeight: 48)
             }
             .accessibilityLabel("播放速度 \(String(format: "%g", p.rate)) 倍")
             Spacer()

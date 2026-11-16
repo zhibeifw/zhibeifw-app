@@ -28,7 +28,6 @@ enum WidgetCatalog {
         return URLSession(configuration: c)
     }()
 
-    private static var etagFile: URL? { WidgetStore.dir?.appendingPathComponent("widget-index.etag") }
     private static var checkedFile: URL? { WidgetStore.dir?.appendingPathComponent("widget-checked") }
 
     /// 距上次检查（App 同步或小组件自己取）够 2 小时才取，免得小组件每次重画（点按钮等）都联网
@@ -39,47 +38,50 @@ enum WidgetCatalog {
     }
 
     /// 取一次；有新内容就写进共享目录并返回新的数据，否则返回 nil
-    static func refresh(_ snap: WidgetSnapshot) async -> WidgetSnapshot? {
+    static func refresh(
+        _ snap: WidgetSnapshot, using requestSession: URLSession? = nil, directory: URL? = WidgetStore.dir
+    ) async -> WidgetSnapshot? {
+        let startedAt = Date().timeIntervalSince1970 * 1000
         guard let origin = snap.origin, isHttpsOrigin(origin), let url = buildUrl(origin, "index.json") else { return nil }
         var req = URLRequest(url: url, timeoutInterval: 15)
+        let etagFile = directory?.appendingPathComponent("widget-index.etag")
         let etag = etagFile.flatMap { try? String(contentsOf: $0, encoding: .utf8) }
         if let etag { req.setValue(etag, forHTTPHeaderField: "If-None-Match") }
-        guard let (data, resp) = try? await session.data(for: req), let http = resp as? HTTPURLResponse else {
+        guard let (data, resp) = try? await (requestSession ?? session).data(for: req), let http = resp as? HTTPURLResponse else {
             WidgetLog.note("小组件取目录：连不上")
             return nil
         }
-        markChecked()
+        markChecked(in: directory)
         if http.statusCode == 304 { WidgetLog.note("小组件取目录：没变"); return nil }
         guard http.statusCode == 200, data.count <= indexLimit, let latest = parseLatest(data) else {
             WidgetLog.note("小组件取目录：失败 \(http.statusCode)")
             return nil
         }
-        var s = snap
         let colors = Dictionary(
             (snap.latest + [snap.nowPlaying?.item].compactMap { $0 }).map { ($0.seriesId, $0.color) }, uniquingKeysWith: { a, _ in a })
-        let progress = Dictionary(
-            snap.latest.compactMap { item -> (String, Double)? in
-                guard let id = item.episodeId, let value = item.progress else { return nil }
-                return (id, value)
-            }, uniquingKeysWith: { a, _ in a })
         var items: [WidgetItem] = []
+        var covers: [String: Data] = [:]
         for e in latest {
-            let name = await cover(origin, e.coverPath)
+            let image = await cover(origin, e.coverPath, directory: directory)
+            if let image { covers[image.name] = image.data }
             items.append(
                 WidgetItem(
-                    seriesId: e.id, seriesTitle: e.title, episodeId: e.lastId, episodeTitle: e.lastTitle, cover: name,
-                    color: colors[e.id] ?? 0xFF8E8E93, progress: progress[e.lastId]))
+                    seriesId: e.id, seriesTitle: e.title, episodeId: e.lastId, episodeTitle: e.lastTitle, cover: image?.name,
+                    color: colors[e.id] ?? 0xFF8E8E93))
         }
-        s.latest = items
-        s.latestFromWidgetAt = Date().timeIntervalSince1970 * 1000
-        guard WidgetStore.write(s) else { return nil }
+        var s = WidgetSnapshot()
+        let changed = WidgetStore.update(at: directory?.appendingPathComponent("snapshot.json"), covers: covers) { current in
+            current.mergeCatalog(items, checkedAt: startedAt)
+            s = current
+        }
+        guard changed, s.latestFromWidgetAt == startedAt else { return nil }
         if let f = etagFile, let e = http.value(forHTTPHeaderField: "ETag") { try? e.write(to: f, atomically: true, encoding: .utf8) }
         WidgetLog.note("小组件取目录：更新了 \(items.count) 门")
         return s
     }
 
-    private static func markChecked() {
-        guard let f = checkedFile else { return }
+    private static func markChecked(in directory: URL?) {
+        guard let f = directory?.appendingPathComponent("widget-checked") else { return }
         try? String(Date().timeIntervalSince1970 * 1000).write(to: f, atomically: true, encoding: .utf8)
     }
 
@@ -137,18 +139,18 @@ enum WidgetCatalog {
 
     /// 封面：共享目录里已有（App 存过）就用；没有就取 640 小图（服务器没有小图时取原图），缩到 480 宽存 JPEG。
     /// 文件名和 App 的一样（封面路径的 SHA-256），App 下次写数据时认得出
-    private static func cover(_ origin: String, _ path: String) async -> String? {
-        guard let dir = WidgetStore.coversDir else { return nil }
+    private static func cover(_ origin: String, _ path: String, directory: URL?) async -> (name: String, data: Data)? {
+        guard let dir = directory?.appendingPathComponent("covers", isDirectory: true) else { return nil }
         let name = SHA256.hash(data: Data(path.utf8)).map { String(format: "%02x", $0) }.joined() + ".jpg"
         let f = dir.appendingPathComponent(name)
-        if FileManager.default.fileExists(atPath: f.path) { return name }
+        if let data = try? Data(contentsOf: f) { return (name, data) }
         try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         for src in [thumbPath(path, width: 640), path] {
             guard let u = buildUrl(origin, src),
                 let (data, resp) = try? await session.data(for: URLRequest(url: u, timeoutInterval: 15)),
                 (resp as? HTTPURLResponse)?.statusCode == 200, data.count <= coverLimit
             else { continue }
-            if saveJPEG(data, to: f) { return name }
+            if let data = jpeg(data) { return (name, data) }
         }
         return nil
     }
@@ -159,7 +161,8 @@ enum WidgetCatalog {
         return "\(path[..<dot])-\(width)\(path[dot...])"
     }
 
-    private static func saveJPEG(_ data: Data, to f: URL) -> Bool {
+    private static func jpeg(_ data: Data) -> Data? {
+        let output = NSMutableData()
         guard let src = CGImageSourceCreateWithData(data as CFData, nil),
             let img = CGImageSourceCreateThumbnailAtIndex(
                 src, 0,
@@ -167,9 +170,9 @@ enum WidgetCatalog {
                     kCGImageSourceCreateThumbnailFromImageAlways: true, kCGImageSourceThumbnailMaxPixelSize: coverPx,
                     kCGImageSourceCreateThumbnailWithTransform: true,
                 ] as CFDictionary),
-            let dest = CGImageDestinationCreateWithURL(f as CFURL, UTType.jpeg.identifier as CFString, 1, nil)
-        else { return false }
+            let dest = CGImageDestinationCreateWithData(output, UTType.jpeg.identifier as CFString, 1, nil)
+        else { return nil }
         CGImageDestinationAddImage(dest, img, [kCGImageDestinationLossyCompressionQuality: 0.8] as CFDictionary)
-        return CGImageDestinationFinalize(dest)
+        return CGImageDestinationFinalize(dest) ? output as Data : nil
     }
 }

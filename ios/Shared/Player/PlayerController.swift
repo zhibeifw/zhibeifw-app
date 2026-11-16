@@ -439,9 +439,6 @@ final class PlayerController {
         guard current != nil else { return .noSuchContent }
         guard let value = PLAYBACK_RATES.first(where: { Float($0) == requested }) else { return .commandFailed }
         setRate(value)
-        #if DEBUG
-        Logger(subsystem: "com.zhibeifw.app", category: "SiriControls").notice("remoteRate applied=\(value)")
-        #endif
         return .success
     }
 
@@ -572,7 +569,7 @@ final class PlayerController {
             Task { @MainActor in self?.seek(to: t) }
             return .success
         }
-        // Siri 的倍速请求走系统媒体控制通道，使用与 App 相同的可选值。
+        // 系统媒体控制与 App 使用相同的可选倍速。
         cc.changePlaybackRateCommand.supportedPlaybackRates = PLAYBACK_RATES.map { NSNumber(value: $0) }
         cc.changePlaybackRateCommand.isEnabled = true
         cc.changePlaybackRateCommand.addTarget { [weak self] event in

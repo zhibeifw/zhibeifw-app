@@ -48,15 +48,26 @@ object WidgetStore {
         decode(Json.parse(file(ctx).readText()) as Map<*, *>)
     }.getOrDefault(WidgetSnapshot())
 
-    /** 内容没变就不写，返回 false（不用刷新小组件） */
-    fun write(ctx: Context, s: WidgetSnapshot): Boolean {
+    /** 完整写入和播放按钮更新共用同一把锁，避免读取旧快照后覆盖新状态。 */
+    @Synchronized
+    fun update(ctx: Context, pruneCovers: Boolean = false, change: (WidgetSnapshot) -> WidgetSnapshot): Boolean {
+        val snapshot = change(read(ctx))
         val f = file(ctx)
-        val text = Json.stringify(encode(s))
-        if (f.exists() && runCatching { f.readText() }.getOrNull() == text) return false
-        f.parentFile?.mkdirs()
-        val tmp = File(f.path + ".tmp")
-        tmp.writeText(text)
-        return tmp.renameTo(f)
+        val text = Json.stringify(encode(snapshot))
+        val changed = runCatching { f.readText() }.getOrNull() != text
+        if (changed) {
+            f.parentFile?.mkdirs()
+            val tmp = File(f.path + ".tmp")
+            tmp.writeText(text)
+            if (!tmp.renameTo(f)) return false
+        }
+        val keep = (listOfNotNull(snapshot.nowPlaying?.item) + snapshot.latest).mapNotNull { it.cover }.toSet()
+        if (pruneCovers) coversDir(ctx).listFiles()?.forEach { if (it.name !in keep) it.delete() }
+        return changed
+    }
+
+    fun writePrepared(ctx: Context, prepared: WidgetSnapshot, original: WidgetSnapshot): Boolean = update(ctx, pruneCovers = true) { current ->
+        prepared.copy(nowPlaying = if (current.nowPlaying == original.nowPlaying) prepared.nowPlaying else current.nowPlaying)
     }
 
     /** 解码过的封面：刷新小组件（比如点了播放）时不用每张重新解码；文件名就是封面路径的摘要，同名就是同一张图 */

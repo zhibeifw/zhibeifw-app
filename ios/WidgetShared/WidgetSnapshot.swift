@@ -64,6 +64,38 @@ struct WidgetSnapshot: Codable, Hashable {
     var latestFromWidgetAt: Double?
 }
 
+extension WidgetSnapshot {
+    private var catalogTime: Double { max(catalogCheckedAt ?? 0, latestFromWidgetAt ?? 0) }
+
+    mutating func mergeCatalog(_ items: [WidgetItem], checkedAt: Double) {
+        guard checkedAt >= catalogTime else { return }
+        let progress = Dictionary(
+            latest.compactMap { item -> (String, Double)? in
+                guard let id = item.episodeId, let progress = item.progress else { return nil }
+                return (id, progress)
+            }, uniquingKeysWith: { a, _ in a })
+        latest = items.map { item in
+            var item = item
+            item.progress = item.episodeId.flatMap { progress[$0] }
+            return item
+        }
+        latestFromWidgetAt = checkedAt
+    }
+
+    /// 封面加载期间写入的播放状态、新目录不能被较早的任务覆盖。
+    mutating func mergeApp(_ prepared: WidgetSnapshot, basedOn original: WidgetSnapshot) {
+        if nowPlaying == original.nowPlaying { nowPlaying = prepared.nowPlaying }
+        if prepared.catalogTime >= catalogTime {
+            latest = prepared.latest
+            latestFromWidgetAt = prepared.latestFromWidgetAt
+        }
+        if (prepared.catalogCheckedAt ?? 0) >= (catalogCheckedAt ?? 0) {
+            catalogCheckedAt = prepared.catalogCheckedAt
+            origin = prepared.origin
+        }
+    }
+}
+
 /// 小组件的种类（kind），App 刷新时用
 enum WidgetKinds {
     static let nowPlaying = "NowPlaying"
@@ -89,13 +121,43 @@ enum WidgetStore {
         return s
     }
 
-    /// 内容没变就不写，返回 false（不用刷新小组件）
+    private static let lock = NSLock()
+
+    /// App 与扩展在同一次系统文件协调中合并快照、安装封面和清理旧封面。
     @discardableResult
-    static func write(_ s: WidgetSnapshot) -> Bool {
-        guard let f = snapshotFile, let d = try? JSONEncoder().encode(s) else { WidgetLog.note("写：没有共享目录"); return false }
-        if (try? Data(contentsOf: f)) == d { return false }
-        try? FileManager.default.createDirectory(at: f.deletingLastPathComponent(), withIntermediateDirectories: true)
-        return (try? d.write(to: f, options: .atomic)) != nil
+    static func update(at file: URL? = snapshotFile, covers: [String: Data] = [:], _ change: (inout WidgetSnapshot) -> Void) -> Bool {
+        guard let file else { return false }
+        lock.lock(); defer { lock.unlock() }
+        let fm = FileManager.default
+        var changed = false
+        var coordinationError: NSError?
+        do { try fm.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true) } catch {
+            WidgetLog.note("创建共享目录失败：\(error)"); return false
+        }
+        NSFileCoordinator().coordinate(writingItemAt: file, options: .forMerging, error: &coordinationError) { url in
+            do {
+                let oldData = try? Data(contentsOf: url)
+                var snapshot = oldData.flatMap { try? JSONDecoder().decode(WidgetSnapshot.self, from: $0) } ?? WidgetSnapshot()
+                change(&snapshot)
+                let keep = Set(([snapshot.nowPlaying?.item].compactMap { $0 } + snapshot.latest).compactMap(\.cover))
+                let coverDir = url.deletingLastPathComponent().appendingPathComponent("covers", isDirectory: true)
+                if !covers.isEmpty { try fm.createDirectory(at: coverDir, withIntermediateDirectories: true) }
+                for (name, data) in covers where keep.contains(name) {
+                    let target = coverDir.appendingPathComponent(name)
+                    if (try? Data(contentsOf: target)) != data {
+                        try data.write(to: target, options: .atomic)
+                        changed = true
+                    }
+                }
+                let data = try JSONEncoder().encode(snapshot)
+                if oldData != data { try data.write(to: url, options: .atomic); changed = true }
+                for name in (try? fm.contentsOfDirectory(atPath: coverDir.path)) ?? [] where !keep.contains(name) {
+                    try? fm.removeItem(at: coverDir.appendingPathComponent(name))
+                }
+            } catch { WidgetLog.note("写共享快照失败：\(error)"); changed = false }
+        }
+        if let coordinationError { WidgetLog.note("协调共享快照失败：\(coordinationError)") }
+        return changed
     }
 
     static func coverURL(_ name: String?) -> URL? {
