@@ -2,6 +2,7 @@
 import CoreGraphics
 
 enum WidgetDesign {
+    static let coverAspectRatio: CGFloat = 1.7777777778
     static let playProgressDiameter: CGFloat = 32
     static let latestPlayProgressDiameter: CGFloat = 24
     static let gaugeNative: CGFloat = 52

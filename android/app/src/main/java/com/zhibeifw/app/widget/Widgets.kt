@@ -33,6 +33,7 @@ import androidx.glance.appwidget.SizeMode
 import androidx.glance.appwidget.action.ActionCallback
 import androidx.glance.appwidget.action.actionRunCallback
 import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.appwidget.appWidgetBackground
 import androidx.glance.appwidget.cornerRadius
 import androidx.glance.appwidget.provideContent
 import androidx.glance.background
@@ -58,6 +59,7 @@ import androidx.glance.unit.ColorProvider
 import com.zhibeifw.app.MainActivity
 import com.zhibeifw.app.R
 import com.zhibeifw.app.ZhibeiApp
+import com.zhibeifw.app.design.generated.Tok
 
 // 智悲佛网的桌面小组件：继续播放、最新课程（和 iOS 一样）。
 // 数据都是 App 写好的（WidgetStore），这里只读、只画；App 里内容变了会刷新，这里不自己定时刷新。
@@ -75,8 +77,11 @@ private fun family(): Family = if (LocalSize.current.height >= 240.dp) Family.LA
 private val VersionKey = longPreferencesKey("dataVersion")
 
 /** 所有小组件共用：读数据和封面图，按尺寸画 */
-abstract class SnapshotWidget(sizes: Set<DpSize> = setOf(MEDIUM, LARGE)) : GlanceAppWidget() {
-    override val sizeMode = SizeMode.Responsive(sizes)
+abstract class SnapshotWidget(
+    sizes: Set<DpSize> = setOf(MEDIUM, LARGE),
+    private val fillHeight: Boolean = true,
+) : GlanceAppWidget() {
+    override val sizeMode: SizeMode = SizeMode.Responsive(sizes)
     override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -85,9 +90,18 @@ abstract class SnapshotWidget(sizes: Set<DpSize> = setOf(MEDIUM, LARGE)) : Glanc
             // 文件很小、封面只有几张小图：版本变了才重读
             val (snap, covers) = remember(v) { load(context) }
             GlanceTheme {
-                Box(
-                    GlanceModifier.fillMaxSize().background(GlanceTheme.colors.widgetBackground).padding(14.dp)
-                ) { Content(snap, covers) }
+                var frame = if (fillHeight) GlanceModifier.fillMaxSize() else GlanceModifier.fillMaxWidth()
+                if (!fillHeight) {
+                    frame = frame.appWidgetBackground()
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                        frame = frame.cornerRadius(android.R.dimen.system_app_widget_background_radius)
+                    }
+                }
+                Box(GlanceModifier.fillMaxSize()) {
+                    Box(frame.background(GlanceTheme.colors.widgetBackground).padding(14.dp)) {
+                        Content(snap, covers)
+                    }
+                }
             }
         }
     }
@@ -142,14 +156,33 @@ private fun open(link: WidgetLink) = actionStartActivity(
 
 // ---------- 继续播放 ----------
 
-class NowPlayingWidget : SnapshotWidget(setOf(DpSize(110.dp, 110.dp))) {
+class NowPlayingWidget : SnapshotWidget(setOf(DpSize(110.dp, 110.dp)), fillHeight = false) {
+    override val sizeMode = SizeMode.Exact
     override fun covers(s: WidgetSnapshot) = listOfNotNull(s.nowPlaying?.item)
 
     @Composable
     override fun Content(s: WidgetSnapshot, covers: Map<String, Bitmap>) {
         val np = s.nowPlaying ?: return EmptyWidget("还没有在听的课程")
-        Column(GlanceModifier.fillMaxSize()) {
-            Cover(np.item, covers, GlanceModifier.fillMaxWidth().defaultWeight(), 10)
+        val size = LocalSize.current
+        val fontScale = LocalContext.current.resources.configuration.fontScale
+        val controlsHeight = maxOf(28f, (12 + 12) * 1.45f * fontScale).dp
+        val coverRoom = (size.height - 28.dp - 6.dp - controlsHeight).coerceAtLeast(0.dp)
+        val coverWidth = minOf(
+            (size.width - 28.dp).coerceAtLeast(0.dp),
+            coverRoom * Tok.Widget.coverAspectRatio,
+        )
+        Column(GlanceModifier.fillMaxWidth()) {
+            // 封面保持 16:9，标题和播放键紧跟封面，剩余高度留在内容下方。
+            Box(
+                GlanceModifier.fillMaxWidth().height(coverWidth / Tok.Widget.coverAspectRatio),
+                contentAlignment = Alignment.TopCenter,
+            ) {
+                Cover(
+                    np.item, covers,
+                    GlanceModifier.width(coverWidth).height(coverWidth / Tok.Widget.coverAspectRatio),
+                    10, ContentScale.Fit,
+                )
+            }
             Spacer(GlanceModifier.height(6.dp))
             Row(GlanceModifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(GlanceModifier.defaultWeight()) {
@@ -250,11 +283,14 @@ private fun PlayIcon(size: Int, playing: Boolean = false) = Image(
 
 /** 封面；没有图时是这门课的占位色。圆角要 Android 12 起才有 */
 @Composable
-private fun Cover(i: WidgetItem, covers: Map<String, Bitmap>, modifier: GlanceModifier, radius: Int) {
+private fun Cover(
+    i: WidgetItem, covers: Map<String, Bitmap>, modifier: GlanceModifier, radius: Int,
+    contentScale: ContentScale = ContentScale.Crop,
+) {
     val bmp = i.cover?.let { covers[it] }
     val m = modifier.cornerRadius(radius.dp)
     if (bmp != null) {
-        Image(ImageProvider(bmp), contentDescription = null, contentScale = ContentScale.Crop, modifier = m)
+        Image(ImageProvider(bmp), contentDescription = null, contentScale = contentScale, modifier = m)
     } else {
         Box(m.background(ColorProvider(Color(i.color.toInt())))) {}
     }

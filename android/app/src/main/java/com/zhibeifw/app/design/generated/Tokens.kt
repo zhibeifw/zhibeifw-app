@@ -419,6 +419,7 @@ object Tok {
         }
     }
     object Widget {
+        const val coverAspectRatio: Float = 1.7777777778f
         const val playProgressDiameter: Float = 32f
         const val latestPlayProgressDiameter: Float = 24f
         const val gaugeNative: Float = 52f
