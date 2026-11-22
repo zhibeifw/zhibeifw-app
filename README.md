@@ -3,8 +3,8 @@
 
 ## 下载
 
-- iPhone：App Store（上架后补链接）
-- Android：官网 <https://zhibeifw.com>
+- iPhone：App Store  https://apps.apple.com/app/id6829302070   支持iPhone,iPad,MacOS,Vision Pro,Apple Watch
+- Android：官网 <https://zhibeifw.com>    支持Android手机,Android平板,Android智能电视
 
 ## 目录
 
