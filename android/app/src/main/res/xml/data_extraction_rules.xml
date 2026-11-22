@@ -1,11 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="sharedpref" path="apk_download.xml" />
         <exclude domain="file" path="audio/" />
         <exclude domain="file" path="covers/" />
         <exclude domain="file" path="backup/" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="sharedpref" path="apk_download.xml" />
         <exclude domain="file" path="audio/" />
         <exclude domain="file" path="covers/" />
         <exclude domain="file" path="backup/" />

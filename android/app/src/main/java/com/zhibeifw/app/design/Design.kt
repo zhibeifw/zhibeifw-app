@@ -71,17 +71,14 @@ fun fontWeight(w: Int): FontWeight = when {
     else -> FontWeight.Bold
 }
 
-/** 把字号令牌变成 Compose 的 TextStyle。maxScale：给固定尺寸的外壳（悬浮导航）封顶。 */
 @Composable
-fun ZTextStyle.ts(color: Color, maxScale: Float? = null): TextStyle {
-    val fs = LocalDensity.current.fontScale
-    val k = if (maxScale != null && fs > maxScale) maxScale / fs else 1f
+fun ZTextStyle.ts(color: Color): TextStyle {
     return TextStyle(
         color = color,
         fontFamily = AppFont,
         fontWeight = fontWeight(weight),
-        fontSize = (size * k).sp,
-        lineHeight = (lineHeight * k).sp,
+        fontSize = size.sp,
+        lineHeight = lineHeight.sp,
         lineHeightStyle = LineHeightStyle(
             LineHeightStyle.Alignment.Center,
             LineHeightStyle.Trim.None

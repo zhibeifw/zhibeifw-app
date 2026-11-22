@@ -25,6 +25,23 @@ class SystemDownloaderDeviceTest {
         assertQueuedDownloadRecognized(".${UUID.randomUUID()}")
     }
 
+    @Test
+    fun catalogReconciliationLeavesUpdateDownloadAlone() = runBlocking {
+        val ctx = InstrumentationRegistry.getInstrumentation().targetContext
+        val manager = ctx.getSystemService(AndroidDownloads::class.java)
+        val task = manager.enqueue(AndroidDownloads.Request(Uri.parse("https://example.invalid/app.apk"))
+            .setRequiresDeviceIdle(true)
+            .setDestinationInExternalFilesDir(ctx, "updates", "update.apk"))
+        try {
+            SystemDownloader(ctx).activeIds(emptyList())
+            manager.query(AndroidDownloads.Query().setFilterById(task)).use {
+                org.junit.Assert.assertTrue(it.moveToFirst())
+            }
+        } finally {
+            manager.remove(task)
+        }
+    }
+
     private suspend fun assertQueuedDownloadRecognized(suffix: String) {
         val ctx = InstrumentationRegistry.getInstrumentation().targetContext
         val dm = ctx.getSystemService(AndroidDownloads::class.java)

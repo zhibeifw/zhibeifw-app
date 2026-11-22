@@ -1,5 +1,8 @@
 package com.zhibeifw.app.ui
 
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Row
+import androidx.compose.runtime.CompositionLocalProvider
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -166,7 +169,7 @@ fun AlertLayer(model: AppModel) {
         AlertDialog(
             onDismissRequest = { model.upgrade.remindLater(u.version) },
             title = { Text("发现新版本 ${u.version}") },
-            confirmButton = { TextButton({ model.upgrade.openApk(u.apkPath) }) { Text("立刻更新") } },
+            confirmButton = { TextButton({ model.upgrade.installUpdate(u.version, u.apkPath) }) { Text("立刻更新") } },
             dismissButton = { TextButton({ model.upgrade.remindLater(u.version) }) { Text("稍后提醒") } },
         )
     }
@@ -209,18 +212,28 @@ fun MainView(model: AppModel) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        for ((t, nav, start) in listOf(
-            Triple(Tab.HOME, homeNav, Routes.HOME),
-            Triple(Tab.CATEGORIES, categoriesNav, Routes.CATEGORIES),
-            Triple(Tab.LIBRARY, libraryNav, Routes.LIBRARY_HUB),
-            Triple(Tab.SEARCH, searchNav, Routes.SEARCH)
-        )) {
-            val on = model.nav.tab == t
-            Box(
-                Modifier.fillMaxSize().zIndex(if (on) 1f else 0f).alpha(if (on) 1f else 0f)
-            ) { Stack(model, nav, start, on) }
+        val rail = Layout.isTablet(windowWidth())
+        Row(Modifier.fillMaxSize()) {
+            if (rail && !onAbout) AppNavigation(model, rail = true)
+            Column(Modifier.weight(1f)) {
+                BoxWithConstraints(Modifier.weight(1f)) {
+                    CompositionLocalProvider(LocalPageWidth provides maxWidth.value) {
+                        for ((t, nav, start) in listOf(
+                            Triple(Tab.HOME, homeNav, Routes.HOME),
+                            Triple(Tab.CATEGORIES, categoriesNav, Routes.CATEGORIES),
+                            Triple(Tab.LIBRARY, libraryNav, Routes.LIBRARY_HUB),
+                            Triple(Tab.SEARCH, searchNav, Routes.SEARCH)
+                        )) {
+                            val on = model.nav.tab == t
+                            Box(
+                                Modifier.fillMaxSize().zIndex(if (on) 1f else 0f).alpha(if (on) 1f else 0f)
+                            ) { Stack(model, nav, start, on) }
+                        }
+                    }
+                }
+                if (!onAbout) BottomNav(model, rail)
+            }
         }
-        if (!onAbout) Box(Modifier.align(Alignment.BottomCenter).zIndex(2f)) { BottomNav(model) }
         Box(Modifier.zIndex(3f)) { PlayerLayer(model) }
         Box(Modifier.zIndex(3f)) { DescriptionSheetLayer(model) }
     }

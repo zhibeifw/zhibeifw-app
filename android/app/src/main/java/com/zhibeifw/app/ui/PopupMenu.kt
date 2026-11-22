@@ -24,6 +24,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import android.view.Menu
+import android.view.View
+import android.widget.PopupMenu
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.semantics.contentDescription
@@ -45,6 +50,39 @@ data class MenuItem(
 )
 
 data class SheetSpec(val title: String, val category: String?, val body: String)
+
+/** 用 Android 自带的锚定弹出菜单处理电视遥控器的方向键、选择和返回。 */
+@Composable
+internal fun TvMenu(items: () -> List<List<MenuItem>>, anchor: @Composable (open: () -> Unit) -> Unit) {
+    var view by remember { mutableStateOf<View?>(null) }
+    var menu by remember { mutableStateOf<PopupMenu?>(null) }
+    DisposableEffect(Unit) { onDispose { menu?.dismiss() } }
+    Box {
+        AndroidView(factory = { context -> View(context).apply {
+            importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            isFocusable = false
+            view = this
+        } }, modifier = Modifier.matchParentSize())
+        anchor {
+            view?.let { target ->
+                val popup = PopupMenu(target.context, target, android.view.Gravity.END)
+                items().forEachIndexed { group, entries ->
+                    entries.forEach { entry ->
+                        popup.menu.add(group, Menu.NONE, Menu.NONE, entry.title).apply {
+                            isCheckable = entry.checked != null
+                            isChecked = entry.checked == true
+                            setOnMenuItemClickListener { entry.action(); true }
+                        }
+                    }
+                }
+                popup.menu.setGroupDividerEnabled(true)
+                popup.setOnDismissListener { menu = null }
+                menu = popup
+                popup.show()
+            }
+        }
+    }
+}
 
 /**
  * 系统下拉菜单：点 [anchor] 弹出，挂在它下面（放不下系统自动往上翻）。组之间用分隔线，破坏性项红色，可勾选的项前面打对勾。

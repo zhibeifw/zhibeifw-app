@@ -6,7 +6,8 @@ import com.zhibeifw.app.design.ZTextStyle
 
 object Tok {
     object Television {
-        const val margin: Float = 40f
+        const val margin: Float = 48f
+        const val verticalSafeMargin: Float = 27f
         const val shelfLarge: Float = 274f
         const val shelfSmall: Float = 200f
         const val gap: Float = 20f

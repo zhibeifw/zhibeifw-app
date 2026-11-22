@@ -32,7 +32,7 @@ class UpgradeChecker(
     private val scope: CoroutineScope,
     private val versionName: String,
     private val channel: UpdateChannel,
-    private val openUrl: (String) -> Unit,
+    private val notify: (String) -> Unit,
 ) {
     /** “此版本过旧”提示条。 */
     var outdated by mutableStateOf<UpdateDecision.Outdated?>(null); private set
@@ -86,7 +86,7 @@ class UpgradeChecker(
         return when (val d = decideUpdate(versionName, u, channel)) {
             is UpdateDecision.Outdated -> {
                 outdated = d
-                "版本过旧，请到官网更新"
+                "版本过旧，请更新"
             }
 
             is UpdateDecision.Optional -> {
@@ -119,11 +119,15 @@ class UpgradeChecker(
         }
     }
 
-    /** 立刻更新：打开官网 APK 直链，交给浏览器 / 下载管理器。 */
-    fun openApk(apkPath: String) {
+    fun installUpdate(version: String, apkPath: String) {
         updateDialog = null
-        // 正在刷新线路时还没有选定的域名：用最近一次选出过的，交给浏览器去下；都没有才不动
-        val origin = net.displayOrigin ?: return
-        openUrl(buildUrl(origin, apkPath))
+        if (channel != UpdateChannel.SITE) return
+        val origin = net.displayOrigin
+        if (origin == null) {
+            notify("网络线路尚未就绪，请稍后重试")
+            return
+        }
+        ctx.startActivity(UpdateInstallActivity.intent(ctx, buildUrl(origin, apkPath), version)
+            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 }

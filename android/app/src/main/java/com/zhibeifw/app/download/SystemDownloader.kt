@@ -148,6 +148,7 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
     private fun rows(): List<Row>? {
         val out = ArrayList<Row>()
         val orphans = ArrayList<Long>()
+        val audioDirectory = dir()
         val ok = runCatching {
             val cursor = dm.query(AndroidDownloads.Query()) ?: return null
             cursor.use { c ->
@@ -165,8 +166,10 @@ class SystemDownloader(private val ctx: Context) : SystemDownloads {
                     // 下到 App 专属目录时系统给的是 file:// 地址；不是的话不拿它当文件路径，按我们交给系统时的文件名找
                     val uri = c.getString(iUri)?.let(Uri::parse)
                     val named = if (uri?.scheme == "file") uri.path?.let(::File) else null
-                    val hinted = if (iHint >= 0) c.getString(iHint)?.let(Uri::parse)?.lastPathSegment else null
-                    val name = named?.name ?: hinted
+                    val hinted = if (iHint >= 0) c.getString(iHint)?.let(Uri::parse)?.path?.let(::File) else null
+                    val destination = named ?: hinted
+                    if (destination != null && destination.parentFile != audioDirectory) continue
+                    val name = destination?.name
                     // 先按本次交给系统时记下的编号认；App 重启后按文件名认
                     val id = idsBySys[sysId] ?: name?.substringBefore('.')?.let { byKey[it] }
                     if (id == null) {

@@ -141,8 +141,10 @@ object Layout {
     val navReserve get() = Tok.Nav.capsuleHeight + Tok.Nav.bottomMargin + Tok.Nav.androidBarHeight + 16f
 }
 
+internal val LocalPageWidth = androidx.compose.runtime.compositionLocalOf<Float?> { null }
+
 @Composable
-fun windowWidth(): Float = LocalConfiguration.current.screenWidthDp.toFloat()
+fun windowWidth(): Float = LocalPageWidth.current ?: LocalConfiguration.current.screenWidthDp.toFloat()
 
 /** 窗口高度，只用来分平板的竖屏、横屏。 */
 @Composable
@@ -157,13 +159,12 @@ fun Txt(
     color: Color,
     modifier: Modifier = Modifier,
     maxLines: Int = Int.MAX_VALUE,
-    maxScale: Float? = null,
     align: TextAlign? = null
 ) {
     BasicText(
         text,
         modifier,
-        style = style.ts(color, maxScale)
+        style = style.ts(color)
             .let { if (align != null) it.copy(textAlign = align) else it },
         maxLines = maxLines,
         overflow = TextOverflow.Ellipsis
@@ -317,7 +318,7 @@ fun PageScaffold(
                     item("__bottom") {
                         Spacer(
                             Modifier.height(
-                                (if (model.isTelevision) 0f else Layout.navReserve).d + WindowInsets.safeDrawing.asPaddingValues()
+                                WindowInsets.safeDrawing.asPaddingValues()
                                     .calculateBottomPadding()
                             )
                         )

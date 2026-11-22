@@ -1,5 +1,9 @@
 package com.zhibeifw.app.ui
 
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.material3.NavigationRail
+import androidx.compose.material3.NavigationRailItem
 import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
 import androidx.compose.material3.NavigationBarItemDefaults
@@ -74,13 +78,48 @@ import com.zhibeifw.app.images.CoverImage
 import com.zhibeifw.app.player.SEEK_FORWARD_SECONDS
 import kotlinx.coroutines.delay
 
-/**
- * 主页 / 分类 / 资料库 / 搜索：系统（Material 3）的 NavigationBar。Android 没有液态玻璃，也没有“正在播放”附件位，
- * 播放胶囊放在导航栏正上方，底用 Material 的 Surface。颜色用我们的令牌。
- */
 @Composable
-fun BottomNav(model: AppModel) {
-    Column(Modifier.fillMaxWidth()) {
+internal fun AppNavigation(model: AppModel, rail: Boolean) {
+    if (rail) {
+        NavigationRail(containerColor = C.background()) {
+            for (tab in Tab.entries) {
+                val selected = model.nav.tab == tab
+                NavigationRailItem(selected, { model.nav.selectTab(tab) },
+                    icon = { TabIcon(tab, selected) }, label = { TabLabel(tab) })
+            }
+        }
+    } else {
+        NavigationBar(containerColor = C.background()) {
+            for (tab in Tab.entries) {
+                val selected = model.nav.tab == tab
+                NavigationBarItem(selected, { model.nav.selectTab(tab) },
+                    icon = { TabIcon(tab, selected) }, label = { TabLabel(tab) },
+                    colors = NavigationBarItemDefaults.colors(
+                        selectedTextColor = C.labelPrimary(), unselectedTextColor = C.labelSecondary(),
+                        indicatorColor = C.backgroundSecondary()))
+            }
+        }
+    }
+}
+
+@Composable
+private fun TabIcon(tab: Tab, selected: Boolean) {
+    ZIcon(icon(tab, selected), Tok.Nav.iconGlyph.d, C.labelPrimary())
+}
+
+@Composable
+private fun TabLabel(tab: Tab) {
+    Text(when (tab) {
+        Tab.HOME -> "主页"
+        Tab.CATEGORIES -> "分类"
+        Tab.LIBRARY -> "资料库"
+        Tab.SEARCH -> "搜索"
+    })
+}
+
+@Composable
+internal fun BottomNav(model: AppModel, rail: Boolean) {
+    Column(Modifier.fillMaxWidth().then(if (rail) Modifier.navigationBarsPadding() else Modifier)) {
         Surface(
             Modifier.padding(horizontal = Tok.Nav.sideMargin.d)
                 .padding(bottom = Tok.Nav.bottomMargin.d), shape = CircleShape,
@@ -88,28 +127,7 @@ fun BottomNav(model: AppModel) {
         ) {
             PlayerCapsule(model, collapsed = false)
         }
-        NavigationBar(containerColor = C.background()) {
-            for (t in listOf(Tab.HOME, Tab.CATEGORIES, Tab.LIBRARY, Tab.SEARCH)) {
-                val on = model.nav.tab == t
-                NavigationBarItem(
-                    selected = on,
-                    onClick = { model.nav.selectTab(t) },
-                    icon = { ZIcon(icon(t, on), Tok.Nav.iconGlyph.d, C.labelPrimary()) },
-                    label = {
-                        Text(
-                            when (t) {
-                                Tab.HOME -> "主页"; Tab.CATEGORIES -> "分类"; Tab.LIBRARY -> "资料库"; Tab.SEARCH -> "搜索"
-                            }
-                        )
-                    },
-                    colors = NavigationBarItemDefaults.colors(
-                        selectedTextColor = C.labelPrimary(),
-                        unselectedTextColor = C.labelSecondary(),
-                        indicatorColor = C.backgroundSecondary(),
-                    ),
-                )
-            }
-        }
+        if (!rail) AppNavigation(model, rail = false)
     }
 }
 
@@ -128,13 +146,13 @@ fun PlayerCapsule(model: AppModel, collapsed: Boolean) {
     val thumb = minOf(CP.Capsule.thumb, h - 2 * CP.Capsule.thumbInset)
     val playing = p?.looksPlaying == true
     Row(
-        Modifier.fillMaxWidth().height(h.d)
+        Modifier.fillMaxWidth().heightIn(min = h.d)
             .padding(start = CP.Capsule.paddingH.d, end = (CP.Capsule.paddingH / 2).d),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(CP.Capsule.textGap.d),
     ) {
         Row(
-            Modifier.weight(1f).fillMaxHeight()
+            Modifier.weight(1f).heightIn(min = h.d)
                 .clickable(enabled = cur != null) { model.openPlayer() }
                 .semantics {
                     contentDescription =
@@ -159,8 +177,7 @@ fun PlayerCapsule(model: AppModel, collapsed: Boolean) {
                     S.buttonText,
                     C.labelPrimary(),
                     Modifier.weight(1f),
-                    maxLines = 1,
-                    maxScale = Tok.Font.MaxScale.capsule
+                    maxLines = 2
                 )
             } else {
                 Box(
@@ -174,8 +191,7 @@ fun PlayerCapsule(model: AppModel, collapsed: Boolean) {
                     S.buttonText,
                     C.labelSecondary(),
                     Modifier.weight(1f),
-                    maxLines = 1,
-                    maxScale = Tok.Font.MaxScale.capsule
+                    maxLines = 2
                 )
             }
         }

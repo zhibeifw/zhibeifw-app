@@ -1,5 +1,6 @@
 package com.zhibeifw.app.ui
 
+import androidx.compose.foundation.layout.sizeIn
 import android.os.SystemClock
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -292,7 +293,7 @@ private fun Controls(
                 })
             }) { open ->
                 Box(
-                    Modifier.size(Tok.Space.MinTouchTarget.android.d).pressable(onClick = open)
+                    Modifier.sizeIn(minWidth = Tok.Space.MinTouchTarget.android.d, minHeight = Tok.Space.MinTouchTarget.android.d).pressable(onClick = open)
                     .semantics {
                         contentDescription =
                             "播放速度 ${rateLabel(p.rate).removeSuffix("×")} 倍，点按更改"
@@ -301,8 +302,7 @@ private fun Controls(
                     Txt(
                         rateLabel(p.rate),
                         S.rateLabel,
-                        C.labelSecondary(),
-                        maxScale = Tok.Font.MaxScale.rateLabel
+                        C.labelSecondary()
                     )
                 }
             }

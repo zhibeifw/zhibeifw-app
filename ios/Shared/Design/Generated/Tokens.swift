@@ -4,7 +4,8 @@ import CoreGraphics
 // swiftlint:disable all
 enum Tok {
     enum Television {
-        static let margin: CGFloat = 40
+        static let margin: CGFloat = 48
+        static let verticalSafeMargin: CGFloat = 27
         static let shelfLarge: CGFloat = 274
         static let shelfSmall: CGFloat = 200
         static let gap: CGFloat = 20

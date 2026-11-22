@@ -64,19 +64,19 @@ internal fun TvCoverCard(model: AppModel, card: SeriesCard, modifier: Modifier =
     val title = card.featureTitle ?: card.title
     Column(modifier) {
         val shape = RoundedCornerShape(TV.coverRadius.d)
-        var menu by remember { mutableStateOf(false) }
-        Box {
+        val cover: @Composable ((() -> Unit)?) -> Unit = { open ->
             androidx.tv.material3.Card(
                 onClick = { model.nav.push(Routes.series(card.id)) },
-                onLongClick = removeFavorite?.let { { menu = true } },
+                onLongClick = open,
                 modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { contentDescription = title },
                 shape = androidx.tv.material3.CardDefaults.shape(shape)
             ) {
                 CoverImage(model.images, card.coverPath, card.id, shape, Modifier.fillMaxSize(), originVersion = model.net.originVersion)
             }
-            if (removeFavorite != null) DropdownMenu(menu, { menu = false }) {
-                DropdownMenuItem(text = { Text("取消收藏") }, onClick = { menu = false; removeFavorite() })
-            }
+        }
+        if (removeFavorite == null) cover(null)
+        else TvMenu({ listOf(listOf(MenuItem("取消收藏", destructive = true, action = removeFavorite))) }) { open ->
+            cover(open)
         }
         Text(title, Modifier.padding(top = Tok.Space.scale[1].d), style = MaterialTheme.typography.titleMedium,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -110,8 +110,8 @@ internal fun TvHome(model: AppModel, focusHomeTab: () -> Unit) {
         if (model.syncFailed) item { BannerView("无法更新，显示的是上一次更新的内容",
             listOf("重试" to { model.launch { model.syncCatalog(true) }; Unit })) }
         model.upgrade.outdated?.takeUnless { model.upgrade.outdatedDismissed }?.let { update ->
-            item { BannerView("此版本过旧，请到官网更新", listOf("关闭" to { model.upgrade.outdatedDismissed = true },
-                "更新" to { model.upgrade.openApk(update.apkPath) })) }
+            item { BannerView("此版本过旧，请更新应用", listOf("关闭" to { model.upgrade.outdatedDismissed = true },
+                "更新" to { model.upgrade.installUpdate(update.version, update.apkPath) })) }
         }
         if (h.ongoing.isNotEmpty()) item { TvShelf(model, "新课程", h.ongoing, TV.shelfLarge.d) }
         if (h.featured.isNotEmpty()) item { TvShelf(model, "编辑精选", h.featured, TV.shelfSmall.d) }

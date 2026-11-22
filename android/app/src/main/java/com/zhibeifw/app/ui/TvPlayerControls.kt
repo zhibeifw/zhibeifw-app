@@ -36,7 +36,7 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                         Text(current.info.episodeTitle, style = MaterialTheme.typography.headlineMedium)
                         TvPill("${current.info.seriesTitle} ›", { model.goToSeries(current.seriesId) })
                     }
-                    NativeMenu({ moreGroups(model, p) }) { open ->
+                    TvMenu({ moreGroups(model, p) }) { open ->
                         TvIconButton(open, Modifier.size(Tok.Space.MinTouchTarget.android.d), label = "更多操作") {
                             ZIcon("ellipsis-horizontal", Tok.Menu.iconSize.d, LocalContentColor.current)
                         }
@@ -103,7 +103,7 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                 Spacer(Modifier.height(TV.sectionGap.d))
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
                     val button = Modifier.size(Tok.Space.MinTouchTarget.android.d)
-                    NativeMenu({ listOf(PLAYBACK_RATES.map { rate ->
+                    TvMenu({ listOf(PLAYBACK_RATES.map { rate ->
                         MenuItem(if (rate == 1.0) "1×（正常）" else rateLabel(rate), checked = p.rate == rate) { p.changeRate(rate) }
                     }) }) { open -> TvIconButton(open, button, label = "播放速度") { Text(rateLabel(p.rate)) } }
                     TvIconButton({ p.seekBy(-SEEK_BACK_SECONDS) }, button, label = "后退 15 秒") {
@@ -115,7 +115,7 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                     TvIconButton({ p.seekBy(SEEK_FORWARD_SECONDS) }, button, label = "前进 30 秒") {
                         SeekIcon(true, Tok.Menu.iconSize.d, LocalContentColor.current)
                     }
-                    NativeMenu({ listOf(sleepItems(p)) }) { open -> TvIconButton(open, button, label = sleepA11y(p)) {
+                    TvMenu({ listOf(sleepItems(p)) }) { open -> TvIconButton(open, button, label = sleepA11y(p)) {
                         ZIcon(if (p.sleep == SleepSetting.Off) "moon-outline" else "moon", Tok.Menu.iconSize.d, LocalContentColor.current)
                     } }
                 }

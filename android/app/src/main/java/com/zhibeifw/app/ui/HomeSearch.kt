@@ -107,10 +107,10 @@ fun HomeView(model: AppModel) {
                 val od = model.upgrade.outdated
                 if (od != null && !model.upgrade.outdatedDismissed) {
                     BannerView(
-                        "此版本过旧，已无法获得最新的内容更新，请到官网更新",
+                        "此版本过旧，已无法获得最新的内容更新，请更新应用",
                         listOf(
                             "关闭" to { model.upgrade.outdatedDismissed = true },
-                            "更新" to { model.upgrade.openApk(od.apkPath) })
+                            "更新" to { model.upgrade.installUpdate(od.version, od.apkPath) })
                     )
                     Spacer(Modifier.height(CP.Banner.bottomGap.d))
                 }

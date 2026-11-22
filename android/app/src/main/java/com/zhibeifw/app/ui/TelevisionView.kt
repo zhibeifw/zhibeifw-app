@@ -99,7 +99,7 @@ internal fun TelevisionView(model: AppModel) {
             if (selected == Routes.PLAYING && !tabsFocused) tabFocus.requestFocus()
             else select(if (selected == Routes.PLAYING) lastBrowse else Routes.HOME)
         }
-        Column(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().padding(vertical = Tok.Television.verticalSafeMargin.d)) {
             Row(Modifier.fillMaxWidth().onFocusChanged { tabsFocused = it.hasFocus }
                 .padding(top = Tok.Space.scale[3].d, bottom = Tok.Space.scale[1].d), horizontalArrangement = Arrangement.Center) {
                 val tabs = televisionTabs

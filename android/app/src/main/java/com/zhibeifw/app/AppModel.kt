@@ -117,7 +117,7 @@ class AppModel(private val ctx: Context) {
 
     val versionName: String = BuildConfig.VERSION_NAME
     val channel = if (BuildConfig.CHANNEL == "store") UpdateChannel.STORE else UpdateChannel.SITE
-    val upgrade = UpgradeChecker(ctx, net, scope, versionName, channel) { openExternal(it) }
+    val upgrade = UpgradeChecker(ctx, net, scope, versionName, channel) { alert = AlertSpec(it) }
     private val covers = CoverArchive(files, images, scope)
     /** 桌面小组件的数据 */
     val widgets = WidgetFeeder(ctx, this, scope)
@@ -135,6 +135,7 @@ class AppModel(private val ctx: Context) {
     private suspend fun boot() {
         val t0 = System.currentTimeMillis()
         val ok = withContext(Dispatchers.IO) {
+            UpdateInstallActivity.cleanupInstalledUpdate(ctx)
             files.prepare()
             try {
                 val db = Db.open(files.dbPath.path)
