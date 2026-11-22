@@ -1,5 +1,18 @@
 {
   "_说明": "智悲佛网 App 设计令牌（两端共用的唯一数值来源）。由 v1.0 的 src/theme 与各组件常量整理（2026-10-21）。两端用脚本从本文件生成 Swift / Kotlin 常量，界面代码只引用令牌名、不写数字。尺寸单位：iOS 为 pt、Android 为 dp（数值相同）。颜色：#RRGGBB 或 #RRGGBBAA（最后两位是透明度）。改数值只改这里，并说明来源（PRD 章节或用户决定）。",
+  "television": {
+    "_来源": "Apple TV 的 1920 点参考布局换算到 960dp 电视窗口",
+    "margin": 40,
+    "shelfLarge": 274,
+    "shelfSmall": 200,
+    "gap": 20,
+    "sectionGap": 30,
+    "coverRadius": 6,
+    "playerRadius": 12,
+    "playerCover": 440,
+    "playerControls": 360,
+    "playerGap": 50
+  },
   "color": {
     "_来源": "PRD 10.2；深浅模式都跟随系统，App 内不提供手动切换",
     "background": {

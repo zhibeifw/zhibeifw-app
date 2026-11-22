@@ -1,5 +1,7 @@
 package com.zhibeifw.app.ui
 
+import androidx.compose.foundation.focusable
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -206,7 +208,7 @@ fun PageScaffold(
     overlay: @Composable () -> Unit = {},
     content: LazyListScope.() -> Unit,
 ) {
-    val m = Layout.pageMargin(windowWidth())
+    val m = if (model.isTelevision) Tok.Television.margin else Layout.pageMargin(windowWidth())
     val density = LocalDensity.current
     val behavior =
         if (largeTitle && !showBack) TopAppBarDefaults.exitUntilCollapsedScrollBehavior() else TopAppBarDefaults.pinnedScrollBehavior()
@@ -222,7 +224,11 @@ fun PageScaffold(
         actionIconContentColor = C.labelPrimary()
     )
     val nav: @Composable () -> Unit = {
-        if (showBack) IconButton(
+        if (showBack && model.isTelevision) {
+            TvIconButton({ model.nav.navController?.popBackStack() }, label = "返回") {
+                ZIcon("chevron-back", Tok.PageHeader.iconSize.d, androidx.compose.material3.LocalContentColor.current)
+            }
+        } else if (showBack) IconButton(
             onClick = { model.nav.navController?.popBackStack() },
             modifier = Modifier.semantics { contentDescription = "返回" }) {
             ZIcon("chevron-back", Tok.PageHeader.iconSize.d, C.labelPrimary())
@@ -239,7 +245,7 @@ fun PageScaffold(
             topBar = {
                 // 一级页（主页、搜索，没有返回键）用大标题；子页（有返回键）用小标题顶部栏，副标题放在小标题下面
                 val sub = showBack && largeTitle
-                Box {
+                Box(if (model.isTelevision) Modifier.padding(horizontal = m.d) else Modifier) {
                     when {
                         sub -> TopAppBar(
                             title = {
@@ -311,7 +317,7 @@ fun PageScaffold(
                     item("__bottom") {
                         Spacer(
                             Modifier.height(
-                                Layout.navReserve.d + WindowInsets.safeDrawing.asPaddingValues()
+                                (if (model.isTelevision) 0f else Layout.navReserve).d + WindowInsets.safeDrawing.asPaddingValues()
                                     .calculateBottomPadding()
                             )
                         )
@@ -706,6 +712,12 @@ fun ProgressRing(ratio: Double, paused: Boolean, size: Dp = CP.EpisodeRow.ring.d
 @Composable
 fun MoreButton(label: String = "更多操作", items: () -> List<List<MenuItem>>) {
     NativeMenu(items) { open ->
+        if (androidx.compose.ui.res.booleanResource(com.zhibeifw.app.R.bool.is_television)) {
+            TvIconButton(open, label = label) {
+                ZIcon("ellipsis-horizontal", CP.EpisodeRow.moreIcon.d, androidx.compose.material3.LocalContentColor.current)
+            }
+            return@NativeMenu
+        }
         Box(
             Modifier.size(CP.EpisodeRow.moreTouch.d).pressable(onClick = open)
                 .semantics { contentDescription = label },
@@ -723,13 +735,19 @@ fun EmptyStateView(text: String, modifier: Modifier = Modifier, retry: (() -> Un
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(CP.RetryButton.topGap.d)
     ) {
-        Txt(text, S.body, C.labelSecondary(), align = TextAlign.Center)
+        val focus = if (androidx.compose.ui.res.booleanResource(com.zhibeifw.app.R.bool.is_television) && retry == null)
+            Modifier.focusable() else Modifier
+        Txt(text, S.body, C.labelSecondary(), focus, align = TextAlign.Center)
         if (retry != null) RetryButton("重试", retry)
     }
 }
 
 @Composable
 fun RetryButton(title: String, onClick: () -> Unit) {
+    if (androidx.compose.ui.res.booleanResource(com.zhibeifw.app.R.bool.is_television)) {
+        TvPill(title, onClick)
+        return
+    }
     Box(
         Modifier.heightIn(min = CP.RetryButton.height.d).clip(CircleShape)
             .background(C.backgroundSecondary()).pressable(onClick = onClick)
@@ -751,7 +769,8 @@ fun BannerView(text: String, actions: List<Pair<String, () -> Unit>>) {
     ) {
         Txt(text, S.bannerText, C.labelSecondary(), Modifier.weight(1f))
         actions.forEach { (t, a) ->
-            Box(
+            if (androidx.compose.ui.res.booleanResource(com.zhibeifw.app.R.bool.is_television)) TvPill(t, a)
+            else Box(
                 Modifier.heightIn(min = CP.Banner.height.d).pressable(onClick = a),
                 contentAlignment = Alignment.Center
             ) { Txt(t, S.bannerAction, C.labelPrimary()) }

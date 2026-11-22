@@ -133,7 +133,7 @@ fun PlayerLayer(model: AppModel) {
 }
 
 @Composable
-private fun PlayerView(model: AppModel, p: PlayerController) {
+internal fun PlayerView(model: AppModel, p: PlayerController) {
     var scrub by remember { mutableStateOf<Double?>(null) }
     // 睡眠定时倒计时：只在按分钟定时时每秒刷新显示，其余时候不让整页每秒重组（到点暂停由播放器侧保证）
     var tick by remember { mutableStateOf(0) }
@@ -315,7 +315,9 @@ private fun Controls(
                 SeekIcon(false, CP.Player.seekIcon.d, C.labelPrimary())
             }
             Box(
-                Modifier.size(CP.Player.playIcon.d).pressable { p.toggle() }
+                Modifier.size(CP.Player.playIcon.d)
+                    .let { if (model.isTelevision) it.tvEntryFocus() else it }
+                    .pressable { p.toggle() }
                     .semantics { contentDescription = if (p.looksPlaying) "暂停" else "播放" },
                 contentAlignment = Alignment.Center
             ) {
@@ -350,7 +352,7 @@ private fun Controls(
     }
 }
 
-private fun sleepA11y(p: PlayerController) = when (val s = p.sleep) {
+internal fun sleepA11y(p: PlayerController) = when (val s = p.sleep) {
     SleepSetting.Off -> "睡眠定时，未开启"
     SleepSetting.End -> "睡眠定时，本集结束时"
     is SleepSetting.Timer -> "睡眠定时，剩余 ${
@@ -358,7 +360,7 @@ private fun sleepA11y(p: PlayerController) = when (val s = p.sleep) {
     } 分钟"
 }
 
-private fun sleepItems(p: PlayerController) = SLEEP_CHOICES.map { ch ->
+internal fun sleepItems(p: PlayerController) = SLEEP_CHOICES.map { ch ->
     MenuItem(ch.title, checked = p.sleep.choiceId == ch.id) {
         when {
             ch.id == "off" -> p.changeSleep(SleepSetting.Off)
@@ -373,7 +375,7 @@ private fun sleepItems(p: PlayerController) = SLEEP_CHOICES.map { ch ->
     }
 }
 
-private fun moreGroups(model: AppModel, p: PlayerController): List<List<MenuItem>> {
+internal fun moreGroups(model: AppModel, p: PlayerController): List<List<MenuItem>> {
     val c = p.current ?: return emptyList()
     val e = EpisodeItem(
         c.episodeId,
@@ -385,7 +387,7 @@ private fun moreGroups(model: AppModel, p: PlayerController): List<List<MenuItem
     )
     val fav = runCatching { model.store.isFavorite(c.seriesId) }.getOrDefault(false)
     return listOf(
-        model.downloadItems(e) + model.markItem(e),
+        (if (model.isTelevision) emptyList() else model.downloadItems(e)) + model.markItem(e),
         listOf(
             MenuItem(
                 if (fav) "取消收藏课程" else "收藏课程",
@@ -399,7 +401,7 @@ private fun moreGroups(model: AppModel, p: PlayerController): List<List<MenuItem
 /** 播放进度：系统（Material 3）的滑块。拖动时只更新显示的时间，松手才跳转。 */
 @OptIn(ExperimentalMaterial3Api::class) // 轨道的参数（缝隙、末端圆点）在 Material 3 里还标着实验性
 @Composable
-private fun ProgressBar(
+internal fun ProgressBar(
     position: Double,
     duration: Double,
     onScrub: (Double) -> Unit,

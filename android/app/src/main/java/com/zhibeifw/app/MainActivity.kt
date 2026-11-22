@@ -2,6 +2,7 @@ package com.zhibeifw.app
 
 import android.Manifest
 import android.app.Application
+import android.content.ComponentName
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.content.pm.ActivityInfo
@@ -32,7 +33,19 @@ class ZhibeiApp : Application() {
     override fun onCreate() {
         super.onCreate()
         model = AppModel(this)
-        com.zhibeifw.app.widget.CatalogRefreshWorker.schedule(this)
+        if (model.isTelevision) {
+            // 安装时系统解析清单会采用默认资源，电视进程启动时显式关闭小组件接收器。
+            for (receiver in listOf(com.zhibeifw.app.widget.NowPlayingReceiver::class.java,
+                    com.zhibeifw.app.widget.LatestReceiver::class.java)) {
+                val component = ComponentName(this, receiver)
+                if (packageManager.getComponentEnabledSetting(component) != PackageManager.COMPONENT_ENABLED_STATE_DISABLED) {
+                    packageManager.setComponentEnabledSetting(component, PackageManager.COMPONENT_ENABLED_STATE_DISABLED,
+                        PackageManager.DONT_KILL_APP)
+                }
+            }
+        } else {
+            com.zhibeifw.app.widget.CatalogRefreshWorker.schedule(this)
+        }
         ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
             override fun onStart(owner: LifecycleOwner) = model.onForeground()
             override fun onStop(owner: LifecycleOwner) = model.onBackground()
@@ -55,27 +68,39 @@ class MainActivity : ComponentActivity() {
         lockOrientation(false)
         model.openUrl = openUrlRef
         model.bootOnce()
-        // 点桌面小组件打开的（页面重建时不再处理一次）
-        if (savedInstanceState == null) model.openWidgetLink(intent?.data)
+        if (savedInstanceState == null) handleEntry(intent)
         setContent {
             val dark = isSystemInDarkTheme()
             ZTheme(dark) {
                 LaunchedEffect(model.playerOpen) { lockOrientation(model.playerOpen) }
-                RootView(model)
+                if (model.isTelevision) {
+                    val colors = if (dark) androidx.tv.material3.darkColorScheme() else androidx.tv.material3.lightColorScheme()
+                    androidx.tv.material3.MaterialTheme(colorScheme = colors) { RootView(model) }
+                } else RootView(model)
             }
         }
     }
 
-    /** App 已经开着时点桌面小组件（singleTask：不新建页面，交到这里） */
+    /** singleTask 复用已有界面时，处理这一次的桌面入口。 */
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
-        model.openWidgetLink(intent.data)
+        handleEntry(intent)
+    }
+
+    private fun handleEntry(intent: Intent) {
+        if (!model.isTelevision) {
+            model.openWidgetLink(intent.data)
+        } else if (intent.action == Intent.ACTION_MAIN && intent.hasCategory(Intent.CATEGORY_LAUNCHER)) {
+            // 电视播放卡片走系统的普通启动入口。openPlayer 只展示当前集，不改变播放状态。
+            model.openPlayer()
+        }
     }
 
     /** 屏幕方向：手机只有全屏播放页能横屏；平板（最短边 ≥ 600dp）全部方向。 */
     private fun lockOrientation(playerOpen: Boolean) {
         val tablet = resources.configuration.smallestScreenWidthDp >= 600
         requestedOrientation = when {
+            model.isTelevision -> ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE
             tablet -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             playerOpen -> ActivityInfo.SCREEN_ORIENTATION_FULL_SENSOR
             else -> ActivityInfo.SCREEN_ORIENTATION_PORTRAIT

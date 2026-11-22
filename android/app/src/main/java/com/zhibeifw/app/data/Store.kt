@@ -490,7 +490,20 @@ class Store(val db: Db) {
             ?.optStr("cover_path")
 
     /** 搜索：先整句，搜不到就从开头 2 个字起逐个加长。instr()，不用 LIKE。 */
+    private val pinyin by lazy { PinyinSearch() }
+
     fun searchSeries(input: String): SearchResult {
+        val byTitle = searchByTitle(input)
+        val normalized = normalizeText(input)
+        val query = normalized.replace(" ", "")
+        if (query.length !in 2..MAX_QUERY_LENGTH || query.any { it !in 'a'..'z' }) return byTitle
+        val cards = db.all("SELECT id, title, cover_path, status FROM catalog_series ORDER BY pos").map(::card)
+        val exact = if (byTitle.fallback) emptyList() else byTitle.rows
+        val rows = (exact + pinyin.matches(cards, query)).distinctBy { it.id }.take(500)
+        return if (rows.isEmpty()) byTitle else SearchResult(rows, normalized, false)
+    }
+
+    private fun searchByTitle(input: String): SearchResult {
         val empty = SearchResult(emptyList(), "", false)
         val norm = normalizeText(input)
         val cps = norm.codePoints().toArray().take(MAX_QUERY_LENGTH)

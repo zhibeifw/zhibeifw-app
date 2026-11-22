@@ -60,11 +60,14 @@ fun RootView(model: AppModel) {
         when (val ph = model.phase) {
             Phase.Launching -> SplashView()
             Phase.DbError -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                EmptyStateView("升级本机数据时出错，你的收听记录和下载都还在。请重启 App 再试；仍然不行请联系我们。")
+                EmptyStateView(if (model.isTelevision) "读取本机数据时出错，请重新打开 App 再试；仍然不行请联系我们。"
+                    else "升级本机数据时出错，你的收听记录和下载都还在。请重启 App 再试；仍然不行请联系我们。")
             }
 
             is Phase.Initializing -> InitView(model, ph.attempt, ph.failed)
-            Phase.Ready -> MainView(model)
+            Phase.Ready -> if (model.isTelevision) {
+                androidx.compose.material3.Surface(Modifier.fillMaxSize()) { TelevisionView(model) }
+            } else MainView(model)
         }
         AlertLayer(model)
     }
@@ -224,7 +227,7 @@ fun MainView(model: AppModel) {
 }
 
 @Composable
-private fun Stack(model: AppModel, nav: NavHostController, start: String, active: Boolean) {
+internal fun Stack(model: AppModel, nav: NavHostController, start: String, active: Boolean, focusHomeTab: () -> Unit = {}) {
     val idArg = listOf(navArgument("id") { type = NavType.StringType })
     fun id(e: NavBackStackEntry) = Uri.decode(e.arguments?.getString("id") ?: "")
     // 不在前台的那个标签页：不接收触摸、读屏也读不到（两个标签页各保留自己的页面栈）
@@ -256,16 +259,25 @@ private fun Stack(model: AppModel, nav: NavHostController, start: String, active
             popEnterTransition = { androidx.compose.animation.slideInHorizontally(move) { -dist } + fadeIn },
             popExitTransition = { androidx.compose.animation.slideOutHorizontally(move) { dist } + fadeOut },
         ) {
-            composable(Routes.HOME) { HomeView(model) }
+            composable(Routes.HOME) { if (model.isTelevision) TvHome(model, focusHomeTab) else HomeView(model) }
             composable(Routes.CATEGORIES) { CategoriesView(model) }
             composable(Routes.LIBRARY_HUB) { LibraryHubView(model) }
             composable(Routes.SEARCH) { SearchView(model) }
             composable("category/{id}", idArg) { CategoryView(model, id(it)) }
-            composable("series/{id}", idArg) { SeriesView(model, id(it)) }
+            composable("series/{id}", idArg) {
+                if (model.isTelevision) TvSeriesView(model, id(it)) else SeriesView(model, id(it))
+            }
             composable(Routes.RECENT) { RecentView(model) }
             composable(Routes.FAVORITES) { FavoritesView(model) }
-            composable(Routes.LIBRARY) { LibraryView(model) }
-            composable("libraryCourse/{id}", idArg) { LibraryCourseView(model, id(it)) }
+            if (model.isTelevision) {
+                for (detail in listOf(Routes.CONTACT, Routes.PRIVACY, Routes.SOURCE)) {
+                    composable(detail) { TvAboutDetail(detail) }
+                }
+                composable(Routes.PLAYING) { TvPlayingView(model) }
+            } else {
+                composable(Routes.LIBRARY) { LibraryView(model) }
+                composable("libraryCourse/{id}", idArg) { LibraryCourseView(model, id(it)) }
+            }
             composable(Routes.ABOUT) { AboutView(model) }
         }
         if (!active) Box(

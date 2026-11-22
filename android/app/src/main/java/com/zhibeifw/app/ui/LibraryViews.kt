@@ -3,6 +3,7 @@ package com.zhibeifw.app.ui
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -52,12 +53,31 @@ import com.zhibeifw.app.design.ts
 /** 资料库标签：Material 列表行，三行进三个子页。 */
 @Composable
 fun LibraryHubView(model: AppModel) {
+    if (model.isTelevision) {
+        Box(Modifier.fillMaxWidth().padding(top = Tok.Television.margin.d), contentAlignment = Alignment.TopCenter) {
+            Column(Modifier.widthIn(max = Tok.Television.playerCover.d), verticalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
+                listOf("最近播放" to Routes.RECENT, "收藏" to Routes.FAVORITES).forEach { (title, route) ->
+                    TvButton({ model.nav.push(route) }, Modifier.fillMaxWidth(), androidx.compose.material3.MaterialTheme.shapes.medium,
+                        scale = androidx.tv.material3.ButtonScale.None) {
+                        androidx.compose.foundation.layout.Row(Modifier.fillMaxWidth().padding(Tok.Space.scale[3].d),
+                            horizontalArrangement = Arrangement.spacedBy(Tok.Space.scale[2].d)) {
+                            ZIcon(if (route == Routes.RECENT) "time-outline" else "bookmark-outline",
+                                Tok.Menu.iconSize.d, androidx.compose.material3.LocalContentColor.current)
+                            Text(title)
+                        }
+                    }
+                }
+            }
+        }
+        return
+    }
     PageScaffold(model, "资料库", showBack = false) {
         listOf(
             Triple("最近播放", "time-outline", Routes.RECENT),
             Triple("收藏", "bookmark-outline", Routes.FAVORITES),
             Triple("已下载", "arrow-down-circle-outline", Routes.LIBRARY)
         )
+            .filter { !model.isTelevision || it.third != Routes.LIBRARY }
             .forEach { (title, icon, route) ->
                 item(route) {
                     ListItem(
@@ -71,7 +91,7 @@ fun LibraryHubView(model: AppModel) {
                             )
                         },
                         colors = ListItemDefaults.colors(containerColor = C.background()),
-                        modifier = Modifier.clickable { model.nav.push(route) },
+                        modifier = Modifier.pressable { model.nav.push(route) },
                     )
                 }
             }
@@ -82,8 +102,8 @@ fun LibraryHubView(model: AppModel) {
 fun RecentView(model: AppModel) {
     var rows by remember { mutableStateOf<List<RecentRow>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.progressVersion, model.downloadsVersion) {
-        rows = runCatching { model.store.loadRecent() }.getOrDefault(emptyList())
+    LaunchedEffect(model.catalogVersion, model.progressVersion, model.downloadsVersion) {
+        rows = runCatching { if (model.isTelevision) model.store.loadRecent(200) else model.store.loadRecent() }.getOrDefault(emptyList())
     }
     PageScaffold(
         model,
@@ -94,7 +114,7 @@ fun RecentView(model: AppModel) {
             TextButton(enabled = rows.isNotEmpty(), onClick = {
                 model.alert = AlertSpec(
                     "清空最近列表？",
-                    "列表中的记录会被移除。各课程的收听进度、已听完标记和已下载内容不受影响。",
+                    if (model.isTelevision) "各课程的收听进度和已听完标记会保留。" else "列表中的记录会被移除。各课程的收听进度、已听完标记和已下载内容不受影响。",
                     listOf(
                         AlertButton("取消", cancel = true),
                         AlertButton(
@@ -104,9 +124,10 @@ fun RecentView(model: AppModel) {
                     )
                 )
             }) {
+                if (model.isTelevision) ZIcon("trash-outline", Tok.Menu.iconSize.d, C.danger())
                 Text(
                     "清空",
-                    color = if (rows.isNotEmpty()) C.labelPrimary() else C.labelTertiary()
+                    color = if (rows.isEmpty()) C.labelTertiary() else if (model.isTelevision) C.danger() else C.labelPrimary()
                 )
             }
         }) {
@@ -117,7 +138,7 @@ fun RecentView(model: AppModel) {
             )
         }
         items(rows, key = { it.episodeId }) { r ->
-            RecentRowView(model, r)
+            if (model.isTelevision) TvRecentRow(model, r) else RecentRowView(model, r)
         }
     }
 }
@@ -127,7 +148,7 @@ fun RecentView(model: AppModel) {
 fun FavoritesView(model: AppModel) {
     var rows by remember { mutableStateOf<List<FavoriteRow>>(emptyList()) }
     val list = rememberLazyListState()
-    LaunchedEffect(model.favoritesVersion) {
+    LaunchedEffect(model.catalogVersion, model.favoritesVersion) {
         rows = runCatching { model.store.loadFavorites() }.getOrDefault(emptyList())
     }
     PageScaffold(
@@ -142,7 +163,11 @@ fun FavoritesView(model: AppModel) {
                 Modifier.padding(top = (Tok.Space.scale[6] * 4).d)
             )
         }
-        items(rows, key = { it.id }) { f ->
+        if (model.isTelevision) tvCardGrid(model, rows.map { f ->
+            com.zhibeifw.app.data.SeriesCard(f.id, f.title, f.coverPath, f.status.orEmpty(),
+                featureTitle = if (f.gone) "${f.title}（已下架）" else null)
+        }, removeFavorite = model::removeFavorite)
+        else items(rows, key = { it.id }) { f ->
             Box(Modifier.padding(bottom = CP.SeriesRow.gap.d)) {
                 SeriesRowView(
                     model,

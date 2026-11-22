@@ -4,6 +4,9 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.Dispatchers
 import com.zhibeifw.app.design.generated.Tok.Component as CP
 import com.zhibeifw.app.design.generated.Tok.Font.Style as S
+import com.zhibeifw.app.Routes
+import androidx.compose.foundation.focusable
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -16,6 +19,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,7 +27,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.LiveRegionMode
@@ -38,7 +41,6 @@ import com.zhibeifw.app.design.Separator
 import com.zhibeifw.app.design.ZIcon
 import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.net.NetConfig
-import kotlinx.coroutines.launch
 
 /** 关于智悲佛网。居中小标题；Android 官网版末尾多一行“检查更新”。 */
 @Composable
@@ -50,7 +52,7 @@ fun AboutView(model: AppModel) {
     var clearResult by remember { mutableStateOf<String?>(null) }
     var routeResult by remember { mutableStateOf<String?>(null) }
     var updateResult by remember { mutableStateOf<String?>(null) }
-    PageScaffold(model, "关于", largeTitle = false, centeredTitle = true) {
+    PageScaffold(model, "关于", largeTitle = false, centeredTitle = true, showBack = !model.isTelevision) {
         item("body") {
             Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
                 Column(
@@ -112,11 +114,12 @@ fun AboutView(model: AppModel) {
                         Txt("关于", S.body, C.labelSecondary(),
                             Modifier.padding(top = CP.About.rowsTop.d)
                                 .padding(horizontal = Tok.Space.pageMargin.d).semantics { heading() })
-                        Row("联系", value = "hello@zhibeifw.com")
+                        Row("联系", value = "hello@zhibeifw.com",
+                            onClick = if (model.isTelevision) { { model.nav.push(Routes.CONTACT) } } else null)
                         Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
-                        Row("隐私政策", arrow = true) { model.openExternal(NetConfig.PRIVACY_URL) }
+                        Row("隐私政策", arrow = true) { if (model.isTelevision) model.nav.push(Routes.PRIVACY) else model.openExternal(NetConfig.PRIVACY_URL) }
                         Separator(Modifier.padding(horizontal = Tok.Space.pageMargin.d))
-                        Row("源代码", arrow = true) { model.openExternal(NetConfig.SOURCE_URL) }
+                        Row("源代码", arrow = true) { if (model.isTelevision) model.nav.push(Routes.SOURCE) else model.openExternal(NetConfig.SOURCE_URL) }
                     }
                     // 页脚
                     Column(
@@ -145,6 +148,15 @@ private fun Row(
     arrow: Boolean = false,
     onClick: (() -> Unit)? = null
 ) {
+    if (androidx.compose.ui.res.booleanResource(R.bool.is_television) && onClick != null) {
+        androidx.tv.material3.ListItem(selected = false, onClick = onClick, scale = androidx.tv.material3.ListItemScale.None,
+            headlineContent = { androidx.tv.material3.Text(title) },
+            trailingContent = {
+                if (value != null) androidx.tv.material3.Text(value)
+                if (arrow) ZIcon("chevron-forward", CP.SectionTitle.arrowSize.d, androidx.tv.material3.LocalContentColor.current)
+            })
+        return
+    }
     val mod = Modifier.fillMaxWidth().heightIn(min = CP.About.rowMinHeight.d)
         .let { if (onClick != null) it.pressable(onClick = onClick) else it }
         .padding(horizontal = Tok.Space.pageMargin.d)
@@ -174,5 +186,24 @@ private fun Row(
             } // 长按由系统完成选择与复制
         }
         if (arrow) ZIcon("chevron-forward", CP.SectionTitle.arrowSize.d, C.labelTertiary())
+    }
+}
+
+@Composable
+internal fun TvAboutDetail(route: String) {
+    val (title, address) = when (route) {
+        Routes.PRIVACY -> "隐私政策" to NetConfig.PRIVACY_URL
+        Routes.SOURCE -> "源代码" to NetConfig.SOURCE_URL
+        else -> "联系我们" to "hello@zhibeifw.com"
+    }
+    Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(Tok.Television.gap.d, Alignment.CenterVertically)) {
+        Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+        if (route != Routes.CONTACT) {
+            Image(painterResource(if (route == Routes.PRIVACY) R.drawable.tv_qr_privacy else R.drawable.tv_qr_source),
+                null, Modifier.width(CP.Player.LandscapePhone.cover.d))
+            Text("用手机扫码查看")
+        }
+        Text(address, Modifier.tvEntryFocus().focusable())
     }
 }

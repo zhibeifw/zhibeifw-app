@@ -78,6 +78,7 @@ data class AlertSpec(
 
 /** 全 App 的状态与动作（与 iOS AppModel.swift 同样的结构）。页面只读它、调它。 */
 class AppModel(private val ctx: Context) {
+    val isTelevision = ctx.resources.getBoolean(R.bool.is_television)
     val files = AppFiles(ctx)
     lateinit var store: Store; private set
     val net = Network(ctx)
@@ -163,16 +164,18 @@ class AppModel(private val ctx: Context) {
         withContext(Dispatchers.IO) { runCatching { importV1Prefs() } }
         val p = PlayerController(ctx, store, files, net)
         player = p
-        val dm = DownloadManager(SystemDownloader(ctx), store, files)
-        dm.origin = { net.ensureRoutes() }
-        dm.onChange = { downloadsVersion++ }
-        dm.onBatchFailed = { alert = AlertSpec("部分下载失败，请稍后重试") }
-        dm.onDiskFull = { alert = AlertSpec("手机存储空间不足，下载失败") }
-        downloads = dm
         p.onProgressSaved = { progressVersion++ }
-        p.onDamaged =
-            { id -> dm.removeDownload(id); alert = AlertSpec("这一集的下载文件已损坏，请重新下载") }
-        runCatching { dm.reconcile() }
+        if (!isTelevision) {
+            val dm = DownloadManager(SystemDownloader(ctx), store, files)
+            dm.origin = { net.ensureRoutes() }
+            dm.onChange = { downloadsVersion++ }
+            dm.onBatchFailed = { alert = AlertSpec("部分下载失败，请稍后重试") }
+            dm.onDiskFull = { alert = AlertSpec("手机存储空间不足，下载失败") }
+            downloads = dm
+            p.onDamaged =
+                { id -> dm.removeDownload(id); alert = AlertSpec("这一集的下载文件已损坏，请重新下载") }
+            runCatching { dm.reconcile() }
+        }
         connectivity.onReconnect.add {
             val ph = phase
             if (ph is Phase.Initializing && ph.failed) scope.launch { runInitialization() }
@@ -196,7 +199,7 @@ class AppModel(private val ctx: Context) {
     /** 进入主页之后：检查更新、开始给小组件备数据、打开冷启动时点小组件带来的链接 */
     private fun onReady() {
         scope.launch { upgrade.check(manual = false) }
-        widgets.start()
+        if (!isTelevision) widgets.start()
         pendingLink?.let { pendingLink = null; openWidgetLink(it) }
     }
 
@@ -267,6 +270,11 @@ class AppModel(private val ctx: Context) {
      *  新课程是大卡片（要原图）；编辑精选和各分类行是小卡片（640 小图），每行只取前 4 张（第一屏能看到的加一点）。 */
     private fun prefetchHomeCovers() {
         val h = home
+        if (isTelevision) {
+            val cards = h.ongoing + h.featured + h.categories.flatMap { it.series.take(5) }
+            images.prefetch(scope, cards.map { it.coverPath to COVER_THUMB_WIDTHS.last() })
+            return
+        }
         val large = h.ongoing.map { it.coverPath to Int.MAX_VALUE }
         val small =
             (h.featured + h.categories.flatMap { it.series.take(4) }).map { it.coverPath to COVER_THUMB_WIDTHS.last() }
@@ -326,7 +334,7 @@ class AppModel(private val ctx: Context) {
 
     fun onBackground() {
         player?.saveNow()
-        scope.launch { widgets.writeNow() }
+        if (!isTelevision) scope.launch { widgets.writeNow() }
     }
 
     // ---------- 桌面小组件 ----------
@@ -431,6 +439,10 @@ class AppModel(private val ctx: Context) {
     /** 播放页“前往课程”：下面已经是这门课就只收起播放页。 */
     fun goToSeries(seriesId: String) {
         closePlayer()
+        nav.leavePlayerForSeries?.let { open ->
+            open(seriesId)
+            return
+        }
         if (nav.isShowingSeries(seriesId)) return
         nav.push(Routes.series(seriesId))
     }

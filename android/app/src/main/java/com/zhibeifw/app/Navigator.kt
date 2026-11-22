@@ -19,7 +19,11 @@ object Routes {
     const val RECENT = "recent"
     const val FAVORITES = "favorites"
     const val LIBRARY = "library"
+    const val PLAYING = "playing"
     const val ABOUT = "about"
+    const val CONTACT = "contact"
+    const val PRIVACY = "privacy"
+    const val SOURCE = "source"
     fun category(id: String) = "category/${Uri.encode(id)}"
     fun series(id: String) = "series/${Uri.encode(id)}"
     fun libraryCourse(id: String) = "libraryCourse/${Uri.encode(id)}"
@@ -38,13 +42,16 @@ class Navigator {
     var libraryNav: NavHostController? = null
     var searchNav: NavHostController? = null
 
+    var televisionNav: NavHostController? = null
+    var leavePlayerForSeries: ((String) -> Unit)? = null
+
     /** 底部导航栏是否显示（关于页不显示）；Snackbar 据此决定要不要给导航栏让位 */
     var bottomNavShown by mutableStateOf(true)
     private val pushGuard = PushGuard()
 
     /** 当前标签的页面栈 */
     val navController
-        get() = when (tab) {
+        get() = televisionNav ?: when (tab) {
             Tab.HOME -> homeNav; Tab.CATEGORIES -> categoriesNav; Tab.LIBRARY -> libraryNav; Tab.SEARCH -> searchNav
         }
 

@@ -15,6 +15,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -40,7 +43,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.*
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
@@ -82,7 +87,9 @@ fun HomeView(model: AppModel) {
         onRefresh = { model.syncCatalog(true) },
         topCenter = { if (model.autoUpdating) UpdatingHint() },
         trailing = {
-            IconButton(
+            if (model.isTelevision) {
+                androidx.compose.material3.TextButton({ model.launch { model.syncCatalog(true) } }) { Text("刷新") }
+            } else IconButton(
                 onClick = { model.nav.push(Routes.ABOUT) },
                 modifier = Modifier.semantics { contentDescription = "关于智悲佛网" }) {
                 ZIcon("information-circle-outline", Tok.PageHeader.iconSize.d, C.labelPrimary())
@@ -174,28 +181,39 @@ private fun Section(title: String, onClick: (() -> Unit)?, row: @Composable () -
     }
 }
 
-/** 搜索页：按键盘上的“搜索”才开始搜；没搜之前显示“输入课程名搜索”（分类磁贴在“分类”标签）。 */
+@Composable
+private fun BrowseTabList(
+    model: AppModel,
+    title: String,
+    state: LazyListState = rememberLazyListState(),
+    content: LazyListScope.() -> Unit
+) {
+    if (model.isTelevision) {
+        LazyColumn(state = state, content = content)
+    } else {
+        PageScaffold(model, title, showBack = false, state = state, content = content)
+    }
+}
+
+/** 电视停止输入后搜索，手机和平板由键盘提交。 */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun SearchView(model: AppModel) {
     val W = windowWidth()
-    val m = Layout.pageMargin(W)
+    val m = if (model.isTelevision) Tok.Television.margin else Layout.pageMargin(W)
     var text by rememberSaveable { mutableStateOf("") }
     var result by remember { mutableStateOf<SearchResult?>(null) }
     // 按“搜索”时的词：页面重建（深色模式切换、窗口大小变化、进程被回收后回来）后按它把结果重新搜出来，不退回空提示
     var submitted by rememberSaveable { mutableStateOf<String?>(null) }
-    // 每次搜索加一：查询在后台做，只用最后一次的结果
-    var searchSeq by remember { mutableIntStateOf(0) }
-    // 搜不到整句时会从开头逐字加长多查几次，放到后台，不卡输入
-    fun search(q: String) {
-        val seq = ++searchSeq
-        model.launch {
-            val r = withContext(Dispatchers.IO) { runCatching { model.store.searchSeries(q) }.getOrNull() }
-            if (seq == searchSeq) result = r
+    var submitCount by remember { mutableIntStateOf(0) }
+    val query = if (model.isTelevision) text else submitted.orEmpty()
+    LaunchedEffect(query, submitCount, model.catalogVersion) {
+        if (normalizeText(query).isEmpty()) {
+            result = null
+            return@LaunchedEffect
         }
-    }
-    LaunchedEffect(Unit) {
-        submitted?.let { q -> if (result == null) search(q) }
+        if (model.isTelevision) kotlinx.coroutines.delay(400)
+        result = withContext(Dispatchers.IO) { runCatching { model.store.searchSeries(query) }.getOrNull() }
     }
     var focused by remember { mutableStateOf(false) }
     val focus = LocalFocusManager.current
@@ -203,24 +221,24 @@ fun SearchView(model: AppModel) {
     val state = rememberLazyListState()
     LaunchedEffect(state) {
         snapshotFlow { state.isScrollInProgress }.collect {
-            if (it) {
+            if (it && !model.isTelevision) {
                 kb?.hide(); focus.clearFocus()
             }
         }
     } // 滚动时键盘收起，输入框也失焦（和 iOS 一致）
     fun run() {
         if (normalizeText(text).isEmpty()) return
-        search(text)
         submitted = text
+        if (!model.isTelevision) submitCount++
         kb?.hide()
-        focus.clearFocus() // 搜完输入框失焦（和 iOS 一致）
+        if (model.isTelevision) focus.moveFocus(FocusDirection.Down) else focus.clearFocus()
     }
-    PageScaffold(model, "搜索", showBack = false, state = state) {
+    BrowseTabList(model, "搜索", state) {
         item("field") {
             // 系统（Material 3）的搜索输入框。放大镜、清除键沿用项目里的图标（Android 系统没有自带图标库）
             Row(
                 Modifier.padding(horizontal = m.d)
-                    .padding(top = (CP.SearchField.topGap - CP.PageTitle.bottomGap).d),
+                    .padding(top = (if (model.isTelevision) CP.Tile.topGap else CP.SearchField.topGap - CP.PageTitle.bottomGap).d),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(CP.SearchField.cancelGap.d)
             ) {
@@ -228,16 +246,24 @@ fun SearchView(model: AppModel) {
                     query = text,
                     onQueryChange = { v ->
                         text =
-                            if (v.length > MAX_QUERY_LENGTH) v.take(MAX_QUERY_LENGTH) else v; if (text.isEmpty()) {
-                        searchSeq++; result = null; submitted = null
-                    }
+                            if (v.codePointCount(0, v.length) > MAX_QUERY_LENGTH) v.substring(0, v.offsetByCodePoints(0, MAX_QUERY_LENGTH)) else v
+                        if (text.isEmpty()) { result = null; submitted = null }
                     },
                     onSearch = { run() },
                     expanded = false,
                     onExpandedChange = {},
                     modifier = Modifier.weight(1f).onFocusChanged { focused = it.isFocused }
-                        .semantics { contentDescription = "搜索课程名" },
-                    placeholder = { Text("课程名", style = S.body.ts(C.labelSecondary())) },
+                        .onPreviewKeyEvent { event ->
+                            if (!model.isTelevision || event.key != Key.DirectionDown || result?.rows.isNullOrEmpty())
+                                return@onPreviewKeyEvent false
+                            if (event.type == KeyEventType.KeyDown) {
+                                kb?.hide()
+                                focus.moveFocus(FocusDirection.Down)
+                            }
+                            true
+                        }
+                        .semantics { contentDescription = "搜索课程名或拼音首字母" },
+                    placeholder = { Text("课程名或拼音首字母", style = S.body.ts(C.labelSecondary())) },
                     // 底色、文字、光标用我们的颜色令牌，不用 Material 默认的紫色
                     colors = SearchBarDefaults.inputFieldColors(
                         focusedContainerColor = C.backgroundSecondary(),
@@ -256,7 +282,7 @@ fun SearchView(model: AppModel) {
                     trailingIcon = if (text.isEmpty()) null else ({
                         Box(
                             Modifier.size(Tok.Space.MinTouchTarget.android.d)
-                                .pressable { text = ""; searchSeq++; result = null; submitted = null }
+                                .pressable { text = ""; result = null; submitted = null }
                                 .semantics { contentDescription = "清除" },
                             contentAlignment = Alignment.Center
                         ) {
@@ -269,7 +295,7 @@ fun SearchView(model: AppModel) {
                     }),
                 )
                 if (focused || text.isNotEmpty()) TextButton(onClick = {
-                    text = ""; searchSeq++; result = null; submitted = null; focus.clearFocus()
+                    text = ""; result = null; submitted = null; focus.clearFocus()
                 }) { Text("取消", style = S.body.ts(C.labelPrimary())) }
             }
             Spacer(Modifier.height(CP.Tile.topGap.d))
@@ -291,7 +317,7 @@ fun SearchView(model: AppModel) {
                         Modifier.padding(horizontal = m.d)
                     )
                 }
-                items(r.rows, key = { "r-" + it.id }) { c ->
+                if (model.isTelevision) tvCardGrid(model, r.rows) else items(r.rows, key = { "r-" + it.id }) { c ->
                     ListRowView(model, c) {
                         model.nav.push(
                             Routes.series(c.id)
@@ -303,7 +329,7 @@ fun SearchView(model: AppModel) {
             // 没搜之前：空状态提示
             item("start") {
                 EmptyStateView(
-                    "输入课程名搜索",
+                    "输入课程名或拼音首字母搜索，比如 rzl 找“入中论讲解”",
                     Modifier.padding(top = (Tok.Space.scale[6] * 3).d)
                 )
             }
@@ -315,15 +341,15 @@ fun SearchView(model: AppModel) {
 @Composable
 fun CategoriesView(model: AppModel) {
     val W = windowWidth()
-    val m = Layout.pageMargin(W)
+    val m = if (model.isTelevision) Tok.Television.margin else Layout.pageMargin(W)
     var tiles by remember { mutableStateOf<List<CategoryTile>>(emptyList()) }
     val largeText = Layout.isLargeText(fontScale())
     LaunchedEffect(model.catalogVersion) {
         tiles = runCatching { model.store.loadCategories() }.getOrDefault(emptyList())
     }
-    PageScaffold(model, "分类", showBack = false) {
+    BrowseTabList(model, "分类") {
         item("gap") { Spacer(Modifier.height(CP.Tile.topGap.d)) }
-        val cols = if (largeText) 1 else Layout.tileColumns(W)
+        val cols = if (model.isTelevision) 4 else if (largeText) 1 else Layout.tileColumns(W)
         items(tiles.chunked(cols), key = { "t-" + it.first().id }) { row ->
             Row(
                 Modifier.padding(horizontal = m.d).padding(bottom = CP.Tile.gap.d),
@@ -338,6 +364,17 @@ fun CategoriesView(model: AppModel) {
 
 @Composable
 private fun Tile(model: AppModel, t: CategoryTile, large: Boolean) {
+    if (model.isTelevision) {
+        TvButton({ model.nav.push(Routes.category(t.id)) }, Modifier.fillMaxWidth(),
+            RoundedCornerShape(Tok.Radius.tile.d), resolveCategoryColor(t.color, t.id).c(), t.name) {
+            Row(Modifier.fillMaxWidth().padding(Tok.Space.scale[3].d),
+                horizontalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
+                ZIcon(resolveCategoryIcon(t.icon, t.id), Tok.Menu.iconSize.d, androidx.compose.material3.LocalContentColor.current)
+                Text(t.name)
+            }
+        }
+        return
+    }
     Box(
         Modifier.fillMaxWidth().heightIn(min = CP.Tile.height.d)
             .clip(RoundedCornerShape(Tok.Radius.tile.d))
@@ -393,7 +430,7 @@ fun CategoryView(model: AppModel, categoryId: String) {
                 Modifier.padding(top = (Tok.Space.scale[6] * 3).d)
             )
         }
-        items(rows, key = { it.id }) { c ->
+        if (model.isTelevision) tvCardGrid(model, rows, ::more) else items(rows, key = { it.id }) { c ->
             Column(Modifier.padding(bottom = CP.SeriesRow.gap.d)) {
                 SeriesRowView(
                     model,

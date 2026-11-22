@@ -249,13 +249,17 @@ class ImageLoader(private val net: Network, val diskDir: File) {
         }
     }
 
-    /** 关于页“清除缓存”：清内存和磁盘两层（不碰已下载课程另存的封面）。 */
+    var cacheGeneration by androidx.compose.runtime.mutableIntStateOf(0)
+        private set
+
+    /** 关于页清内存和磁盘缓存后，通知正在显示的封面重新取图。 */
     fun clear(): Boolean {
         memory.evictAll()
         largest.clear()
         noThumbs.clear(); thumbHits.set(0); thumbMisses.set(0)
-        diskDir.listFiles()?.forEach { it.delete() }
-        return diskDir.exists() || diskDir.mkdirs()
+        val ok = if (diskDir.exists()) diskDir.listFiles()?.all { !it.exists() || it.delete() } == true else diskDir.mkdirs()
+        cacheGeneration++
+        return ok
     }
 }
 
@@ -273,7 +277,7 @@ fun CoverImage(
     // 取图和缓存用的键。已下架的课目录里没有封面路径，但下载时存过本地封面：用“local:课程 ID”当键，
     // 否则几门这样的课都用空字符串当键，会互相串图
     val path = if (coverPath.isEmpty() && localFile != null) "local:$colorId" else coverPath
-    var failed by remember(path) { mutableStateOf(false) }
+    var failed by remember(path, loader.cacheGeneration) { mutableStateOf(false) }
     // 没有封面、或确实取不到：内容色块；还在加载：淡灰底（不像色块那样显眼）
     val bg =
         if ((path.isEmpty() && localFile == null) || failed) placeholderColor(colorId).c() else C.backgroundSecondary()
@@ -281,10 +285,10 @@ fun CoverImage(
         val px = coverRequestPx(with(LocalDensity.current) { maxWidth.roundToPx() })
         // 换尺寸（播放页弹出、横竖屏）时不清空：正确尺寸解码好之前，先用内存里这张图的任一尺寸顶上，不闪色块
         val first =
-            remember(path) { (loader.cached(path, px, localFile != null) ?: loader.anyCached(path))?.asImageBitmap() }
-        var img by remember(path) { mutableStateOf(first) }
-        val alpha = remember(path) { Animatable(if (first != null) 1f else 0f) }
-        LaunchedEffect(path, px, originVersion) {
+            remember(path, loader.cacheGeneration) { (loader.cached(path, px, localFile != null) ?: loader.anyCached(path))?.asImageBitmap() }
+        var img by remember(path, loader.cacheGeneration) { mutableStateOf(first) }
+        val alpha = remember(path, loader.cacheGeneration) { Animatable(if (first != null) 1f else 0f) }
+        LaunchedEffect(path, px, originVersion, loader.cacheGeneration) {
             if (px <= 0) return@LaunchedEffect // 还没量出宽度：等量好了再取，免得先下一张不需要的小图
             val exact = loader.cached(path, px, localFile != null)
             if (exact != null) {

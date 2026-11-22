@@ -13,6 +13,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.zhibeifw.app.MainActivity
+import com.zhibeifw.app.R
 import com.zhibeifw.app.design.generated.Tok
 
 /** 整个 App 只有一个 ExoPlayer（播放状态的唯一来源）。 */
@@ -53,12 +54,6 @@ class PlaybackService : MediaSessionService() {
     override fun onCreate() {
         super.onCreate()
         val player = PlayerHolder.get(this)
-        val open = PendingIntent.getActivity(
-            this,
-            0,
-            Intent(this, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
-        )
         val back = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
             .setPlayerCommand(Player.COMMAND_SEEK_BACK).setDisplayName("后退 15 秒")
             .setSlots(CommandButton.SLOT_BACK).build()
@@ -66,7 +61,16 @@ class PlaybackService : MediaSessionService() {
             .setPlayerCommand(Player.COMMAND_SEEK_FORWARD).setDisplayName("前进 30 秒")
             .setSlots(CommandButton.SLOT_FORWARD).build()
         session = MediaSession.Builder(this, player)
-            .setSessionActivity(open)
+            // 电视桌面通过系统默认应用入口打开播放卡片。
+            .apply {
+                if (!resources.getBoolean(R.bool.is_television)) {
+                    setSessionActivity(PendingIntent.getActivity(
+                        this@PlaybackService, 0,
+                        Intent(this@PlaybackService, MainActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+                    ))
+                }
+            }
             .setMediaButtonPreferences(listOf(back, fwd))
             .setCallback(object : MediaSession.Callback {
                 override fun onConnect(

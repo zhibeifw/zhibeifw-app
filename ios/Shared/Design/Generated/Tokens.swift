@@ -3,6 +3,18 @@ import CoreGraphics
 
 // swiftlint:disable all
 enum Tok {
+    enum Television {
+        static let margin: CGFloat = 40
+        static let shelfLarge: CGFloat = 274
+        static let shelfSmall: CGFloat = 200
+        static let gap: CGFloat = 20
+        static let sectionGap: CGFloat = 30
+        static let coverRadius: CGFloat = 6
+        static let playerRadius: CGFloat = 12
+        static let playerCover: CGFloat = 440
+        static let playerControls: CGFloat = 360
+        static let playerGap: CGFloat = 50
+    }
     enum Color {
         static let background = ZColor(light: 0xFFFFFFFF, dark: 0xFF000000)
         static let backgroundSecondary = ZColor(light: 0xFFF2F2F7, dark: 0xFF1C1C1E)

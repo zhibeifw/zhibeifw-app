@@ -3,6 +3,9 @@ package com.zhibeifw.app
 import android.util.Log
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
+import com.zhibeifw.app.core.IndexFile
+import com.zhibeifw.app.core.CategoryEntry
+import com.zhibeifw.app.core.SeriesEntry
 import com.zhibeifw.app.core.Prog
 import com.zhibeifw.app.data.Db
 import com.zhibeifw.app.data.Migrator
@@ -39,6 +42,25 @@ class StoreDeviceTest {
     fun tearDown() {
         db.db.close()
         dir.deleteRecursively()
+    }
+
+    @Test
+    fun pinyinSearchIncludesInitialsAndFullSpellingAfterTitleMatches() {
+        fun catalog(vararg titles: String) = IndexFile(
+            listOf(CategoryEntry("c", "课程", null, null)),
+            titles.mapIndexed { i, title -> SeriesEntry("s$i", title, "c", "", "ended", null, emptyList(), null) },
+            emptyList()
+        )
+        store.replaceIndex(catalog("讲解金刚经", "金刚经讲解", "JGJ", "入中论讲解"))
+        fun titles(q: String) = store.searchSeries(q).rows.map { it.title }
+        assertEquals(listOf("JGJ", "金刚经讲解", "讲解金刚经"), titles("ＪＧＪ"))
+        assertEquals(listOf("金刚经讲解", "讲解金刚经"), titles("jin gang"))
+        assertEquals(listOf("入中论讲解"), titles("R Z L"))
+        assertTrue(titles("r").isEmpty())
+        assertFalse(store.searchSeries("jgj").fallback)
+        store.replaceIndex(catalog("入中论讲解新编"))
+        assertTrue(titles("jgj").isEmpty())
+        assertEquals(listOf("入中论讲解新编"), titles("rzl"))
     }
 
     @Test

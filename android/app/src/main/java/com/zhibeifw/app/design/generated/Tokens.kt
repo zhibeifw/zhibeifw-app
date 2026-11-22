@@ -5,6 +5,18 @@ import com.zhibeifw.app.design.ZColor
 import com.zhibeifw.app.design.ZTextStyle
 
 object Tok {
+    object Television {
+        const val margin: Float = 40f
+        const val shelfLarge: Float = 274f
+        const val shelfSmall: Float = 200f
+        const val gap: Float = 20f
+        const val sectionGap: Float = 30f
+        const val coverRadius: Float = 6f
+        const val playerRadius: Float = 12f
+        const val playerCover: Float = 440f
+        const val playerControls: Float = 360f
+        const val playerGap: Float = 50f
+    }
     object Color {
         val background = ZColor(light = 0xFFFFFFFF, dark = 0xFF000000)
         val backgroundSecondary = ZColor(light = 0xFFF2F2F7, dark = 0xFF1C1C1E)

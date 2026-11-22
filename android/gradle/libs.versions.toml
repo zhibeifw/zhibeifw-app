@@ -2,6 +2,7 @@
 [versions]
 agp = "9.4.1"
 kotlin = "2.4.21"
+tvMaterial = "1.1.0"
 composeBom = "2026.09.00"
 activity = "1.13.0"
 core = "1.19.1"
@@ -28,6 +29,7 @@ compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeB
 compose-ui = { module = "androidx.compose.ui:ui" }
 compose-foundation = { module = "androidx.compose.foundation:foundation" }
 compose-animation = { module = "androidx.compose.animation:animation" }
+tv-material = { module = "androidx.tv:tv-material", version.ref = "tvMaterial" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
