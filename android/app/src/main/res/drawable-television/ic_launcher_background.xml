@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 自适应图标显示图层的 2/3；120dp 图层在电视上提供 80dp 方形图标。 -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <size android:width="120dp" android:height="120dp" />
+    <solid android:color="@color/icon_background" />
+</shape>

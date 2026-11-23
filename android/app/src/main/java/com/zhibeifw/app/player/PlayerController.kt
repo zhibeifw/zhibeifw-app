@@ -29,6 +29,12 @@ import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.buildUrl
 import kotlinx.coroutines.CoroutineExceptionHandler
+import com.google.common.util.concurrent.ListenableFuture
+import androidx.core.content.ContextCompat
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -66,7 +72,7 @@ class PlayerController(
     private val store: Store,
     private val files: AppFiles,
     private val net: Network,
-    val player: ExoPlayer = PlayerHolder.get(ctx),
+    testPlayer: ExoPlayer? = null,
     private val routes: suspend () -> String? = { net.ensureRoutes() },
     private val headStatus: suspend (String) -> Int? = { net.headStatus(it) },
     private val stallLimitMs: Long = STALL_LIMIT_MS,
@@ -106,66 +112,102 @@ class PlayerController(
     private var probeJob: Job? = null
     private var pendingSeek: Pair<Double, Long>? = null
     private var durationRecorded = false
-    private var controller: MediaController? = null
+    private var attached = testPlayer
+    internal val player get() = checkNotNull(attached)
+    private var connection: ListenableFuture<MediaController>? = null
+
+    private val listener = object : Player.Listener {
+        override fun onIsPlayingChanged(playing: Boolean) {
+            val was = isPlaying
+            isPlaying = playing
+            if (playing) {
+                clearStall(); error = null; tick()
+            }
+            if (was && !playing && !player.playWhenReady && positionKnown && !markedDone) {
+                readPosition(); saveNow()
+            } // 在 App 外暂停：记下位置
+        }
+
+        override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
+            systemWantsPlay = playWhenReady
+            if (playWhenReady) {
+                pendingStart = false; tick()
+            } else clearStall()
+        }
+
+        // 来电、导航播报、提示音等短暂抢走音频：按系统默认，播放器暂时不出声，抢完自己接着播；
+        // 被抢的时候先记下位置，万一这期间 App 被系统杀掉，进度也不丢
+        override fun onPlaybackSuppressionReasonChanged(reason: Int) {
+            if (reason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS && positionKnown && !markedDone) {
+                readPosition(); saveNow()
+            }
+        }
+
+        override fun onPlaybackStateChanged(state: Int) {
+            buffering = state == Player.STATE_BUFFERING
+            if (state == Player.STATE_BUFFERING) armStall()
+            if (state == Player.STATE_READY) clearStall()
+            if (state == Player.STATE_ENDED) onFinished()
+        }
+
+        override fun onPlayerError(e: PlaybackException) {
+            Log.w("Player", "播放出错", e)
+            val c = current ?: return
+            // 已下载的本地文件放不了：文件坏了（截断、0 字节等），按“下载文件已损坏”处理，改回未下载，免得一直重试一个坏文件
+            if (!streaming) {
+                onDamaged?.invoke(c.episodeId); fail(PlayerError.DAMAGED)
+            } else fail(PlayerError.CANNOT_PLAY)
+        }
+    }
 
     init {
-        // 连上自己的 MediaSessionService：服务因此启动，锁屏和通知栏才有播放卡片
-        MediaController.Builder(
-            ctx,
-            SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java))
-        ).buildAsync().also { f ->
-            f.addListener({
-                controller = try {
-                    f.get()
-                } catch (e: Exception) {
-                    null
+        attached?.addListener(listener)
+    }
+
+    private suspend fun connect(): Boolean {
+        if (attached != null) return true
+        val future = connection ?: MediaController.Builder(ctx, SessionToken(ctx, ComponentName(ctx, PlaybackService::class.java)))
+            .buildAsync().also { connection = it }
+        return suspendCancellableCoroutine { continuation ->
+            future.addListener({
+                if (!continuation.isActive) return@addListener
+                val connected = runCatching { future.get().isConnected }.getOrDefault(false)
+                val engine = PlayerHolder.active
+                if (connection === future && connected && engine != null) {
+                    if (attached == null) {
+                        attached = engine
+                        engine.addListener(listener)
+                    }
+                    continuation.resume(true)
+                } else {
+                    if (connection === future) {
+                        MediaController.releaseFuture(future)
+                        connection = null
+                    }
+                    continuation.resume(false)
                 }
-            }, { main.post(it) })
+            }, ContextCompat.getMainExecutor(ctx))
         }
-        player.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(playing: Boolean) {
-                val was = isPlaying
-                isPlaying = playing
-                if (playing) {
-                    clearStall(); error = null; tick()
-                }
-                if (was && !playing && !player.playWhenReady && positionKnown && !markedDone) {
-                    readPosition(); saveNow()
-                } // 在 App 外暂停：记下位置
-            }
+    }
 
-            override fun onPlayWhenReadyChanged(playWhenReady: Boolean, reason: Int) {
-                systemWantsPlay = playWhenReady
-                if (playWhenReady) {
-                    pendingStart = false; tick()
-                } else clearStall()
-            }
-
-            // 来电、导航播报、提示音等短暂抢走音频：按系统默认，播放器暂时不出声，抢完自己接着播；
-            // 被抢的时候先记下位置，万一这期间 App 被系统杀掉，进度也不丢
-            override fun onPlaybackSuppressionReasonChanged(reason: Int) {
-                if (reason == Player.PLAYBACK_SUPPRESSION_REASON_TRANSIENT_AUDIO_FOCUS_LOSS && positionKnown && !markedDone) {
-                    readPosition(); saveNow()
-                }
-            }
-
-            override fun onPlaybackStateChanged(state: Int) {
-                buffering = state == Player.STATE_BUFFERING
-                if (state == Player.STATE_BUFFERING) armStall()
-                if (state == Player.STATE_READY) clearStall()
-                if (state == Player.STATE_ENDED) onFinished()
-            }
-
-            override fun onPlayerError(e: PlaybackException) {
-                Log.w("Player", "播放出错", e)
-                val c = current ?: return
-                // 已下载的本地文件放不了：文件坏了（截断、0 字节等），按“下载文件已损坏”处理，改回未下载，免得一直重试一个坏文件
-                if (!streaming) {
-                    onDamaged?.invoke(c.episodeId); fail(PlayerError.DAMAGED)
-                } else fail(PlayerError.CANNOT_PLAY)
-            }
-        })
-        tick()
+    internal fun disconnect() {
+        if (attached == null && connection == null) return
+        if (positionKnown && !markedDone) {
+            readPosition()
+            saveNow()
+        }
+        generation++
+        clearStall()
+        attached?.removeListener(listener)
+        attached = null
+        connection?.let { MediaController.releaseFuture(it) }
+        connection = null
+        positionKnown = false
+        needsReload = current != null
+        pendingStart = false
+        isPlaying = false
+        systemWantsPlay = false
+        buffering = false
     }
 
     // ---------- 周期回调：位置、定时存进度、睡眠定时（播放器线程上，不依赖界面） ----------
@@ -173,7 +215,7 @@ class PlayerController(
     /** 每 0.5 秒一次，只在需要时跑：想播 / 在播，或者睡眠定时在走（原来一直空转，没播放时也每秒唤醒两次）。 */
     private var ticking = false
     private fun needsTick() =
-        player.playWhenReady || player.isPlaying || sleep is SleepSetting.Timer
+        attached?.playWhenReady == true || attached?.isPlaying == true || sleep is SleepSetting.Timer
 
     private fun tick() {
         if (ticking) return
@@ -199,7 +241,8 @@ class PlayerController(
             if (duration == 0.0 || abs(duration - ds) > 0.5) duration = ds
             val c = current
             if (!durationRecorded && c != null) {
-                durationRecorded = true; runCatching { store.recordDuration(c.episodeId, ds) }
+                durationRecorded = true
+                scope.launch(store.progressIo) { store.recordDuration(c.episodeId, ds) }
             }
         }
     }
@@ -217,21 +260,13 @@ class PlayerController(
 
     private fun save(pos: Double, dur: Double, np: NowPlaying? = current, notify: Boolean = true) {
         val c = np ?: return
-        try {
-            store.recordPlayback(
-                c.episodeId,
-                c.seriesId,
-                pos,
-                dur,
-                c.info.seriesTitle,
-                c.info.episodeTitle,
-                c.info.coverPath
-            )
-            lastSavedAt = pos
+        lastSavedAt = pos
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            withContext(store.progressIo) {
+                store.recordPlayback(c.episodeId, c.seriesId, pos, dur, c.info.seriesTitle, c.info.episodeTitle, c.info.coverPath)
+            }
             if (notify) onProgressSaved?.invoke()
-        } catch (e: Exception) {
-            Log.w("Player", "保存播放进度出错", e)
-        } // 写库失败不影响播放
+        }
     }
 
     fun saveNow() {
@@ -266,7 +301,7 @@ class PlayerController(
 
     private fun fail(e: PlayerError) {
         clearStall()
-        player.pause()
+        attached?.pause()
         pendingStart = false
         needsReload = true
         isPlaying = false
@@ -296,18 +331,21 @@ class PlayerController(
         durationRecorded = false
         clearStall()
         pendingSeek = null
-        player.pause()
+        attached?.pause()
         current = NowPlaying(info, ctx)
         position = 0.0; duration = 0.0; error = null; buffering = true
         pendingStart = true
 
-        val local = runCatching { files.localAudio(info.episodeId, store) }.getOrDefault(AppFiles.LocalAudio.None)
-        if (local is AppFiles.LocalAudio.Missing) {
-            onDamaged?.invoke(info.episodeId)
-            fail(PlayerError.DAMAGED)
-            return
-        }
         scope.launch {
+            val local = withContext(Dispatchers.IO) {
+                runCatching { files.localAudio(info.episodeId, store) }.getOrDefault(AppFiles.LocalAudio.None)
+            }
+            if (gen != generation) return@launch
+            if (local is AppFiles.LocalAudio.Missing) {
+                onDamaged?.invoke(info.episodeId)
+                fail(PlayerError.DAMAGED)
+                return@launch
+            }
             var uri: String? = null
             var isLocal = false
             if (local is AppFiles.LocalAudio.Found) {
@@ -315,7 +353,11 @@ class PlayerController(
             } else routes()?.let { uri = buildUrl(it, info.audioPath) }
             if (gen != generation) return@launch
             val u = uri ?: run { fail(PlayerError.CANNOT_PLAY); return@launch }
-            val prog = runCatching { store.loadProgress(info.episodeId) }.getOrNull()
+            val prog = withContext(store.progressIo) { runCatching { store.loadProgress(info.episodeId) }.getOrNull() }
+            if (gen != generation) return@launch
+            val connected = connect()
+            if (gen != generation) return@launch
+            if (!connected) { fail(PlayerError.CANNOT_PLAY); return@launch }
             val startAt = prog?.let { if (it.completed) 0.0 else it.position } ?: 0.0
             val known = prog?.duration ?: 0.0
             needsReload = false
@@ -371,7 +413,7 @@ class PlayerController(
     fun resume() {
         val c = current ?: return
         dropExpiredSleep()
-        if (needsReload || player.mediaItemCount == 0) {
+        if (needsReload || attached == null || player.mediaItemCount == 0) {
             play(c.info, c.ctx); return
         }
         if (positionKnown) player.play() else pendingStart = true
@@ -381,7 +423,7 @@ class PlayerController(
         if (current == null) return
         pendingStart = false
         clearStall()
-        player.pause()
+        attached?.pause()
         if (positionKnown && !markedDone) {
             readPosition(); save(position, duration)
         }
@@ -408,7 +450,7 @@ class PlayerController(
 
     fun changeRate(r: Double) {
         rate = r
-        player.playbackParameters = PlaybackParameters(r.toFloat())
+        attached?.playbackParameters = PlaybackParameters(r.toFloat())
     }
 
     fun changeSleep(s: SleepSetting) {
@@ -447,7 +489,7 @@ class PlayerController(
         positionKnown = false
         pendingStart = false
         clearStall()
-        player.pause()
+        attached?.pause()
         needsReload = true
         position = 0.0
         error = null
@@ -462,9 +504,9 @@ class PlayerController(
         markedDone = false
         pendingStart = false
         clearStall()
-        player.pause() // stop() 不改 playWhenReady：不先暂停的话界面、通知栏还显示成“正在播放”
-        player.stop()
-        player.clearMediaItems()
+        attached?.pause() // stop() 不改 playWhenReady：不先暂停的话界面、通知栏还显示成“正在播放”
+        attached?.stop()
+        attached?.clearMediaItems()
         current = null
         position = 0.0; duration = 0.0
     }
@@ -499,7 +541,7 @@ class PlayerController(
     private fun stopAtEnd() {
         pendingStart = false
         clearStall()
-        player.pause()
+        attached?.pause()
     }
 
 }

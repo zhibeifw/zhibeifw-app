@@ -67,8 +67,12 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                         delay(300)
                     }
                 }
-                Box(Modifier.onFocusChanged { if (!it.hasFocus) held = null }.onPreviewKeyEvent { event ->
+                Box(Modifier.tvEntryFocus().onFocusChanged { if (!it.hasFocus) held = null }.onPreviewKeyEvent { event ->
                     val key = event.key
+                    if (key == Key.DirectionCenter || key == Key.Enter || key == Key.NumPadEnter) {
+                        if (event.type == KeyEventType.KeyUp) p.toggle()
+                        return@onPreviewKeyEvent true
+                    }
                     // Slider 默认用上下键微调数值。电视用这两个键离开进度条。
                     if (key == Key.DirectionUp || key == Key.DirectionDown) {
                         if (event.type == KeyEventType.KeyDown) {
@@ -83,7 +87,7 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                     } else if (event.type == KeyEventType.KeyUp && held == key) held = null
                     true
                 }) {
-                    ProgressBar(pos, p.duration, { scrub = it }, { p.seekTo(it); scrub = null }, { p.seekBy(it) })
+                    ProgressBar(pos, p.duration, { scrub = it }, { p.seekTo(it); scrub = null }, focusWhileLoading = true)
                 }
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     Text(clock(pos), color = C.labelSecondary())
@@ -109,7 +113,7 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                     TvIconButton({ p.seekBy(-SEEK_BACK_SECONDS) }, button, label = "后退 15 秒") {
                         SeekIcon(false, Tok.Menu.iconSize.d, LocalContentColor.current)
                     }
-                    TvIconButton({ p.toggle() }, Modifier.tvEntryFocus().size(Tok.Component.Player.playIcon.d), label = if (p.looksPlaying) "暂停" else "播放") {
+                    TvIconButton({ p.toggle() }, Modifier.size(Tok.Component.Player.playIcon.d), label = if (p.looksPlaying) "暂停" else "播放") {
                         PlaybackIcon(if (p.looksPlaying) "pause" else "play", Tok.Space.scale[5].d, LocalContentColor.current, p.loadingPlayback)
                     }
                     TvIconButton({ p.seekBy(SEEK_FORWARD_SECONDS) }, button, label = "前进 30 秒") {

@@ -165,7 +165,7 @@ class NowPlayingWidget : SnapshotWidget(setOf(DpSize(110.dp, 110.dp)), fillHeigh
         val np = s.nowPlaying ?: return EmptyWidget("还没有在听的课程")
         val size = LocalSize.current
         val fontScale = LocalContext.current.resources.configuration.fontScale
-        val controlsHeight = maxOf(28f, (12 + 12) * 1.45f * fontScale).dp
+        val controlsHeight = maxOf(Tok.Space.MinTouchTarget.android, (12 + 12) * 1.45f * fontScale).dp
         val coverRoom = (size.height - 28.dp - 6.dp - controlsHeight).coerceAtLeast(0.dp)
         val coverWidth = minOf(
             (size.width - 28.dp).coerceAtLeast(0.dp),
@@ -190,7 +190,7 @@ class NowPlayingWidget : SnapshotWidget(setOf(DpSize(110.dp, 110.dp)), fillHeigh
                     Caption(np.item.episodeTitle ?: "")
                 }
                 Spacer(GlanceModifier.width(6.dp))
-                PlayButton(np, 28)
+                PlayButton(np)
             }
         }
     }
@@ -201,16 +201,21 @@ class NowPlayingReceiver : GlanceAppWidgetReceiver() {
 }
 
 @Composable
-private fun PlayButton(np: WidgetNowPlaying, size: Int) {
+private fun PlayButton(np: WidgetNowPlaying) {
     val label = if (np.playing) "暂停" else "播放"
-    Image(
-        ImageProvider(if (np.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play),
-        contentDescription = label,
-        colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
-        modifier = GlanceModifier.size(size.dp).clickable(
-            actionRunCallback<TogglePlaybackAction>(actionParametersOf(EpisodeKey to (np.item.episodeId ?: "")))
-        ),
-    )
+    Box(
+        GlanceModifier.size(Tok.Space.MinTouchTarget.android.dp)
+            .semantics { contentDescription = label }
+            .clickable(actionRunCallback<TogglePlaybackAction>(actionParametersOf(EpisodeKey to (np.item.episodeId ?: "")))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            ImageProvider(if (np.playing) R.drawable.ic_widget_pause else R.drawable.ic_widget_play),
+            contentDescription = null,
+            colorFilter = ColorFilter.tint(GlanceTheme.colors.onSurface),
+            modifier = GlanceModifier.size(28.dp),
+        )
+    }
 }
 
 // ---------- 最新课程 ----------

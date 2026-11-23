@@ -6,7 +6,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.player.PlayerHolder
@@ -16,12 +15,11 @@ import com.zhibeifw.app.design.C
 
 @Composable
 fun AudioWaveformIcon() {
-    val context = LocalContext.current
     var levels by remember { mutableStateOf(List(4) { 0f }) }
     LaunchedEffect(Unit) {
-        val player = PlayerHolder.get(context)
         while (true) {
-            levels = if (player.isPlaying) PlayerHolder.waveform.levels(player.currentPosition * 1000) else List(4) { 0f }
+            val player = PlayerHolder.active
+            levels = if (player?.isPlaying == true) PlayerHolder.waveform.levels(player.currentPosition * 1000) else List(4) { 0f }
             delay(50)
         }
     }

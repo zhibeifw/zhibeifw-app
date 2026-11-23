@@ -13,6 +13,7 @@ import androidx.media3.session.CommandButton
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.zhibeifw.app.MainActivity
+import com.zhibeifw.app.ZhibeiApp
 import com.zhibeifw.app.R
 import com.zhibeifw.app.design.generated.Tok
 
@@ -20,13 +21,13 @@ import com.zhibeifw.app.design.generated.Tok
 @OptIn(UnstableApi::class)
 object PlayerHolder {
     val waveform = AudioWaveform()
-    @Volatile
-    private var p: ExoPlayer? = null
+    var active: ExoPlayer? = null
+        private set
     val SEEK_BACK_MS = (Tok.Player.seekBackSeconds * 1000).toLong()
     val SEEK_FORWARD_MS = (Tok.Player.seekForwardSeconds * 1000).toLong()
 
-    fun get(ctx: Context): ExoPlayer = p ?: synchronized(this) {
-        p ?: ExoPlayer.Builder(ctx.applicationContext, object : androidx.media3.exoplayer.DefaultRenderersFactory(ctx.applicationContext) {
+    fun create(ctx: Context): ExoPlayer =
+        ExoPlayer.Builder(ctx.applicationContext, object : androidx.media3.exoplayer.DefaultRenderersFactory(ctx.applicationContext) {
             override fun buildAudioSink(context: Context, enableFloatOutput: Boolean, enableAudioOutputPlaybackParams: Boolean): androidx.media3.exoplayer.audio.AudioSink? =
                 super.buildAudioSink(context, enableFloatOutput, enableAudioOutputPlaybackParams)?.let { WaveformAudioSink(it, waveform) }
         })
@@ -38,7 +39,12 @@ object PlayerHolder {
             .setSeekBackIncrementMs(SEEK_BACK_MS)
             .setSeekForwardIncrementMs(SEEK_FORWARD_MS)
             .setWakeMode(C.WAKE_MODE_NETWORK)
-            .build().also { p = it }
+            .build().also { active = it }
+
+    fun release() {
+        active?.release()
+        active = null
+        waveform.clear()
     }
 }
 
@@ -53,7 +59,7 @@ class PlaybackService : MediaSessionService() {
 
     override fun onCreate() {
         super.onCreate()
-        val player = PlayerHolder.get(this)
+        val player = PlayerHolder.create(this)
         val back = CommandButton.Builder(CommandButton.ICON_SKIP_BACK_15)
             .setPlayerCommand(Player.COMMAND_SEEK_BACK).setDisplayName("后退 15 秒")
             .setSlots(CommandButton.SLOT_BACK).build()
@@ -72,25 +78,7 @@ class PlaybackService : MediaSessionService() {
                 }
             }
             .setMediaButtonPreferences(listOf(back, fwd))
-            .setCallback(object : MediaSession.Callback {
-                override fun onConnect(
-                    session: MediaSession,
-                    controller: MediaSession.ControllerInfo
-                ): MediaSession.ConnectionResult {
-                    val cmds = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
-                        .remove(Player.COMMAND_SEEK_TO_NEXT)
-                        .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
-                        .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
-                        .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
-                        // 播放服务对外公开（Media3 要求）：别的 App 连上来只能控制播放，不能把内容换掉
-                        .remove(Player.COMMAND_SET_MEDIA_ITEM)
-                        .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
-                        .remove(Player.COMMAND_SET_PLAYLIST_METADATA)
-                        .build()
-                    return MediaSession.ConnectionResult.AcceptedResultBuilder(session)
-                        .setAvailablePlayerCommands(cmds).build()
-                }
-            })
+            .setCallback(PlaybackConnections)
             .build()
     }
 
@@ -98,12 +86,39 @@ class PlaybackService : MediaSessionService() {
 
     override fun onTaskRemoved(rootIntent: Intent?) {
         val p = session?.player
-        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
+        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) {
+            (application as ZhibeiApp).model.player?.disconnect()
+            stopSelf()
+        }
     }
 
     override fun onDestroy() {
-        session?.run { release() }
+        (application as ZhibeiApp).model.player?.disconnect()
+        session?.release()
+        PlayerHolder.release()
         session = null
         super.onDestroy()
+    }
+}
+
+@OptIn(UnstableApi::class)
+internal object PlaybackConnections : MediaSession.Callback {
+    override fun onConnect(
+        session: MediaSession,
+        controller: MediaSession.ControllerInfo
+    ): MediaSession.ConnectionResult {
+        if (!controller.isTrusted) return MediaSession.ConnectionResult.reject()
+        val cmds = MediaSession.ConnectionResult.DEFAULT_PLAYER_COMMANDS.buildUpon()
+            .remove(Player.COMMAND_SEEK_TO_NEXT)
+            .remove(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS)
+            .remove(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            // 系统媒体控件可以控制当前集，课程和播放队列由应用选择。
+            .remove(Player.COMMAND_SET_MEDIA_ITEM)
+            .remove(Player.COMMAND_CHANGE_MEDIA_ITEMS)
+            .remove(Player.COMMAND_SET_PLAYLIST_METADATA)
+            .build()
+        return MediaSession.ConnectionResult.AcceptedResultBuilder(session, controller)
+            .setAvailablePlayerCommands(cmds).build()
     }
 }

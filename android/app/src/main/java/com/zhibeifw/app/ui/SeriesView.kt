@@ -56,37 +56,36 @@ import com.zhibeifw.app.design.generated.Tok
 import com.zhibeifw.app.design.generated.Tok.Component as CP
 import com.zhibeifw.app.design.generated.Tok.Font.Style as S
 import com.zhibeifw.app.design.ts
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
-private enum class LoadState { LOADING, READY, GONE }
+internal data class CourseDetails(val header: SeriesHeader?, val episodes: List<EpisodeRow>)
+
+@Composable
+internal fun courseDetails(model: AppModel, id: String): CourseDetails? {
+    var result by remember(model, id) { mutableStateOf<CourseDetails?>(null) }
+    LaunchedEffect(model, id, model.catalogVersion, model.progressVersion, model.favoritesVersion, model.downloadsVersion) {
+        result = withContext(Dispatchers.IO) {
+            val header = runCatching { model.store.loadSeriesHeader(id) }.getOrNull()
+            val episodes = if (header == null) emptyList() else
+                runCatching { model.store.loadEpisodes(id) }.getOrDefault(emptyList())
+            CourseDetails(header, episodes)
+        }
+    }
+    return result
+}
 
 /** 系列详情页。 */
 @Composable
 fun SeriesView(model: AppModel, seriesId: String) {
-    var header by remember { mutableStateOf<SeriesHeader?>(null) }
-    var episodes by remember { mutableStateOf<List<EpisodeRow>>(emptyList()) }
-    var state by remember { mutableStateOf(LoadState.LOADING) }
+    val details = courseDetails(model, seriesId)
+    val header = details?.header
+    val episodes = details?.episodes.orEmpty()
     // 默认最旧到最新（第 1 课在最上面），和 iOS、Apple TV 一样
     var oldestFirst by remember { mutableStateOf(true) }
     val list = rememberLazyListState()
     val W = windowWidth()
     val m = Layout.pageMargin(W)
-
-    fun refreshRows() {
-        episodes = runCatching { model.store.loadEpisodes(seriesId) }.getOrDefault(emptyList())
-        header = header?.let { h -> h.copy(favorited = runCatching { model.store.isFavorite(seriesId) }.getOrDefault(h.favorited)) }
-    }
-
-    // 只看本机目录，不联网（只有启动和下拉刷新取 index.json）。本机目录没有这门课 = 已下架
-    fun load() {
-        val h = runCatching { model.store.loadSeriesHeader(seriesId) }.getOrNull()
-        if (h != null) {
-            header = h; refreshRows(); state = LoadState.READY
-        } else state = LoadState.GONE
-    }
-    LaunchedEffect(model.catalogVersion) { load() }
-    LaunchedEffect(model.progressVersion, model.favoritesVersion, model.downloadsVersion) {
-        if (state == LoadState.READY) refreshRows()
-    }
 
     val coverW = minOf(W, 640f) - 2 * CP.SeriesHeader.coverMargin
     PageScaffold(
@@ -127,23 +126,23 @@ fun SeriesView(model: AppModel, seriesId: String) {
             }
         },
     ) {
-        when (state) {
-            LoadState.LOADING -> item("loading") {
+        when {
+            details == null -> item("loading") {
                 Box(
                     Modifier.fillMaxWidth().padding(top = (Tok.Space.scale[6] * 3).d),
                     contentAlignment = Alignment.Center
                 ) { CircularProgressIndicator(color = C.labelSecondary()) }
             }
 
-            LoadState.GONE -> item("gone") {
+            header == null -> item("gone") {
                 EmptyStateView(
                     "这门课已下架",
                     Modifier.padding(top = (Tok.Space.scale[6] * 3).d)
                 )
             }
 
-            LoadState.READY -> {
-                val h = header ?: return@PageScaffold
+            else -> {
+                val h = header
                 item("header") { Header(model, h, episodes) }
                 val rows = episodes.map {
                     EpisodeItem(

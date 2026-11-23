@@ -79,7 +79,7 @@ import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
-import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -144,11 +144,11 @@ object Layout {
 internal val LocalPageWidth = androidx.compose.runtime.compositionLocalOf<Float?> { null }
 
 @Composable
-fun windowWidth(): Float = LocalPageWidth.current ?: LocalConfiguration.current.screenWidthDp.toFloat()
+fun windowWidth(): Float = LocalPageWidth.current ?: LocalWindowInfo.current.containerDpSize.width.value
 
 /** 窗口高度，只用来分平板的竖屏、横屏。 */
 @Composable
-fun windowHeight(): Float = LocalConfiguration.current.screenHeightDp.toFloat()
+fun windowHeight(): Float = LocalWindowInfo.current.containerDpSize.height.value
 @Composable
 fun fontScale(): Float = LocalDensity.current.fontScale
 

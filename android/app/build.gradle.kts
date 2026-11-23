@@ -37,9 +37,13 @@ android {
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
-        // 渠道：site＝官网 APK（有“检查更新”）；以后 Google Play 版设为 store
-        buildConfigField("String", "CHANNEL", "\"site\"")
         testInstrumentationRunner = "com.zhibeifw.app.RegressionTestRunner"
+    }
+
+    flavorDimensions += "distribution"
+    productFlavors {
+        create("site") { dimension = "distribution"; isDefault = true }
+        create("play") { dimension = "distribution" }
     }
 
     signingConfigs {

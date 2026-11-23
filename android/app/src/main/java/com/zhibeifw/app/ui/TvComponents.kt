@@ -119,7 +119,7 @@ internal fun TvHome(model: AppModel, focusHomeTab: () -> Unit) {
     }
 }
 
-internal fun LazyListScope.tvCardGrid(model: AppModel, cards: List<SeriesCard>, loadMore: (() -> Unit)? = null, removeFavorite: ((String) -> Unit)? = null) {
+internal fun LazyListScope.tvCardGrid(model: AppModel, cards: List<SeriesCard>, loadMore: (suspend () -> Unit)? = null, removeFavorite: ((String) -> Unit)? = null) {
     items(cards.chunked(4), key = { it.first().id }) { row ->
         Row(Modifier.fillMaxWidth().padding(horizontal = TV.margin.d, vertical = Tok.Space.scale[2].d),
             horizontalArrangement = Arrangement.spacedBy(TV.gap.d)) {

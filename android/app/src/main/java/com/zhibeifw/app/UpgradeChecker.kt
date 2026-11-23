@@ -18,7 +18,6 @@ import com.zhibeifw.app.data.UPGRADE_PATH
 import com.zhibeifw.app.net.NetResult
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
-import com.zhibeifw.app.net.buildUrl
 import com.zhibeifw.app.net.editPrefs
 import com.zhibeifw.app.net.readPrefs
 import kotlinx.coroutines.CoroutineScope
@@ -121,13 +120,6 @@ class UpgradeChecker(
 
     fun installUpdate(version: String, apkPath: String) {
         updateDialog = null
-        if (channel != UpdateChannel.SITE) return
-        val origin = net.displayOrigin
-        if (origin == null) {
-            notify("网络线路尚未就绪，请稍后重试")
-            return
-        }
-        ctx.startActivity(UpdateInstallActivity.intent(ctx, buildUrl(origin, apkPath), version)
-            .addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK))
+        ChannelUpdates.open(ctx, net.displayOrigin, version, apkPath, notify)
     }
 }

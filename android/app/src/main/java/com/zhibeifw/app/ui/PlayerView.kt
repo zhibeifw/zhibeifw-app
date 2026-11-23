@@ -262,8 +262,8 @@ private fun Controls(
             pos,
             p.duration,
             onScrub = { onScrub(it) },
-            onCommit = { p.seekTo(it); onScrub(null) },
-            onStep = { p.seekBy(it) })
+            onCommit = { p.seekTo(it); onScrub(null) }
+        )
         Row(Modifier.padding(top = CP.Player.timeTop.d)) {
             Txt(clock(pos), S.caption, C.labelSecondary())
             Spacer(Modifier.weight(1f))
@@ -406,7 +406,7 @@ internal fun ProgressBar(
     duration: Double,
     onScrub: (Double) -> Unit,
     onCommit: (Double) -> Unit,
-    onStep: (Double) -> Unit
+    focusWhileLoading: Boolean = false
 ) {
     var dragValue by remember { mutableStateOf<Float?>(null) }
     val max = maxOf(duration, 0.0001).toFloat()
@@ -420,10 +420,10 @@ internal fun ProgressBar(
     // 用它自带的参数配成媒体进度的样子：细轨道 + 圆形把手，不留缝、不画末端圆点
     Slider(
         value = dragValue ?: position.toFloat().coerceIn(0f, max),
-        onValueChange = { v -> dragValue = v; onScrub(v.toDouble()) },
+        onValueChange = { v -> if (duration > 0) { dragValue = v; onScrub(v.toDouble()) } },
         onValueChangeFinished = { dragValue?.let { onCommit(it.toDouble()) }; dragValue = null },
         valueRange = 0f..max,
-        enabled = duration > 0,
+        enabled = duration > 0 || focusWhileLoading,
         colors = colors,
         interactionSource = interaction,
         thumb = {

@@ -1,5 +1,7 @@
 package com.zhibeifw.app.ui
 
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -103,7 +105,7 @@ fun RecentView(model: AppModel) {
     var rows by remember { mutableStateOf<List<RecentRow>>(emptyList()) }
     val list = rememberLazyListState()
     LaunchedEffect(model.catalogVersion, model.progressVersion, model.downloadsVersion) {
-        rows = runCatching { if (model.isTelevision) model.store.loadRecent(200) else model.store.loadRecent() }.getOrDefault(emptyList())
+        rows = withContext(Dispatchers.IO) { runCatching { if (model.isTelevision) model.store.loadRecent(200) else model.store.loadRecent() }.getOrDefault(emptyList()) }
     }
     PageScaffold(
         model,
@@ -149,7 +151,7 @@ fun FavoritesView(model: AppModel) {
     var rows by remember { mutableStateOf<List<FavoriteRow>>(emptyList()) }
     val list = rememberLazyListState()
     LaunchedEffect(model.catalogVersion, model.favoritesVersion) {
-        rows = runCatching { model.store.loadFavorites() }.getOrDefault(emptyList())
+        rows = withContext(Dispatchers.IO) { runCatching { model.store.loadFavorites() }.getOrDefault(emptyList()) }
     }
     PageScaffold(
         model,
@@ -196,7 +198,7 @@ fun LibraryView(model: AppModel) {
     var rows by remember { mutableStateOf<List<LibrarySeries>>(emptyList()) }
     val list = rememberLazyListState()
     LaunchedEffect(model.downloadsVersion) {
-        rows = runCatching { model.store.loadLibrary() }.getOrDefault(emptyList())
+        rows = withContext(Dispatchers.IO) { runCatching { model.store.loadLibrary() }.getOrDefault(emptyList()) }
     }
     val items = model.downloads?.items ?: emptyMap()
     val activeAny =
@@ -302,7 +304,7 @@ fun LibraryCourseView(model: AppModel, seriesId: String) {
     var rows by remember { mutableStateOf<List<LibraryEpisode>>(emptyList()) }
     val list = rememberLazyListState()
     LaunchedEffect(model.progressVersion, model.downloadsVersion) {
-        rows = runCatching { model.store.loadLibraryEpisodes(seriesId) }.getOrDefault(emptyList())
+        rows = withContext(Dispatchers.IO) { runCatching { model.store.loadLibraryEpisodes(seriesId) }.getOrDefault(emptyList()) }
     }
     val downloading = rows.any {
         (model.downloads?.items?.get(it.row.episodeId)?.status

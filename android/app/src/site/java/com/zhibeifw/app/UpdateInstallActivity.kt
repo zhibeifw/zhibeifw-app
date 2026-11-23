@@ -60,7 +60,7 @@ class UpdateInstallActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        if (BuildConfig.CHANNEL != "site" || intent.data?.scheme != "https" ||
+        if (intent.data?.scheme != "https" ||
             compareVersions(version, BuildConfig.VERSION_NAME) != 1) {
             finish()
             return
@@ -169,7 +169,7 @@ class UpdateInstallActivity : ComponentActivity() {
     }
 
     private fun discard() {
-        discardDownload(this)
+        UpdateDownloads.discardDownload(this)
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
@@ -183,20 +183,6 @@ class UpdateInstallActivity : ComponentActivity() {
     }
 
     companion object {
-        internal fun cleanupInstalledUpdate(context: Context) {
-            val target = context.getSharedPreferences("apk_download", MODE_PRIVATE).getString("version", null) ?: return
-            if (compareVersions(target, BuildConfig.VERSION_NAME) != 1) discardDownload(context)
-        }
-
-        private fun discardDownload(context: Context) {
-            val prefs = context.getSharedPreferences("apk_download", MODE_PRIVATE)
-            if (prefs.contains("id")) runCatching {
-                context.getSystemService(DownloadManager::class.java).remove(prefs.getLong("id", -1))
-            }
-            prefs.edit().clear().apply()
-            File(context.cacheDir, "installer/update.apk").delete()
-        }
-
         private const val APK_TYPE = "application/vnd.android.package-archive"
         fun intent(context: Context, url: String, version: String) =
             Intent(context, UpdateInstallActivity::class.java).setData(Uri.parse(url)).putExtra("version", version)

@@ -139,11 +139,16 @@ internal fun TelevisionView(model: AppModel) {
 
 @Composable
 internal fun TvSeriesView(model: AppModel, id: String) {
-    val header = remember(id, model.catalogVersion, model.favoritesVersion) { model.store.loadSeriesHeader(id) }
-    val episodes = remember(id, model.catalogVersion, model.progressVersion) { model.store.loadEpisodes(id) }
+    val details = courseDetails(model, id)
+    val header = details?.header
+    val episodes = details?.episodes.orEmpty()
     var oldestFirst by rememberSaveable(id) { mutableStateOf(true) }
     val list = rememberLazyListState()
     val listEntry = remember(id) { FocusRequester() }
+    if (details == null) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+        return
+    }
     if (header == null) {
         EmptyStateView("这门课已下架")
         return

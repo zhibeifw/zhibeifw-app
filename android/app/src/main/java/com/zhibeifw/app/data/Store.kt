@@ -9,6 +9,7 @@ import com.zhibeifw.app.core.MAX_QUERY_LENGTH
 import com.zhibeifw.app.core.Prog
 import com.zhibeifw.app.core.isNearEnd
 import com.zhibeifw.app.core.normalizeText
+import kotlinx.coroutines.Dispatchers
 import kotlin.math.max
 import kotlin.math.min
 
@@ -131,6 +132,9 @@ const val UPGRADE_PATH = "upgrade.json"
 const val DOMAINS_PATH = "domains.json"
 
 class Store(val db: Db) {
+    // 同一队列处理定时保存、标记听完和清空最近，避免旧位置盖过更新的用户操作。
+    internal val progressIo = Dispatchers.IO.limitedParallelism(1)
+
     private fun now() = System.currentTimeMillis()
 
     companion object {

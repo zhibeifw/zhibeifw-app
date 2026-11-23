@@ -6,7 +6,6 @@
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
     <!-- 只声明用到的权限：网络、前台服务（媒体播放）。下载交给系统 DownloadManager，不需要通知、存储权限。不要录音、存储、悬浮窗。 -->
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -15,10 +14,6 @@
 
     <!-- Android 11 起的包可见性：Custom Tabs 与浏览器 -->
     <queries>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:mimeType="application/vnd.android.package-archive" />
-        </intent>
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>
@@ -59,14 +54,6 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
-
-        <activity android:name=".UpdateInstallActivity" android:exported="false"
-            android:theme="@android:style/Theme.DeviceDefault.Dialog.Alert" />
-        <provider android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.updates" android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS" android:resource="@xml/update_files" />
-        </provider>
 
         <service
             android:name=".player.PlaybackService"

@@ -116,7 +116,7 @@ class AppModel(private val ctx: Context) {
     var sheet by mutableStateOf<SheetSpec?>(null)
 
     val versionName: String = BuildConfig.VERSION_NAME
-    val channel = if (BuildConfig.CHANNEL == "store") UpdateChannel.STORE else UpdateChannel.SITE
+    val channel = ChannelUpdates.channel
     val upgrade = UpgradeChecker(ctx, net, scope, versionName, channel) { alert = AlertSpec(it) }
     private val covers = CoverArchive(files, images, scope)
     /** 桌面小组件的数据 */
@@ -135,7 +135,7 @@ class AppModel(private val ctx: Context) {
     private suspend fun boot() {
         val t0 = System.currentTimeMillis()
         val ok = withContext(Dispatchers.IO) {
-            UpdateInstallActivity.cleanupInstalledUpdate(ctx)
+            UpdateDownloads.cleanupInstalledUpdate(ctx)
             files.prepare()
             try {
                 val db = Db.open(files.dbPath.path)
@@ -261,8 +261,8 @@ class AppModel(private val ctx: Context) {
         }
     }
 
-    fun loadHome() {
-        home = runCatching { store.loadHome() }.getOrDefault(HomeData())
+    private suspend fun loadHome() {
+        home = withContext(Dispatchers.IO) { runCatching { store.loadHome() }.getOrDefault(HomeData()) }
         catalogVersion++
         prefetchHomeCovers()
     }
@@ -492,9 +492,16 @@ class AppModel(private val ctx: Context) {
         Log.w("AppModel", "$what 出错", e); null
     }
 
+    private fun editProgress(what: String, edit: () -> Unit) {
+        scope.launch(start = CoroutineStart.UNDISPATCHED) {
+            withContext(store.progressIo) { safe(what, edit) }
+            progressVersion++
+        }
+    }
+
     fun markCompleted(episodeId: String, seriesId: String, completed: Boolean) {
         if (completed) player?.stopAsCompleted(episodeId)
-        safe("标记已听完") {
+        editProgress("标记已听完") {
             val info = store.getEpisodeInfo(episodeId)
             store.markCompleted(
                 episodeId,
@@ -505,7 +512,6 @@ class AppModel(private val ctx: Context) {
                 info?.coverPath ?: ""
             )
         }
-        progressVersion++
     }
 
     fun toggleFavorite(seriesId: String, title: String, coverPath: String) {
@@ -521,13 +527,11 @@ class AppModel(private val ctx: Context) {
     }
 
     fun hideRecent(episodeId: String) {
-        safe("移除最近") { store.hideFromRecent(episodeId) }
-        progressVersion++
+        editProgress("移除最近") { store.hideFromRecent(episodeId) }
     }
 
     fun clearRecent() {
-        safe("清空最近") { store.clearRecent() }
-        progressVersion++
+        editProgress("清空最近") { store.clearRecent() }
     }
 
     // ---------- 下载 ----------

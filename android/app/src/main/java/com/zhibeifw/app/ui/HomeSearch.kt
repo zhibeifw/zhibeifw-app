@@ -345,7 +345,9 @@ fun CategoriesView(model: AppModel) {
     var tiles by remember { mutableStateOf<List<CategoryTile>>(emptyList()) }
     val largeText = Layout.isLargeText(fontScale())
     LaunchedEffect(model.catalogVersion) {
-        tiles = runCatching { model.store.loadCategories() }.getOrDefault(emptyList())
+        tiles = withContext(Dispatchers.IO) {
+            runCatching { model.store.loadCategories() }.getOrDefault(emptyList())
+        }
     }
     BrowseTabList(model, "分类") {
         item("gap") { Spacer(Modifier.height(CP.Tile.topGap.d)) }
@@ -404,21 +406,23 @@ private fun Tile(model: AppModel, t: CategoryTile, large: Boolean) {
 @Composable
 fun CategoryView(model: AppModel, categoryId: String) {
     val pageSize = 40
-    var rows by remember { mutableStateOf<List<SeriesCard>>(emptyList()) }
-    var done by remember { mutableStateOf(false) }
-    var loaded by remember { mutableStateOf(false) }
-    // 分类名在目录变了时查一次，不在每次重画时查库
-    val title = remember(model.catalogVersion) {
-        runCatching { model.store.categoryName(categoryId) }.getOrNull() ?: categoryId
+    var rows by remember(categoryId, model.catalogVersion) { mutableStateOf<List<SeriesCard>>(emptyList()) }
+    var done by remember(categoryId, model.catalogVersion) { mutableStateOf(false) }
+    var loaded by remember(categoryId, model.catalogVersion) { mutableStateOf(false) }
+    var title by remember(categoryId) { mutableStateOf(categoryId) }
+    suspend fun loadPage(offset: Int) = withContext(Dispatchers.IO) {
+        runCatching { model.store.loadCategorySeries(categoryId, pageSize, offset) }.getOrDefault(emptyList())
     }
-    LaunchedEffect(model.catalogVersion) {
-        rows = runCatching { model.store.loadCategorySeries(categoryId, pageSize, 0) }.getOrDefault(emptyList())
+    LaunchedEffect(categoryId, model.catalogVersion) {
+        title = withContext(Dispatchers.IO) { runCatching { model.store.categoryName(categoryId) }.getOrNull() } ?: categoryId
+        rows = loadPage(0)
         done = rows.size < pageSize
         loaded = true
     }
-    fun more() {
+    suspend fun more() {
         if (done) return
-        val next = runCatching { model.store.loadCategorySeries(categoryId, pageSize, rows.size) }.getOrDefault(emptyList())
+        val offset = rows.size
+        val next = loadPage(offset)
         val seen = rows.map { it.id }.toHashSet()
         rows = rows + next.filter { seen.add(it.id) }
         if (next.size < pageSize) done = true

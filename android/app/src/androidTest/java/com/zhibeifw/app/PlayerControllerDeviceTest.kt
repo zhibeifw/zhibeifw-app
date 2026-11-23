@@ -24,6 +24,7 @@ import java.io.ByteArrayOutputStream
 import java.io.File
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -70,6 +71,7 @@ class PlayerControllerDeviceTest {
 
     @After
     fun tearDown() = onMain {
+        withContext(store.progressIo) { }
         players.forEach { it.release() }
         db.db.close(); dir.deleteRecursively()
     }
@@ -157,7 +159,7 @@ class PlayerControllerDeviceTest {
         until("播过 1 秒") { p.player.currentPosition >= 1000 }
         p.pause()
         until("停下") { !p.looksPlaying }
-        val saved = store.loadProgress("课_1")!!.position
+        val saved = withContext(store.progressIo) { store.loadProgress("课_1")!!.position }
         assertEquals(p.player.currentPosition / 1000.0, saved, 0.6)
         p.toggle()
         until("接着出声") { p.isPlaying }
@@ -231,7 +233,7 @@ class PlayerControllerDeviceTest {
         download(1, null)
         val p = make()
         p.start("课_1", PlayContext.Series("课"))
-        assertEquals(PlayerError.DAMAGED, p.error)
+        until("本地文件检查完成") { p.error == PlayerError.DAMAGED }
         assertEquals(listOf("课_1"), damaged)
         assertFalse(p.looksPlaying)
     }
