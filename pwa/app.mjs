@@ -598,6 +598,9 @@ function setStopAfterEpisode(enabled){
 sleepButton.onclick=()=>setStopAfterEpisode(!stopAfterEpisode);
 seekInput.oninput=()=>showSeekPosition(seekInput.valueAsNumber, Number(seekInput.max));
 seekInput.onchange=()=>seek(seekInput.valueAsNumber);
+speedInput.addEventListener('pointerdown',()=>{speedInput.dataset.pointerFocus='';});
+for (const event of ['keydown','blur'])
+ speedInput.addEventListener(event,()=>{delete speedInput.dataset.pointerFocus;});
 speedInput.onchange=()=>{
  audio.defaultPlaybackRate=audio.playbackRate=Number(speedInput.value);
  $('#speed-label').textContent=speedInput.value+'×';

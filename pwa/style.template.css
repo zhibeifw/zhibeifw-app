@@ -130,8 +130,8 @@ nav [aria-current="page"]{font-weight:600}
 .skip-icon span{position:relative;margin-top:{{size2px}}}
 #forward .skip-icon svg{transform:scaleX(-1)}
 .speed-control{position:relative;display:grid;place-items:center;width:{{size52px}};border-radius:{{size8px}};font-size:{{size_95rem}};font-variant-numeric:tabular-nums}
-#speed{position:absolute;inset:0;opacity:0;width:100%;height:100%;font:inherit}
-.speed-control:has(#speed:focus-visible){outline:{{size3px}} solid var(--accent);outline-offset:{{size2px}}}
+#speed{position:absolute;inset:0;opacity:0;width:100%;height:100%;font:inherit;-webkit-tap-highlight-color:transparent}
+.speed-control:has(#speed:focus-visible:not([data-pointer-focus])){outline:{{size3px}} solid var(--accent);outline-offset:{{size2px}}}
 #speed option{background:var(--background);color:var(--labelPrimary)}
 .player-details{grid-area:info;position:relative;min-width:0;margin-inline:{{size12px}} {{size6px}}}
 .now-info{display:flex;align-items:center;min-width:0;min-height:{{size40px}};padding-inline-start:calc(var(--artwork-width) + var(--artwork-gap))}
