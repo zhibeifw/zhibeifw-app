@@ -44,16 +44,17 @@ test('封面缓存按相对路径跨线路复用，清除后重新请求，跳�
  const fetch = async (request, options) => {
   requests.push([request.url, options?.cache]);
   if (offline) throw Error('offline');
+  if (request.url.includes('/legacy-') && request.url.endsWith('-320.jpg')) return new Response('', {status: 404});
   if (request.url.endsWith('/missing.jpg')) return new Response('缺少封面', {status: 404});
   if (request.url.endsWith('/wrong.jpg')) return new Response('not an image');
   return new Response(request.url, {headers:{'Content-Type':'image/jpeg'}});
  };
  const code = await readFile(new URL('../sw.js', import.meta.url), 'utf8');
- vm.runInNewContext(code, {self, URL, Response, caches, fetch});
- async function request(url, destination='image', mode='cors') {
+ vm.runInNewContext(code, {self, URL, Request, Response, caches, fetch});
+ async function request(url, destination='image', mode='cors', clientId='tab') {
   let result;
   const work = [];
-  handlers.get('fetch')({request:{url, method:'GET', destination, mode},
+  handlers.get('fetch')({request:{url, method:'GET', destination, mode}, clientId,
    respondWith: value => { result = value; }, waitUntil: value => work.push(value)});
   const response = await result;
   await Promise.all(work);
@@ -75,4 +76,19 @@ test('封面缓存按相对路径跨线路复用，清除后重新请求，跳�
  assert.equal(coverCache.size, 1);
  assert.equal(await request('https://zbfw.app/audio.m4a', 'audio'), undefined);
  assert.equal(await request('https://zbfw.app/cover.jpg', 'image', 'no-cors'), undefined);
+
+ const thumbnail = 'https://zbfw.org/course/cover-320.jpg';
+ assert.equal(await (await request(thumbnail + '?zbfw-cover')).text(), thumbnail);
+ offline = true;
+ assert.equal(await (await request(thumbnail.replace('zbfw.org', 'zbfw.app') + '?zbfw-cover')).text(), thumbnail);
+ assert.equal(await (await request(mirror.replace('.jpg', '-640.jpg') + '?zbfw-cover')).text(), mirror);
+ offline = false;
+
+ for (let index = 0; index <= 3; index++) {
+  const original = `https://zbfw.org/legacy-${index}.jpg`;
+  const small = original.replace('.jpg', '-320.jpg');
+  const before = requests.length;
+  assert.equal(await (await request(small + '?zbfw-cover', 'image', 'cors', 'legacy-tab')).text(), original);
+  assert.deepEqual(requests.slice(before).map(([url]) => url), index < 3 ? [small, original] : [original]);
+ }
 });

@@ -6,6 +6,10 @@ export function mediaURL(origin,path) {
  if(!validOrigin(origin) || !validPath(path)) throw Error('无效的资源地址');
  return origin + '/' + path.split('/').map(encodeURIComponent).join('/');
 }
+export function coverSourcePath(path, pixels) {
+ const width = pixels <= 320 ? 320 : pixels <= 640 ? 640 : 0;
+ return width ? path.replace(/\.[^./]+$/, extension => `-${width}${extension}`) : path;
+}
 export function parseCatalog(raw) {
  if(!Array.isArray(raw?.categories)) throw Error('课程目录格式无效');
  let rawSeries=0;

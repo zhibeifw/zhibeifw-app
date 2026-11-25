@@ -354,6 +354,8 @@ struct VisionArtwork: View {
     let path: String
     var large = false
     @State private var image: PlatformImage?
+    @State private var requestedPx = 0
+    @Environment(\.displayScale) private var scale
     @ObservedObject private var origin = OriginWatcher.shared
     var body: some View {
         Group {
@@ -364,8 +366,10 @@ struct VisionArtwork: View {
             }
         }
         .accessibilityHidden(true)
-        .task(id: [path, String(large), String(origin.version)]) {
-            let loaded = await ImageLoader.shared.load(path, maxPixel: large ? 640 : 320)
+        .onGeometryChange(for: Int.self) { coverRequestPx(Int($0.size.width * scale)) } action: { requestedPx = $0 }
+        .task(id: [path, String(requestedPx), String(origin.version)]) {
+            guard requestedPx > 0 else { return }
+            let loaded = await ImageLoader.shared.load(path, maxPixel: requestedPx)
             guard !Task.isCancelled else { return }
             image = loaded
         }

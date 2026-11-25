@@ -316,6 +316,8 @@ struct WatchArtwork: View {
     @Environment(AppCore.self) private var core
     @State private var image: PlatformImage?
     @State private var loadedKey: [String] = []
+    @State private var requestedPx = 0
+    @Environment(\.displayScale) private var scale
     @ObservedObject private var origin = OriginWatcher.shared
     var body: some View {
         Group {
@@ -326,14 +328,16 @@ struct WatchArtwork: View {
             }
         }
         .accessibilityHidden(true)
-        .task(id: [path, id, String(origin.version)]) {
-            let key = [path, id]
+        .onGeometryChange(for: Int.self) { coverRequestPx(Int($0.size.width * scale)) } action: { requestedPx = $0 }
+        .task(id: [path, id, String(requestedPx), String(origin.version)]) {
+            guard requestedPx > 0 else { return }
+            let key = [path, id, String(requestedPx)]
             if loadedKey == key, image != nil { return }
             if loadedKey != key { image = nil }
             let file = core.files.coverFile(seriesId: id)
             let loaded = await ImageLoader.shared.load(
                 path.isEmpty ? "local:" + id : path,
-                maxPixel: COVER_THUMB_WIDTHS.first!, localFile: file)
+                maxPixel: requestedPx, localFile: file)
             guard !Task.isCancelled else { return }
             loadedKey = key
             image = loaded

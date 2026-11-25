@@ -1,4 +1,4 @@
-import {validPath,mediaURL,searchCourses,limitSearchText,normalizeQuery,newCourses,timeText,manualCompletion,playbackProgress,recentEntries} from './core.mjs';
+import {validPath,mediaURL,coverSourcePath,searchCourses,limitSearchText,normalizeQuery,newCourses,timeText,manualCompletion,playbackProgress,recentEntries} from './core.mjs';
 import {readRecords,writeRecord,recordCollection} from './storage.mjs';
 import {loadCatalog,currentOrigin,ensureOrigin,restoreCatalog} from './network.mjs';
 import {version} from './assets/version.mjs';
@@ -25,13 +25,46 @@ const route=(type,id='')=>'#'+type+(id?'/'+encodeURIComponent(id):'');
 function getRoute(){const [type='home',...parts]=location.hash.slice(1).split('/');try{return [type||'home',decodeURIComponent(parts.join('/'))];}catch{return ['home',''];}}
 const findSeries=id=>catalog?.series.find(s=>s.id===id);
 function findEpisode(id){for(const s of catalog?.series??[]){const e=s.episodes.find(e=>e.id===id);if(e)return {s,e};}return null;}
+const coverObserver = new ResizeObserver(entries => {
+ for (const {target, contentRect} of entries) updateCover(target, contentRect.width);
+});
+function watchCoverDensity() {
+ matchMedia(`(resolution: ${window.devicePixelRatio}dppx)`).addEventListener('change', () => {
+  for (const image of document.querySelectorAll('img[data-cover-path]')) {
+   updateCover(image, image.getBoundingClientRect().width);
+  }
+  watchCoverDensity();
+ }, {once:true});
+}
+watchCoverDensity();
 function setCoverImage(image,path){
+ const origin = currentOrigin();
+ if (image.dataset.coverPath === path && image.dataset.coverOrigin === origin) return;
+ image.dataset.coverPath = path;
+ image.dataset.coverOrigin = origin;
+ delete image.dataset.coverSrc;
+ image.onerror = null;
+ image.removeAttribute('src');
+ coverObserver.observe(image);
+ if (image.isConnected) updateCover(image, image.getBoundingClientRect().width);
+}
+function updateCover(image, width) {
+ const {coverPath: path, coverOrigin: origin} = image.dataset;
+ if (width <= 0 || !validPath(path)) return;
+ const source = coverSourcePath(path, Math.floor(width * window.devicePixelRatio));
+ const original = mediaURL(origin, path);
+ const src = source === path ? original : mediaURL(origin, source) + '?zbfw-cover';
+ if (image.dataset.coverSrc === src) return;
+ image.dataset.coverSrc = src;
  image.style.visibility='';
- const src=mediaURL(currentOrigin(),path);
  image.onerror=()=>{
+  if (image.getAttribute('src') === src && src !== original) {
+   image.src = original;
+   return;
+  }
   if(image.hasAttribute('crossorigin')){
    image.removeAttribute('crossorigin');
-   image.src=src;
+   image.src=original;
    return;
   }
   image.removeAttribute('src');
@@ -139,6 +172,7 @@ function render(){
  if(!catalog)return;
  const [type,id]=getRoute();
  shelfObserver.disconnect();
+ for (const image of main.querySelectorAll('img[data-cover-path]')) coverObserver.unobserve(image);
  main.replaceChildren();
  document.body.dataset.page=type;
  for(const a of document.querySelectorAll('[data-nav]')){if(a.dataset.nav===(type==='category'||type==='series'?'categories':type))a.setAttribute('aria-current','page');else a.removeAttribute('aria-current');}
@@ -242,6 +276,7 @@ async function clearCache(){
   if(window.caches){
    const scope=new URL('./',location.href).href;
    await Promise.all(['zbfw-icons:', 'zbfw-covers:'].map(prefix=>caches.delete(prefix + scope)));
+   navigator.serviceWorker?.controller?.postMessage('clear-cover-availability');
   }
   cacheResult='已清除';
  }catch{cacheResult='清除失败';}

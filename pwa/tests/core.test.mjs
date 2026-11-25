@@ -1,6 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validId, validPath, parseCatalog, completed, limitSearchText, searchCourses, mediaURL} from '../core.mjs';
+import {validId, validPath, parseCatalog, completed, limitSearchText, searchCourses, mediaURL, coverSourcePath} from '../core.mjs';
+test('按物理像素选择封面，保留原始版本号', () => {
+ const path = '课程.v1/cover-2.jpg';
+ for (const pixels of [96, 320]) assert.equal(coverSourcePath(path, pixels), '课程.v1/cover-2-320.jpg');
+ for (const pixels of [321, 640]) assert.equal(coverSourcePath(path, pixels), '课程.v1/cover-2-640.jpg');
+ assert.equal(coverSourcePath(path, 641), path);
+ assert.equal(coverSourcePath('课程.v1/cover', 320), '课程.v1/cover');
+});
 test('reject untrusted IDs and resource paths', () => {
   assert.ok(validId('入中论_01')); assert.ok(!validId('<script>'));
   for(const p of ['../a','https://evil/a','//evil/a','a\\b','a?b','/a','a b','a%2f..%2fb']) assert.ok(!validPath(p), p);
