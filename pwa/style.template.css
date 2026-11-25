@@ -154,7 +154,7 @@ nav [aria-current="page"]{font-weight:600}
 #seek::-moz-range-track{height:var(--track-height);background:var(--track-fill);border-radius:{{size999px}}}
 #seek::-webkit-slider-thumb{appearance:none;width:0;height:var(--track-height)}
 #seek::-moz-range-thumb{width:0;height:0;border:0}
-@media (width > {{size700px}}){
+@media (width > {{size760px}}){
  .player-details.seek-active .now-info span{opacity:0}
  .player-details.seek-active .times{opacity:1}
 }
@@ -174,6 +174,19 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
  .shelf{grid-auto-columns:calc((100% - 2 * var(--gap))/3)}
  .series-heading{grid-template-columns:minmax(0,42%) minmax(0,1fr);gap:{{size20px}}}
  .actions{gap:{{size6px}};margin-top:{{size14px}}}.actions button{padding:{{size7px}} {{size12px}}}
+}
+@media(max-width:{{size760px}}){
+ #player{
+  --artwork-width:{{size58px}};--artwork-gap:{{size10px}};border-radius:{{size24px}};
+  padding:{{size8px}} {{size12px}};grid-template-areas:"info info more" "controls seek seek";
+  grid-template-columns:auto minmax(0,1fr) auto;gap:{{size4px}} {{size8px}};
+ }
+ .player-details{display:contents}
+ .now-info{grid-area:info;position:relative;min-height:{{size44px}}}
+ .transport button,#speed,#player-more summary{width:{{size44px}};height:{{size44px}}}
+ .scrubber{grid-area:seek;margin-inline-start:0}
+ .times{position:static;min-height:0;opacity:1}
+ #seek{height:{{size24px}}}
 }
 @media(max-width:{{size700px}}){
  :root{--sidebar:{{size0px}};--gutter:{{size20px}};--gap:{{size14px}};--header-height:{{size50px}}}
@@ -195,22 +208,11 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
  .series-heading h1{font-size:{{size1_55rem}}}.speaker{font-size:{{size1_15rem}}}
  .actions{justify-content:center}.introduction .description{text-align:left}
  .track-head,.episode{padding-inline:0}.track::before{left:0}
- #player{
-  --artwork-width:{{size58px}};--artwork-gap:{{size10px}};
-  left:{{size10px}};right:{{size10px}};bottom:max({{size10px}},env(safe-area-inset-bottom));border-radius:{{size24px}};
-  padding:{{size8px}} {{size12px}};grid-template-areas:"info info more" "controls seek seek";
-  grid-template-columns:auto minmax(0,1fr) auto;gap:{{size4px}} {{size8px}};
- }
- .player-details{display:contents}
- .now-info{grid-area:info;position:relative;min-height:{{size44px}}}
- .transport button,#speed,#player-more summary{width:{{size44px}};height:{{size44px}}}
- .scrubber{grid-area:seek;margin-inline-start:0}
- .times{position:static;min-height:0;opacity:1}
- #seek{height:{{size24px}}}
+ #player{left:{{size10px}};right:{{size10px}};bottom:max({{size10px}},env(safe-area-inset-bottom))}
  .player-menu{bottom:calc(100% + {{size10px}});right:0}
  .track-head button,.row-action{min-height:{{size44px}}}
 }
-@media(max-width:{{size360px}}){
+@media(max-width:{{size420px}}){
  #content{padding-bottom:{{size160px}}}
  #player{grid-template-areas:"info more" "controls controls" "seek seek";grid-template-columns:minmax(0,1fr) auto}
  .transport{justify-content:center}

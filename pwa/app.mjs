@@ -6,11 +6,13 @@ import {palette,icons} from './assets/design.mjs';
 const $=s=>document.querySelector(s),main=$('#content'),audio=$('#audio');
 const seekInput = $('#seek');
 const playerDetails = seekInput.closest('.player-details');
+const sleepButton = $('#sleep');
 let catalog=null,current=null,context='series',positionReady=false,pendingPosition=0,saveTime=0,waiting=false,reverse=false,stale=false;
 let favorites=readRecords('favorites');
 let progress=readRecords('progress');
 let noticeTimer, lastSavedPosition;
 let startedPlaying = false, revealOnPlay = true;
+let stopAfterEpisode = false;
 let checkingRoute = false, aboutRouteResult = '', initialRouteResult = '';
 function notice(text){$('#notice').textContent=text;$('#notice').hidden=false;clearTimeout(noticeTimer);noticeTimer=setTimeout(()=>$('#notice').hidden=true,5000);}
 function persist(id){if(!writeRecord('progress',id,progress.get(id)))notice('浏览器暂时无法保存收听记录');}
@@ -493,7 +495,20 @@ audio.addEventListener('timeupdate',()=>{
  if(Date.now()-saveTime>=5000)save();
 });
 audio.addEventListener('error',mediaError);
-audio.addEventListener('ended',()=>{if(!audio.ended || failedSource)return;stopStallWatch();save();if(context==='series'&&current){const next=current.s.episodes[current.s.episodes.findIndex(e=>e.id===current.e.id)+1];if(next){play(current.s,next);return;}}syncPlaybackUI();render();});
+audio.addEventListener('ended',()=>{
+ if(!audio.ended || failedSource)return;
+ stopStallWatch();
+ save();
+ if(stopAfterEpisode){
+  setStopAfterEpisode(false);
+ }else if(context==='series' && current){
+  const {s,e}=current;
+  const next=s.episodes[s.episodes.findIndex(episode=>episode.id===e.id)+1];
+  if(next){play(s,next);return;}
+ }
+ syncPlaybackUI();
+ render();
+});
 const more=$('#player-more');
 $('#player-mark').onclick=()=>{more.open=false;markCompleted(current.s,current.e,!progress.get(current.e.id)?.completed);};
 $('#player-favorite').onclick=()=>{more.open=false;toggleFavorite(current.s.id);};
@@ -515,6 +530,13 @@ window.addEventListener('pointercancel',()=>{scrubbing=false;updateSeek();});
 $('#toggle').onclick=toggle;
 $('#backward').onclick=()=>seek(audio.currentTime-15);
 $('#forward').onclick=()=>seek(audio.currentTime+30);
+function setStopAfterEpisode(enabled){
+ stopAfterEpisode=enabled;
+ sleepButton.setAttribute('aria-pressed',String(enabled));
+ sleepButton.title=enabled?'取消本集播完后停止':'本集播完后停止';
+ setIcon(sleepButton,enabled?'bedtime_fill1':'bedtime');
+}
+sleepButton.onclick=()=>setStopAfterEpisode(!stopAfterEpisode);
 seekInput.oninput=()=>showSeekPosition(seekInput.valueAsNumber, Number(seekInput.max));
 seekInput.onchange=()=>seek(seekInput.valueAsNumber);
 $('#speed').onchange=e=>{audio.defaultPlaybackRate=audio.playbackRate=+e.target.value;updateSeek();};
