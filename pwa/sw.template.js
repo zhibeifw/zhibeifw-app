@@ -1,8 +1,10 @@
 // prepare.py 按界面文件内容生成版本，同一页面始终使用同一套资源。
 const scope = self.registration.scope;
+const appOrigin = new URL(scope).origin;
 const prefix = 'zbfw-shell:' + scope + ':';
 const shell = prefix + '{{revision}}';
 const icons = 'zbfw-icons:' + scope;
+const covers = 'zbfw-covers:' + scope;
 const files = {{files}};
 const paths = new Set(files.map(file => new URL(file, scope).href));
 const installIcons = new Set(['icon.png', 'icon-192.png', 'icon-512.png']
@@ -52,5 +54,31 @@ self.addEventListener('fetch', event => {
       if (response.ok) await cache.put(key, response.clone());
       return response;
     })());
+  } else if (request.destination === 'image' && request.mode === 'cors' &&
+             url.protocol === 'https:' && url.origin !== appOrigin && !url.search) {
+    // 各条内容线路的相对路径指向同一份封面。
+    const coverKey = new URL('cover-cache' + url.pathname, scope).href;
+    event.respondWith(loadCover(event, coverKey));
   }
 });
+
+async function loadCover(event, key) {
+  let cache;
+  try {
+    cache = await caches.open(covers);
+    const hit = await cache.match(key);
+    if (hit) return hit;
+  } catch {
+    cache = undefined;
+  }
+  let response;
+  try {
+    response = await fetch(event.request, cache ? {cache: 'reload'} : undefined);
+  } catch {
+    return Response.error();
+  }
+  if (cache && response.ok && /^image\//i.test(response.headers.get('Content-Type') ?? '')) {
+    event.waitUntil(cache.put(key, response.clone()).catch(() => {}));
+  }
+  return response;
+}

@@ -25,7 +25,27 @@ const route=(type,id='')=>'#'+type+(id?'/'+encodeURIComponent(id):'');
 function getRoute(){const [type='home',...parts]=location.hash.slice(1).split('/');try{return [type||'home',decodeURIComponent(parts.join('/'))];}catch{return ['home',''];}}
 const findSeries=id=>catalog?.series.find(s=>s.id===id);
 function findEpisode(id){for(const s of catalog?.series??[]){const e=s.episodes.find(e=>e.id===id);if(e)return {s,e};}return null;}
-function cover(s,loading='lazy'){if(!validPath(s.coverPath))return el('span',{class:'cover'});const image=el('img',{class:'cover',src:mediaURL(currentOrigin(),s.coverPath),alt:'',loading,decoding:'async'});image.addEventListener('error',()=>{image.removeAttribute('src');image.style.visibility='hidden';},{once:true});return image;}
+function setCoverImage(image,path){
+ image.style.visibility='';
+ const src=mediaURL(currentOrigin(),path);
+ image.onerror=()=>{
+  if(image.hasAttribute('crossorigin')){
+   image.removeAttribute('crossorigin');
+   image.src=src;
+   return;
+  }
+  image.removeAttribute('src');
+  image.style.visibility='hidden';
+ };
+ image.crossOrigin='anonymous';
+ image.src=src;
+}
+function cover(s,loading='lazy'){
+ if(!validPath(s.coverPath))return el('span',{class:'cover'});
+ const image=el('img',{class:'cover',alt:'',loading,decoding:'async'});
+ setCoverImage(image,s.coverPath);
+ return image;
+}
 const courseStatus=s=>s.status==='completed'?'已完结':'更新中';
 function card(s, detail, title=s.title){
  return el('a',{class:'card',href:route('series',s.id)},cover(s),el('strong',{},title),detail?el('small',{},detail):null);
@@ -219,7 +239,10 @@ async function clearCache(){
  clearingCache=true;
  updateSettingsFeedback();
  try{
-  if(window.caches)await caches.delete('zbfw-icons:' + new URL('./', location.href).href);
+  if(window.caches){
+   const scope=new URL('./',location.href).href;
+   await Promise.all(['zbfw-icons:', 'zbfw-covers:'].map(prefix=>caches.delete(prefix + scope)));
+  }
   cacheResult='已清除';
  }catch{cacheResult='清除失败';}
  finally{clearingCache=false;updateSettingsFeedback();}
@@ -329,7 +352,7 @@ async function startEpisode(s,e,ctx){
  revealOnPlay=true;
  audio.defaultPlaybackRate=Number(speedInput.value);
  audio.src=mediaURL(origin,e.audioPath);
- $('#player').hidden=false;$('#toggle').disabled=false;$('#now-title').textContent=s.title;$('#now-episode').textContent=e.title;$('#now-cover').src=mediaURL(currentOrigin(),s.coverPath);$('#now-link').href=route('series',s.id);
+ $('#player').hidden=false;$('#toggle').disabled=false;$('#now-title').textContent=s.title;$('#now-episode').textContent=e.title;setCoverImage($('#now-cover'),s.coverPath);$('#now-link').href=route('series',s.id);
  updateMediaSession();startAudio();syncPlaybackUI();navigator.storage?.persist?.().catch(()=>{});
 }
 let stallWatch, failedSource=false;
