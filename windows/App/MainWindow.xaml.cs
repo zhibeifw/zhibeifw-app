@@ -61,7 +61,7 @@ public partial class MainWindow : Window
             source.AddHook((nint hwnd, int message, nint wParam, nint lParam, ref bool handled) =>
                 CourseShelf.HandleWindowMessage(this, message, wParam, lParam, ref handled));
         };
-        store = new Store(Path.Combine(directory, "library.sqlite"), out var cached);
+        store = new Store(Path.Combine(directory, "zhibeifw.db"), out var cached);
         network = new(store, http);
         covers = new(network, Path.Combine(directory, "covers"), lifetime.Token);
         player = new(store, network, Dispatcher, lifetime.Token);

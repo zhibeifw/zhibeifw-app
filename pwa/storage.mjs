@@ -4,10 +4,46 @@ export function read(key,fallback){try{return JSON.parse(localStorage.getItem(PR
 export function write(key,value){try{localStorage.setItem(PREFIX+key,JSON.stringify(value));return true;}catch{return false;}}
 let dbPromise;
 function database(){
- return dbPromise??=new Promise((resolve,reject)=>{const r=indexedDB.open('zbfw-pwa',1);r.onupgradeneeded=()=>r.result.createObjectStore('catalog');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});
+ if(dbPromise)return dbPromise;
+ const opening=new Promise((resolve,reject)=>{
+  const request=indexedDB.open('zhibeifw.db',1);
+  request.onupgradeneeded=()=>request.result.createObjectStore('catalog');
+  request.onerror=()=>reject(request.error);
+  request.onblocked=()=>reject(new DOMException('课程目录数据库正在更新','InvalidStateError'));
+  request.onsuccess=()=>{
+   const db=request.result;
+   if(dbPromise!==opening){db.close();return;}
+   const forget=()=>{if(dbPromise===opening)dbPromise=undefined;};
+   db.onclose=forget;
+   db.onversionchange=()=>{forget();db.close();};
+   resolve(db);
+  };
+ });
+ dbPromise=opening;
+ opening.catch(()=>{if(dbPromise===opening)dbPromise=undefined;});
+ return opening;
 }
-export async function cachedCatalog(){try{const db=await database();return await new Promise((resolve,reject)=>{const r=db.transaction('catalog').objectStore('catalog').get('current');r.onsuccess=()=>resolve(r.result);r.onerror=()=>reject(r.error);});}catch{return null;}}
-export async function cacheCatalog(value){try{const db=await database();await new Promise((resolve,reject)=>{const tx=db.transaction('catalog','readwrite');tx.objectStore('catalog').put(value,'current');tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);});}catch{/* 目录缓存不可用时仍可在线播放。 */}}
+
+async function catalogTransaction(mode, operation) {
+ for(let attempt=0;attempt<2;attempt++){
+  try{
+   if(typeof indexedDB==='undefined')return null;
+   const db=await database();
+   return await new Promise((resolve,reject)=>{
+    const transaction=db.transaction('catalog',mode);
+    const request=operation(transaction.objectStore('catalog'));
+    transaction.oncomplete=()=>resolve(request.result);
+    transaction.onabort=()=>reject(transaction.error ?? new DOMException('课程目录事务已中止','AbortError'));
+   });
+  }catch(error){
+   if(['QuotaExceededError','SecurityError','NotSupportedError'].includes(error?.name))return null;
+  }
+ }
+ return null;
+}
+
+export const cachedCatalog=()=>catalogTransaction('readonly',store=>store.get('current'));
+export const cacheCatalog=async value=>await catalogTransaction('readwrite',store=>store.put(value,'current'))!==null;
 
 // 旧版按整张表保存。逐条覆盖旧值，两个窗口收听不同集时不会互相覆盖。
 export function readRecords(name) {

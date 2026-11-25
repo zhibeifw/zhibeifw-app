@@ -155,7 +155,9 @@ async function fetchCatalog() {
   if (!result.notModified) {
     const catalog = parseCatalog(result.data);
     cached = {origin, etag: result.etag, catalog};
-    await cacheCatalog({origin, etag: result.etag, raw: result.data});
+    if (!await cacheCatalog({origin, etag: result.etag, raw: result.data}) && typeof indexedDB !== 'undefined') {
+      console.warn('课程目录未能保存到本地数据库');
+    }
   } else if (!etag) {
     throw Error('课程目录响应无效');
   }
