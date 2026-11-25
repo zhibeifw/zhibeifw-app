@@ -1,0 +1,10 @@
+/dist/
+/style.css
+/sw.js
+/assets/*.svg
+!/assets/logo.svg
+!/assets/lesson-mark_24px.svg
+!/assets/lesson-unmark_24px.svg
+/assets/theme.css
+/assets/design.mjs
+/assets/version.mjs

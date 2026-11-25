@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="zh-Hans">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#ffffff">
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#000000">
+<meta name="description" content="智悲佛网，在线收听索达吉堪布讲课。">
+<link rel="manifest" href="./manifest.webmanifest"><link rel="icon" href="./assets/logo.svg" type="image/svg+xml"><link rel="apple-touch-icon" href="./assets/icon.png">
+<link rel="stylesheet" href="./assets/theme.css"><link rel="stylesheet" href="./style.css">
+<title>智悲佛网</title>
+</head>
+<body>
+<a class="skip" href="#content">跳到正文</a>
+<aside id="sidebar">
+<a class="brand" href="#home"><img src="./assets/logo.svg" alt="" width="30" height="30"><strong>智悲佛网</strong></a>
+<nav aria-label="主要导航">
+<a href="#home" data-nav="home"><i data-icon="home"></i>主页</a>
+<a href="#categories" data-nav="categories"><i data-icon="grid_view"></i>分类</a>
+<div class="library-nav" role="group" aria-labelledby="library-nav-title">
+<p id="library-nav-title" class="nav-label">资料库</p>
+<a href="#recent" data-nav="recent"><i data-icon="history"></i>最近播放</a>
+<a href="#favorites" data-nav="favorites"><i data-icon="bookmark"></i>收藏的课程</a>
+</div>
+</nav>
+<a class="about-link" href="#about" data-nav="about"><i data-icon="info"></i>关于</a>
+</aside>
+<header class="site-header">
+<button id="nav-toggle" aria-controls="sidebar" aria-label="打开导航" aria-expanded="false"><span></span><span></span></button>
+<a class="brand" href="#home"><img src="./assets/logo.svg" alt="" width="24" height="24"><strong>智悲佛网</strong></a>
+<a class="header-search" href="#search" data-nav="search" aria-label="搜索" title="搜索"><i data-icon="search"></i></a>
+</header>
+<main id="content" tabindex="-1"><div class="empty"><progress aria-label="载入课程"></progress><p>载入课程</p></div></main>
+<div id="notice" role="status" hidden></div>
+<section id="player" aria-label="播放控制" hidden>
+<div class="transport">
+<select id="speed" aria-label="播放速度"><option value="0.8">0.8×</option><option value="1" selected>1×</option><option value="1.3">1.3×</option><option value="1.5">1.5×</option><option value="1.8">1.8×</option><option value="2">2×</option></select>
+<button disabled id="backward" aria-label="后退15秒" title="后退15秒"><span class="skip-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 8.6A8.5 8.5 0 1 0 12 4.2M15.3 1.5 12 4.2l3.3 2.9"/></svg><span>15</span></span></button>
+<button disabled id="toggle" class="primary-play" aria-label="播放"><i data-icon="play_arrow_fill1"></i></button>
+<button disabled id="forward" aria-label="前进30秒" title="前进30秒"><span class="skip-icon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M4.5 8.6A8.5 8.5 0 1 0 12 4.2M15.3 1.5 12 4.2l3.3 2.9"/></svg><span>30</span></span></button>
+</div>
+<div class="player-details">
+<a id="now-link" class="now-info" title="前往课程"><img id="now-cover" alt=""><span><strong id="now-episode"></strong><small id="now-title"></small></span></a>
+<div class="scrubber"><div class="times" aria-hidden="true"><span id="elapsed">0:00</span><span id="remaining">−0:00</span></div><input id="seek" type="range" min="0" max="1" value="0" step="1" aria-label="播放进度" disabled></div>
+</div>
+<details id="player-more"><summary aria-label="更多播放操作" title="更多播放操作"><i data-icon="more_horiz"></i></summary>
+<div class="player-menu"><button id="player-mark"></button><button id="player-favorite"></button><a id="player-series">前往课程</a></div>
+</details>
+</section>
+<audio id="audio" preload="none"></audio>
+<dialog id="confirm" aria-labelledby="confirm-title" aria-describedby="confirm-text"><form method="dialog"><h2 id="confirm-title"></h2><p id="confirm-text"></p><div class="dialog-actions"><button value="cancel">取消</button><button value="ok" class="danger">清空</button></div></form></dialog>
+<noscript>请启用浏览器的 JavaScript 以浏览和播放课程。</noscript>
+<dialog id="playback-error" aria-labelledby="playback-message">
+ <form method="dialog"><p id="playback-message"></p><div class="dialog-actions"><button id="playback-close" value="close">关闭</button><button id="playback-retry" type="button">重试</button></div></form>
+</dialog>
+<script type="module" src="./app.mjs"></script>
+</body></html>
