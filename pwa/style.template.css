@@ -91,11 +91,7 @@ nav [aria-current="page"]{font-weight:600}
 .episode:hover,.episode:focus-within,.episode.active{background:var(--wash)}
 .episode-main{flex:1;min-width:0;display:flex;align-items:center;position:relative;gap:{{size12px}};min-height:{{size44px}};text-align:left;padding:{{size7px}} 0}
 .episode-main:not(:disabled):hover,.track .row-action:not(:disabled):hover{background:transparent}
-.track{position:relative}
-.track::before{content:attr(data-number);position:absolute;left:{{size8px}};width:{{size24px}};text-align:center;font-variant-numeric:tabular-nums;color:var(--quiet);font-size:{{size_83rem}};pointer-events:none}
-.track .episode-main>i,.track .episode-main>.loading{width:{{size24px}};opacity:0}
-.track:is(:hover,:focus-within,.active)::before{visibility:hidden}
-.track:is(:hover,:focus-within,.active) .episode-main>:first-child{opacity:1}
+.track .episode-main>i,.track .episode-main>.loading{width:{{size24px}}}
 .episode-title{display:flex;align-items:center;justify-content:space-between;gap:{{size10px}};min-width:0;flex:1}
 .episode-title strong{font-weight:400;font-size:{{size_92rem}};overflow-wrap:anywhere}
 .episode-title small{flex:none;font-size:{{size_8rem}};font-variant-numeric:tabular-nums}
@@ -211,7 +207,7 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
  .series-heading>.cover{mask-image:linear-gradient(black 85%,transparent)}
  .series-heading h1{font-size:{{size1_55rem}}}.speaker{font-size:{{size1_15rem}}}
  .actions{justify-content:center}.introduction .description{text-align:left}
- .track-head,.episode{padding-inline:0}.track::before{left:0}
+ .track-head,.episode{padding-inline:0}
  #player{left:{{size10px}};right:{{size10px}};bottom:max({{size10px}},env(safe-area-inset-bottom))}
  .player-menu{bottom:calc(100% + {{size10px}});right:0}
  .track-head button,.row-action{min-height:{{size44px}}}

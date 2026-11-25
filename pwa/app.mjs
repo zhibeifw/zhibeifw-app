@@ -128,14 +128,14 @@ function updateCurrentEpisodeTime() {
  if (label.textContent !== text) label.textContent = text;
 }
 const completionIcon = done => done ? 'lesson-unmark' : 'lesson-mark';
-function episodeRow(s,e,recent=false,unavailable=false,number){
+function episodeRow(s,e,recent=false,unavailable=false){
  const time=el('small',{},recent?null:icon('refresh'),el('span',{},(recent?e.title+' · ':'')+playbackLabel(e)));
  const mainButton=el('button',{class:'episode-main','data-episode':e.id,onclick:()=>unavailable?notice(findSeries(s.id)?'这一集已下架':'这门课已下架'):play(s,e,recent?'single':'series')},icon('play_arrow_fill1'),recent?cover(s):null,el('span',{class:'episode-title'},el('strong',{},recent?s.title:e.title),time));
  let action;
  if(recent && !findSeries(s.id))action=null;
  else if(recent)action=el('a',{class:'row-action',href:route('series',s.id),'aria-label':'前往课程 '+s.title,title:'前往课程'},icon('arrow_circle_right'));
  else{const done=!!progress.get(e.id)?.completed;action=el('button',{class:'row-action','aria-label':done?'标记为未听完':'标记为已听完','aria-pressed':done,title:done?'标记为未听完':'标记为已听完',onclick:()=>markCompleted(s,e,!progress.get(e.id)?.completed)},icon(completionIcon(done)));}
- return el('li',{class:recent?'episode recent-row':'episode track','data-row':e.id,'data-number':number},mainButton,action);
+ return el('li',{class:recent?'episode recent-row':'episode track','data-row':e.id},mainButton,action);
 }
 function savedCourseTitle(id){
  const favoriteTitle=favorites.get(id)?.title?.trim();
@@ -214,7 +214,7 @@ function render(){
     (s.episodes.length?' · 共 '+s.episodes.length+' 节课':'')+' · '+courseStatus(s)));
   if(s.description)info.append(el('details',{class:'introduction'},el('summary',{},'课程简介'),el('p',{class:'description'},s.description)));
   info.append(el('div',{class:'actions'},el('button',{'aria-pressed':isFavorite,onclick:()=>toggleFavorite(id)},icon(isFavorite?'bookmark_fill1':'bookmark'),isFavorite?'已收藏':'收藏')));
-  main.append(el('section',{class:'series-heading'},cover(s,'eager'),info),el('div',{class:'section-head track-head'},el('h2',{},'全部课程'),el('button',{onclick:()=>{reverse=!reverse;render();}},icon('swap_vert'),reverse?' 从新到旧':' 从旧到新')),el('ul',{class:'episode-list'},(reverse?[...s.episodes].reverse():s.episodes).map((e,i)=>episodeRow(s,e,false,false,reverse?s.episodes.length-i:i+1))));document.title=s.title+' · 智悲佛网';
+  main.append(el('section',{class:'series-heading'},cover(s,'eager'),info),el('div',{class:'section-head track-head'},el('h2',{},'全部课程'),el('button',{onclick:()=>{reverse=!reverse;render();}},icon('swap_vert'),reverse?' 从新到旧':' 从旧到新')),el('ul',{class:'episode-list'},(reverse?[...s.episodes].reverse():s.episodes).map(e=>episodeRow(s,e))));document.title=s.title+' · 智悲佛网';
  }else if(type==='recent'){
   const entries=recentEntries(progress);
   pageTitle('最近播放',entries.length?el('button',{class:'danger',onclick:clearRecent},icon('delete'),' 清空'):null);
