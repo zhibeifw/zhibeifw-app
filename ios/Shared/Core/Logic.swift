@@ -54,7 +54,10 @@ private func minutes(_ sec: Double) -> Int {
 func pillState(_ p: Prog?, knownDuration: Double = 0) -> PillState {
     let fresh = PillState(kind: .new, text: knownDuration > 0 ? "\(minutes(knownDuration)) 分钟" : "播放")
     guard let p else { return fresh }
-    if p.completed { return PillState(kind: .done, text: p.duration > 0 ? "\(minutes(p.duration)) 分钟" : "已听完") }
+    if p.completed {
+        let duration = p.duration > 0 ? p.duration : knownDuration
+        return PillState(kind: .done, text: duration > 0 ? "\(minutes(duration)) 分钟" : "已听完")
+    }
     if p.position > 0 && p.duration > 0 { return PillState(kind: .half, text: "剩 \(clock(max(0, p.duration - p.position)))") }
     return fresh
 }
@@ -84,7 +87,7 @@ func normalizeText(_ s: String) -> String {
 
 let MAX_QUERY_LENGTH = 30
 
-// MARK: - 拼音搜索（苹果两端；Android 还没有）
+// MARK: - 拼音搜索
 
 /// 课程名的拼音：首字母和全拼（都是小写、不带空格）。“金刚经” → ("jgj", "jingangjing")。
 /// 汉字逐字用系统的汉字转拼音（Foundation 的 mandarinToLatin，再去声调）；英文字母、数字原样保留；空格、标点跳过。
@@ -324,8 +327,6 @@ let FOREGROUND_SYNC_MIN_GAP_MS: Double = 60_000
 func shouldSyncOnForeground(now: Double, lastSyncAt: Double, syncing: Bool) -> Bool {
     !syncing && now - lastSyncAt >= FOREGROUND_SYNC_MIN_GAP_MS
 }
-let LAUNCH_FRESH_MAX_MS: Double = 3000
-func launchFreshWaitMs(online: Bool, elapsedMs: Double) -> Double { online ? max(0, LAUNCH_FRESH_MAX_MS - elapsedMs) : 0 }
 
 // MARK: - 更新检查
 

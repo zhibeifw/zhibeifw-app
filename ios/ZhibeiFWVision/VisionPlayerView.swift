@@ -142,13 +142,6 @@ struct VisionMiniPlayer: View {
                 .font(.system(size: Tok.Component.CompactPlayer.controlIconSize))
                 .labelStyle(.iconOnly)
                 .buttonStyle(.plain)
-                if let error = p.error {
-                    HStack {
-                        Text(error == .gone ? "这一集已下架" : error == .damaged ? "这一集的文件已损坏" : "暂时无法播放，请检查网络后重试")
-                        if error == .cannotPlay { Button { p.retry() } label: { Label("重试", systemImage: "arrow.clockwise").visionHitTarget() } }
-                    }
-                    .foregroundStyle(C.danger)
-                }
             }
             .padding(.horizontal, Tok.Component.CompactPlayer.padding)
             .padding(.vertical, Tok.Component.CompactPlayer.verticalPadding)
@@ -322,7 +315,6 @@ private struct VisionPlaybackInfo<Metadata: View>: View {
                         .opacity(Tok.Component.CompactPlayer.nativeSliderOpacity)
                 }
                 .frame(height: Tok.Component.Vision.hitSize)
-                .visionDebugBoundary()
             }
         }
         // 两种状态共用完整内容高度，时间字号变化也不会越出播放栏。
@@ -362,33 +354,5 @@ extension View {
     func visionHitTarget() -> some View {
         frame(minWidth: Tok.Component.Vision.hitSize, minHeight: Tok.Component.Vision.hitSize)
             .contentShape(Rectangle())
-            .visionDebugBoundary()
-    }
-}
-
-// 只测量现有布局，不扩大命中范围；系统内部控件仍需单独检查。
-extension View {
-    @ViewBuilder
-    func visionDebugBoundary() -> some View {
-        #if DEBUG
-        overlay {
-            GeometryReader { geometry in
-                let size = geometry.size
-                let enough = size.width >= Tok.Component.Vision.hitSize && size.height >= Tok.Component.Vision.hitSize
-                Rectangle().strokeBorder(enough ? Color.green : Color.red)
-                    .overlay(alignment: .topLeading) {
-                        Text(String(format: "%.1f×%.1f pt", size.width, size.height))
-                            .font(.caption2.monospacedDigit())
-                            .foregroundStyle(.white)
-                            .background(.black)
-                            .fixedSize()
-                    }
-            }
-            .allowsHitTesting(false)
-            .accessibilityHidden(true)
-        }
-        #else
-        self
-        #endif
     }
 }

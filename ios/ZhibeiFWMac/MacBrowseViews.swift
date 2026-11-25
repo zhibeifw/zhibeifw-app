@@ -38,8 +38,11 @@ struct MacHomeView: View {
                     .padding(.horizontal, MacLayout.pageMargin)
                 }
                 if core.syncFailed {
-                    Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
-                        .padding(.horizontal, MacLayout.pageMargin)
+                    HStack {
+                        Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
+                        Button("重试") { Task { await core.syncCatalog(userInitiated: true) } }
+                    }
+                    .padding(.horizontal, MacLayout.pageMargin)
                 }
                 if !home.ongoing.isEmpty {
                     MacCardRow(title: "新课程", cards: home.ongoing, width: MacLayout.largeCardWidth)
@@ -100,6 +103,7 @@ struct MacSeriesCard: View {
     let card: SeriesCard
     var width: CGFloat? = nil
     /// 收藏页：右键菜单里有“取消收藏”
+    var subtitle: String? = nil
     var onRemoveFavorite: (() -> Void)? = nil
 
     var body: some View {
@@ -110,8 +114,8 @@ struct MacSeriesCard: View {
                     .frame(width: width)
                 // 和 iPhone 一致：编辑精选用精选标题，新课程下面写“更新至 最后一集”
                 Text(card.featureTitle ?? card.title).lineLimit(2)
-                if let last = card.lastTitle {
-                    Text("更新至 \(last)").font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                if let detail = subtitle ?? card.lastTitle.map({ "更新至 " + $0 }) {
+                    Text(detail).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
             .frame(width: width, alignment: .leading)
@@ -196,7 +200,7 @@ struct MacCategoryView: View {
             }
             LazyVGrid(columns: MacLayout.grid, alignment: .leading, spacing: 28) {
                 ForEach(rows) { c in
-                    MacSeriesCard(card: c).onAppear { if c.id == rows.last?.id { more() } }
+                    MacSeriesCard(card: c, subtitle: seriesStatusText(c.status)).onAppear { if c.id == rows.last?.id { more() } }
                 }
             }
             .padding(MacLayout.pageMargin)
@@ -227,19 +231,17 @@ struct MacSeriesView: View {
     @Environment(AppCore.self) private var core
     @Environment(MacModel.self) private var model
     let seriesId: String
-    @State private var header: SeriesHeader?
-    @State private var episodes: [EpisodeRow] = []
-    @State private var loaded = false
+    @State private var details: SeriesDetails?
+    @State private var showingDescription = false
     @State private var oldestFirst = true
 
     var body: some View {
-        // 底下垫一层透明的：还没读到数据时上面是空的，空视图上挂的 .task 不会执行，页面会一直空白
         ZStack {
-            Color.clear
-            if let h = header {
+            switch details {
+            case .ready(let h, let episodes):
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 28) {
-                        headerBlock(h)
+                        headerBlock(h, count: episodes.count)
                         VStack(alignment: .leading, spacing: 0) {
                             Text("全部课程").font(.title2).fontWeight(.semibold).padding(.bottom, 4)
                             // 分隔线只画在两集之间（标题下面、最后一集下面不画），和 iPhone 课程页一样
@@ -257,19 +259,25 @@ struct MacSeriesView: View {
                     .frame(maxWidth: .infinity)
                 }
                 .navigationTitle(h.title)
-            } else if loaded {
-                Text("这门课已下架").foregroundStyle(.secondary)
+            case nil: ProgressView()
+            case .readFailed:
+                VStack {
+                    Text("课程读取失败")
+                    Button("重试", action: reload)
+                }
+            case .gone(let title, let favorited):
+                UnavailableCourseView(title: title, favorited: favorited) { core.removeFavorite(seriesId) }
             }
         }
         // 目录、进度、收藏变了就重读
         .task(id: "\(seriesId)|\(core.catalogVersion)|\(core.progressVersion)|\(core.favoritesVersion)") {
-            header = try? core.store.loadSeriesHeader(seriesId)
-            episodes = (try? core.store.loadEpisodes(seriesId)) ?? []
-            loaded = true
+            reload()
         }
     }
 
-    private func headerBlock(_ h: SeriesHeader) -> some View {
+    private func reload() { details = core.store.loadSeriesDetails(seriesId) }
+
+    private func headerBlock(_ h: SeriesHeader, count: Int) -> some View {
         HStack(alignment: .top, spacing: 24) {
             CoverImage(path: h.coverPath, colorId: h.id, radius: MacLayout.coverRadius)
                 .frame(width: 300, height: MacLayout.coverHeight(300))
@@ -288,7 +296,7 @@ struct MacSeriesView: View {
                         .buttonStyle(.plain)
                         .help("进这个分类")
                     }
-                    Text(seriesInfoText(category: h.categoryName != nil, count: episodes.count, status: h.status))
+                    Text(seriesInfoText(category: h.categoryName != nil, count: count, status: h.status))
                         .foregroundStyle(.secondary)
                 }
                 // 收藏、排序一个逻辑：按一下就切换，按钮上显示现在的状态（和 Apple TV 一样）
@@ -299,7 +307,7 @@ struct MacSeriesView: View {
                         Label(h.favorited ? "已收藏" : "收藏", systemImage: h.favorited ? "bookmark.fill" : "bookmark")
                     }
                     Button { oldestFirst.toggle() } label: {
-                        Label(oldestFirst ? "从旧到新" : "从新到旧", systemImage: oldestFirst ? "arrow.down" : "arrow.up")
+                        Label(oldestFirst ? "从旧到新" : "从新到旧", systemImage: oldestFirst ? "arrow.up.arrow.down.circle" : "arrow.up.arrow.down.circle.fill")
                     }
                     .accessibilityLabel(oldestFirst ? "排序：从旧到新" : "排序：从新到旧")
                 }
@@ -308,7 +316,25 @@ struct MacSeriesView: View {
                 .controlSize(.large)
                 .padding(.top, 4)
                 if let d = h.description, !d.isEmpty {
-                    Text(d).foregroundStyle(.secondary).lineLimit(5).textSelection(.enabled).padding(.top, 4)
+                    Button { showingDescription = true } label: {
+                        Text(d).lineLimit(3).foregroundStyle(.secondary).multilineTextAlignment(.leading)
+                    }
+                    .buttonStyle(.plain)
+                    .help("查看完整课程简介")
+                    .sheet(isPresented: $showingDescription) {
+                        VStack(alignment: .leading, spacing: 12) {
+                            HStack {
+                                Text("课程简介").font(.headline)
+                                Spacer()
+                                Button("关闭") { showingDescription = false }.keyboardShortcut(.cancelAction)
+                            }
+                            Text(h.title).font(.title2)
+                            if let name = h.categoryName { Text(name).foregroundStyle(.secondary) }
+                            ScrollView { Text(d).textSelection(.enabled).frame(maxWidth: .infinity, alignment: .leading) }
+                        }
+                        .padding(MacLayout.pageMargin)
+                        .frame(minWidth: 420, minHeight: 260)
+                    }
                 }
             }
         }
@@ -316,7 +342,7 @@ struct MacSeriesView: View {
 }
 
 /// 一集（和 iPhone 课程页同样的两行）：第一行集名；第二行左边是播放胶囊（没听过“▶ 70 分钟”，听了一半带进度条“剩 32:21”，
-/// 听完了打勾；播放中显示实际音量声波），右边直接显示标记听完按钮。点整行播放 / 暂停；鼠标移上去整行浅色高亮。
+/// 听完后显示重播箭头和总时长；播放中显示实际音量声波），右边直接显示标记听完按钮。点整行播放 / 暂停；鼠标移上去整行浅色高亮。
 struct MacEpisodeRow: View {
     @Environment(AppCore.self) private var core
     let episode: EpisodeRow
@@ -335,14 +361,14 @@ struct MacEpisodeRow: View {
             HStack {
                 Button { core.togglePlay(episode.id, ctx: ctx) } label: {
                     HStack(spacing: 6) {
-                        PlaybackLoadingView(loading: playing && (p?.loadingPlayback ?? false)) {
-                    if playing, let p {
-                        AudioWaveformIcon(player: p)
-                    } else {
-                        Image(systemName: pill.kind == .done ? "checkmark" : "play.fill")
-                    }
-                }
-                            .font(.caption)
+                        PlaybackLoadingView(loading: p?.current?.episodeId == episode.id && p?.loadingPlayback == true) {
+                            if playing, let p {
+                                AudioWaveformIcon(player: p)
+                            } else {
+                                Image(systemName: pill.kind == .done ? "arrow.clockwise" : "play.fill")
+                            }
+                        }
+                        .font(.caption)
                         if pill.kind == .half, let prog {
                             ProgressView(value: progressRatio(prog.position, prog.duration)).frame(width: 36)
                         }
@@ -351,7 +377,7 @@ struct MacEpisodeRow: View {
                 }
                 .buttonStyle(.bordered)
                 .buttonBorderShape(.capsule)
-                .accessibilityLabel((playing ? "暂停 " : "播放 ") + episode.title)
+                .accessibilityLabel((playing ? "暂停 " : pill.kind == .done ? "重新播放 " : "播放 ") + episode.title)
                 Spacer()
                 MarkCompletedButton(episodeId: episode.id, seriesId: episode.seriesId, completed: prog?.completed ?? false)
                     .labelStyle(.iconOnly)
@@ -384,13 +410,7 @@ struct MarkCompletedButton: View {
     }
 }
 
-/// 进度文字：已听完 / 剩余时间 / 时长。
-func progressText(_ p: Prog?, knownDuration: Double?) -> String {
-    if let p, p.completed { return "已听完" }
-    if let p, p.duration > 0, p.position > 0 { return "剩余 " + clock(max(0, p.duration - p.position)) }
-    if let d = knownDuration, d > 0 { return clock(d) }
-    return ""
-}
+
 
 /// 最近播放：点一集接着播；右键：标记已听完、前往课程。工具栏里有“清空”。
 struct MacRecentView: View {
@@ -406,7 +426,6 @@ struct MacRecentView: View {
                 // 和课程页一样：整页限宽居中，“N 条记录”下面不画线，分隔线只画在两条记录之间
                 ScrollView(.vertical) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(rows.count) 条记录").foregroundStyle(.secondary)
                         LazyVStack(spacing: 0) {
                             ForEach(Array(rows.enumerated()), id: \.element.id) { i, r in
                                 if i > 0 { Divider() }
@@ -421,6 +440,7 @@ struct MacRecentView: View {
             }
         }
         .navigationTitle("最近播放")
+        .navigationSubtitle(rows.isEmpty ? "" : "\(rows.count) 条记录")
         .toolbar {
             ToolbarItem {
                 Button(role: .destructive, action: confirmClear) { Label("清空", systemImage: "trash") }
@@ -429,7 +449,7 @@ struct MacRecentView: View {
             }
         }
         .task(id: "\(core.catalogVersion)|\(core.progressVersion)") {
-            rows = (try? core.store.loadRecent(limit: 200)) ?? []
+            rows = (try? core.store.loadRecent()) ?? []
         }
     }
 
@@ -445,12 +465,20 @@ struct MacRecentView: View {
                 HStack(spacing: 14) {
                     CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 6)
                         .frame(width: 96, height: MacLayout.coverHeight(96))
+                    PlaybackLoadingView(loading: p?.current?.episodeId == r.episodeId && p?.loadingPlayback == true) {
+                        if let p, p.current?.episodeId == r.episodeId, p.looksPlaying {
+                            AudioWaveformIcon(player: p)
+                        } else {
+                            Image(systemName: prog?.completed == true ? "arrow.clockwise" : "play.fill")
+                        }
+                    }
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(r.epTitle).lineLimit(2)
-                        Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(r.seriesTitle).lineLimit(2)
+                        Text(r.epTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
-                    Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
+                    Text(r.gone ? "已下架" : pillState(prog, knownDuration: r.epDuration ?? 0).text)
                         .foregroundStyle(.secondary).monospacedDigit()
                 }
                 .padding(.vertical, 10)
@@ -492,13 +520,14 @@ struct MacFavoritesView: View {
     var body: some View {
         Group {
             if rows.isEmpty {
-                Text("还没有收藏的课程").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
+                Text("暂无收藏").foregroundStyle(.secondary).frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 ScrollView(.vertical) {
                     LazyVGrid(columns: MacLayout.grid, alignment: .leading, spacing: 28) {
                         ForEach(rows) { f in
                             MacSeriesCard(
                                 card: SeriesCard(id: f.id, title: f.title, coverPath: f.coverPath, status: f.status ?? ""),
+                                subtitle: f.gone ? "已下架" : seriesStatusText(f.status),
                                 onRemoveFavorite: { core.removeFavorite(f.id) })
                         }
                     }
@@ -507,6 +536,7 @@ struct MacFavoritesView: View {
             }
         }
         .navigationTitle("收藏")
+        .navigationSubtitle(rows.isEmpty ? "" : "\(rows.count) 门课")
         .task(id: "\(core.catalogVersion)|\(core.favoritesVersion)") {
             rows = (try? core.store.loadFavorites()) ?? []
         }
@@ -530,7 +560,7 @@ struct MacSearchView: View {
                             Text("已显示“\(r.matched)”的结果").font(.callout).foregroundStyle(.secondary)
                         }
                         LazyVGrid(columns: MacLayout.grid, alignment: .leading, spacing: 28) {
-                            ForEach(r.rows) { c in MacSeriesCard(card: c) }
+                            ForEach(r.rows) { c in MacSeriesCard(card: c, subtitle: seriesStatusText(c.status)) }
                         }
                     }
                 }

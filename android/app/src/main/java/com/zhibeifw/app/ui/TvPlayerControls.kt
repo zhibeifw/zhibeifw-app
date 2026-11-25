@@ -43,17 +43,6 @@ internal fun TvPlayerControls(model: AppModel, p: PlayerController) {
                     }
                 }
                 Spacer(Modifier.height(TV.gap.d))
-                val error = p.error
-                if (error != null) {
-                    val message = when (error) {
-                        PlayerError.GONE -> "这一集已下架"
-                        PlayerError.DAMAGED -> "这一集的文件已损坏"
-                        PlayerError.CANNOT_PLAY -> "暂时无法播放，请检查网络后重试"
-                    }
-                    Text(message, color = C.danger())
-                    if (error == PlayerError.CANNOT_PLAY) TvPill("重试", { p.retry() })
-                    return@Column
-                }
                 var scrub by remember(current.episodeId) { mutableStateOf<Double?>(null) }
                 val pos = scrub ?: p.position
                 val focus = LocalFocusManager.current

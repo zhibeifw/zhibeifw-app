@@ -63,10 +63,10 @@ fun pillState(p: Prog?, knownDuration: Double = 0.0): PillState {
     val fresh =
         PillState(PillKind.NEW, if (knownDuration > 0) "${minutes(knownDuration)} 分钟" else "播放")
     if (p == null) return fresh
-    if (p.completed) return PillState(
-        PillKind.DONE,
-        if (p.duration > 0) "${minutes(p.duration)} 分钟" else "已听完"
-    )
+    if (p.completed) {
+        val duration = p.duration.takeIf { it > 0 } ?: knownDuration
+        return PillState(PillKind.DONE, if (duration > 0) "${minutes(duration)} 分钟" else "已听完")
+    }
     if (p.position > 0 && p.duration > 0) return PillState(
         PillKind.HALF,
         "剩 ${clock(max(0.0, p.duration - p.position))}"
@@ -349,9 +349,6 @@ const val FOREGROUND_SYNC_MIN_GAP_MS = 60_000L
 fun shouldSyncOnForeground(now: Long, lastSyncAt: Long, syncing: Boolean) =
     !syncing && now - lastSyncAt >= FOREGROUND_SYNC_MIN_GAP_MS
 
-const val LAUNCH_FRESH_MAX_MS = 3000L
-fun launchFreshWaitMs(online: Boolean, elapsedMs: Long) =
-    if (online) max(0L, LAUNCH_FRESH_MAX_MS - elapsedMs) else 0L
 
 // ---------- 更新检查 ----------
 const val CHECK_INTERVAL_MS = 24L * 3600 * 1000

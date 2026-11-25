@@ -25,6 +25,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -46,6 +47,7 @@ import com.zhibeifw.app.Routes
 import com.zhibeifw.app.core.DlStatus
 import com.zhibeifw.app.core.PlayContext
 import com.zhibeifw.app.core.seriesInfoText
+import com.zhibeifw.app.data.CourseDetails
 import com.zhibeifw.app.data.DlItem
 import com.zhibeifw.app.data.EpisodeRow
 import com.zhibeifw.app.data.SeriesHeader
@@ -59,18 +61,11 @@ import com.zhibeifw.app.design.ts
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
-internal data class CourseDetails(val header: SeriesHeader?, val episodes: List<EpisodeRow>)
-
 @Composable
-internal fun courseDetails(model: AppModel, id: String): CourseDetails? {
-    var result by remember(model, id) { mutableStateOf<CourseDetails?>(null) }
-    LaunchedEffect(model, id, model.catalogVersion, model.progressVersion, model.favoritesVersion, model.downloadsVersion) {
-        result = withContext(Dispatchers.IO) {
-            val header = runCatching { model.store.loadSeriesHeader(id) }.getOrNull()
-            val episodes = if (header == null) emptyList() else
-                runCatching { model.store.loadEpisodes(id) }.getOrDefault(emptyList())
-            CourseDetails(header, episodes)
-        }
+internal fun courseDetails(model: AppModel, id: String, attempt: Int): CourseDetails? {
+    var result by remember(model, id, attempt) { mutableStateOf<CourseDetails?>(null) }
+    LaunchedEffect(model, id, attempt, model.catalogVersion, model.progressVersion, model.favoritesVersion, model.downloadsVersion) {
+        result = withContext(Dispatchers.IO) { model.store.loadCourseDetails(id) }
     }
     return result
 }
@@ -78,9 +73,8 @@ internal fun courseDetails(model: AppModel, id: String): CourseDetails? {
 /** 系列详情页。 */
 @Composable
 fun SeriesView(model: AppModel, seriesId: String) {
-    val details = courseDetails(model, seriesId)
-    val header = details?.header
-    val episodes = details?.episodes.orEmpty()
+    var attempt by remember(seriesId) { mutableIntStateOf(0) }
+    val details = courseDetails(model, seriesId, attempt)
     // 默认最旧到最新（第 1 课在最上面），和 iOS、Apple TV 一样
     var oldestFirst by remember { mutableStateOf(true) }
     val list = rememberLazyListState()
@@ -89,7 +83,7 @@ fun SeriesView(model: AppModel, seriesId: String) {
 
     val coverW = minOf(W, 640f) - 2 * CP.SeriesHeader.coverMargin
     PageScaffold(
-        model, header?.title ?: "", largeTitle = false, state = list,
+        model, (details as? CourseDetails.Ready)?.header?.title.orEmpty(), largeTitle = false, state = list,
         revealAt = (Tok.PageHeader.rowHeight + CP.SeriesHeader.coverTop + Layout.coverHeight(coverW) + CP.SeriesHeader.titleTop + S.seriesTitle.lineHeight).d,
         trailing = {
             NativeMenu({
@@ -126,23 +120,27 @@ fun SeriesView(model: AppModel, seriesId: String) {
             }
         },
     ) {
-        when {
-            details == null -> item("loading") {
+        when (details) {
+            null -> item("loading") {
                 Box(
                     Modifier.fillMaxWidth().padding(top = (Tok.Space.scale[6] * 3).d),
                     contentAlignment = Alignment.Center
                 ) { CircularProgressIndicator(color = C.labelSecondary()) }
             }
 
-            header == null -> item("gone") {
-                EmptyStateView(
-                    "这门课已下架",
+            CourseDetails.ReadFailed -> item("read-error") {
+                EmptyStateView("课程读取失败", Modifier.padding(top = (Tok.Space.scale[6] * 3).d)) { attempt++ }
+            }
+
+            is CourseDetails.Gone -> item("gone") {
+                UnavailableCourseView(
+                    details, { model.removeFavorite(seriesId) },
                     Modifier.padding(top = (Tok.Space.scale[6] * 3).d)
                 )
             }
 
-            else -> {
-                val h = header
+            is CourseDetails.Ready -> {
+                val (h, episodes) = details
                 item("header") { Header(model, h, episodes) }
                 val rows = episodes.map {
                     EpisodeItem(

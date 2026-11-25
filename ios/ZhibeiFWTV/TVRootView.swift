@@ -39,19 +39,19 @@ private struct TVInitView: View {
     let attempt: Int
     let failed: Bool
     @State private var refreshing = false
+    @State private var routeLabel = "刷新网络线路"
 
     var body: some View {
         VStack(spacing: 32) {
             if failed {
                 Text("暂时无法连接").font(.title3)
                 Button("重试") { Task { await core.runInitialization() } }
-                Button(refreshing ? "正在检测…" : "刷新网络线路") {
+                Button(refreshing ? "正在检测…" : routeLabel) {
                     guard !refreshing else { return }
                     refreshing = true
                     Task {
-                        _ = await Network.shared.refreshRoutes()
+                        routeLabel = await core.refreshRoutes()
                         refreshing = false
-                        await core.runInitialization()
                     }
                 }
             } else {

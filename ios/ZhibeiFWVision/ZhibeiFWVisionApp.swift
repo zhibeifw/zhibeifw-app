@@ -115,6 +115,7 @@ struct VisionRootView: View {
     @Environment(VisionModel.self) private var model
     @Environment(AppCore.self) private var core
     @State private var refreshingRoutes = false
+    @State private var routeLabel = "刷新网络线路"
     var body: some View {
         @Bindable var model = model
         Group {
@@ -148,12 +149,11 @@ struct VisionRootView: View {
                     Button {
                         refreshingRoutes = true
                         Task {
-                            _ = await Network.shared.refreshRoutes()
-                            await core.runInitialization()
+                            routeLabel = await core.refreshRoutes()
                             refreshingRoutes = false
                         }
                     } label: {
-                        Text(refreshingRoutes ? "正在检测…" : "刷新网络线路").visionHitTarget()
+                        Text(refreshingRoutes ? "正在检测…" : routeLabel).visionHitTarget()
                     }
                     .disabled(refreshingRoutes)
                 }

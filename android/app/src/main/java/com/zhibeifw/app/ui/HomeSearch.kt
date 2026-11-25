@@ -329,7 +329,7 @@ fun SearchView(model: AppModel) {
             // 没搜之前：空状态提示
             item("start") {
                 EmptyStateView(
-                    "输入课程名或拼音首字母搜索，比如 rzl 找“入中论讲解”",
+                    "输入课程名搜索",
                     Modifier.padding(top = (Tok.Space.scale[6] * 3).d)
                 )
             }

@@ -71,6 +71,11 @@
       "material": "check_circle",
       "fill": false
     },
+    "remove-circle-outline": {
+      "sf": "minus.circle",
+      "material": "do_not_disturb_on",
+      "fill": false
+    },
     "chevron-back": {
       "sf": "chevron.backward",
       "material": "arrow_back",

@@ -104,23 +104,27 @@ final class Network: @unchecked Sendable {
         return await resolve()
     }
 
-    func resolve() async -> String? {
-        let (t, mine): (Task<String?, Never>, Bool) = lock.withLock {
-            if let r = resolving { return (r, false) }
-            let t = Task<String?, Never> { await self.doResolve() }
-            resolving = t
-            return (t, true)
+    func resolve(checking current: String? = nil) async -> String? {
+        while true {
+            let (task, started) = lock.withLock {
+                if let resolving { return (resolving, false) }
+                let task = Task<String?, Never> {
+                    defer { self.lock.withLock { self.resolving = nil } }
+                    return await self.doResolve(checking: current)
+                }
+                resolving = task
+                return (task, true)
+            }
+            let result = await task.value
+            if started || current == nil { return result }
         }
-        let v = await t.value
-        if mine { lock.withLock { resolving = nil } }
-        return v
     }
 
-    private func doResolve() async -> String? {
+    private func doResolve(checking current: String?) async -> String? {
         let saved = Prefs.d.string(forKey: Prefs.kDomains).flatMap { parseDomains($0) }
         let origins = orderOrigins(
             remembered: Prefs.d.string(forKey: Prefs.kLastService), saved: saved?.domains ?? [], builtin: NetConfig.builtinDomains)
-        let won = await pickFirstReachable(origins) { (origin: String) async -> Domains? in
+        let won = await pickFirstReachable(origins, checking: current) { (origin: String) async -> Domains? in
             guard let url = buildUrl(origin, DOMAINS_PATH) else { return nil }
             var req = URLRequest(url: url, timeoutInterval: NetConfig.raceTimeout)
             req.cachePolicy = .reloadIgnoringLocalCacheData
@@ -129,7 +133,11 @@ final class Network: @unchecked Sendable {
             else { return nil }
             return parseDomains(data)  // 内容必须是格式正确的 domains.json（被劫持返回别的页面也算失败）
         }
-        guard let won else { setService(nil); return nil }
+        guard let won else {
+            if current != nil { Prefs.d.removeObject(forKey: Prefs.kLastService) }
+            setService(nil)
+            return nil
+        }
         if let data = try? JSONEncoder().encode(won.value), let s = String(data: data, encoding: .utf8) {
             Prefs.d.set(s, forKey: Prefs.kDomains)
         }
@@ -138,12 +146,11 @@ final class Network: @unchecked Sendable {
         return won.origin
     }
 
-    /// 手动入口（只有“关于 → 刷新网络线路”用）：忘掉记住的域名，重新选。返回 (选到的域名, 和原来是否同一个)。
+    /// 手动检测优先保留当前线路，失败后才检查其他候选。
     func refreshRoutes() async -> (String?, Bool) {
-        let before = Prefs.d.string(forKey: Prefs.kLastService) ?? currentOrigin ?? NetConfig.builtinDomains.first
+        let before = currentOrigin ?? Prefs.d.string(forKey: Prefs.kLastService) ?? NetConfig.builtinDomains[0]
         setService(nil)
-        Prefs.d.removeObject(forKey: Prefs.kLastService)
-        let r = await resolve()
+        let r = await resolve(checking: before)
         return (r, r != nil && r == before)
     }
 
@@ -197,9 +204,11 @@ final class Network: @unchecked Sendable {
 /// 不等超时再换：从第一个开始试；前一个 1.5 秒还没回应就同时试下一个（前一个不取消）；
 /// 前一个明确失败就立刻试下一个。谁先成功用谁，其余取消。全部失败返回 nil。
 func pickFirstReachable<T: Sendable>(
-    _ origins: [String], staggerMs: UInt64 = NetConfig.raceStaggerMs,
+    _ candidates: [String], checking current: String? = nil, staggerMs: UInt64 = NetConfig.raceStaggerMs,
     probe: @escaping @Sendable (String) async -> T?
 ) async -> (origin: String, value: T)? {
+    if let current, let value = await probe(current) { return (current, value) }
+    let origins = candidates.filter { $0 != current }
     if origins.isEmpty { return nil }
     return await withTaskGroup(of: (Int, T?).self) { group in
         var next = 0

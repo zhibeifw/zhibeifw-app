@@ -47,6 +47,7 @@ final class FormatTests: XCTestCase {
         XCTAssertEqual(pillState(nil, knownDuration: 3710), PillState(kind: .new, text: "62 分钟"))
         XCTAssertEqual(pillState(Prog(position: 100, duration: 960, completed: false)), PillState(kind: .half, text: "剩 14:20"))
         XCTAssertEqual(pillState(Prog(position: 0, duration: 3710, completed: true)), PillState(kind: .done, text: "62 分钟"))
+        XCTAssertEqual(pillState(Prog(position: 0, duration: 0, completed: true), knownDuration: 3710).text, "62 分钟")
         XCTAssertEqual(pillState(Prog(position: 0, duration: 0, completed: true)), PillState(kind: .done, text: "已听完"))
         XCTAssertEqual(progressRatio(5, 0), 0)
         XCTAssertEqual(progressRatio(50, 10), 1)
@@ -232,9 +233,6 @@ final class InteractionTests: XCTestCase {
         XCTAssertTrue(shouldSyncOnForeground(now: 60_000, lastSyncAt: 0, syncing: false))
         XCTAssertFalse(shouldSyncOnForeground(now: 59_999, lastSyncAt: 0, syncing: false))
         XCTAssertFalse(shouldSyncOnForeground(now: 99_999, lastSyncAt: 0, syncing: true))
-        XCTAssertEqual(launchFreshWaitMs(online: false, elapsedMs: 10), 0)
-        XCTAssertEqual(launchFreshWaitMs(online: true, elapsedMs: 1000), 2000)
-        XCTAssertEqual(launchFreshWaitMs(online: true, elapsedMs: 5000), 0)
     }
     func testSleepChoices() {
         XCTAssertEqual(SLEEP_CHOICES.map(\.title), ["单集结束时", "1 小时", "45 分钟", "30 分钟", "15 分钟", "10 分钟", "5 分钟", "关闭"])
@@ -259,6 +257,30 @@ final class InteractionTests: XCTestCase {
 }
 
 final class RaceTests: XCTestCase {
+    func testManualCheckKeepsHealthyCurrentRoute() async {
+        let selected = await pickFirstReachable(["backup", "current"], checking: "current", staggerMs: 1) { origin -> Int? in
+            XCTAssertEqual(origin, "current")
+            try? await Task.sleep(nanoseconds: 20_000_000)
+            return 1
+        }
+        XCTAssertEqual(selected?.origin, "current")
+    }
+
+    func testManualCheckDoesNotProbeFailedCurrentTwice() async {
+        actor Log {
+            var origins = [String]()
+            func add(_ origin: String) { origins.append(origin) }
+        }
+        let log = Log()
+        let selected = await pickFirstReachable(["backup", "current"], checking: "current") { origin -> Int? in
+            await log.add(origin)
+            return origin == "backup" ? 1 : nil
+        }
+        let origins = await log.origins
+        XCTAssertEqual(origins, ["current", "backup"])
+        XCTAssertEqual(selected?.origin, "backup")
+    }
+
     func testFirstFastWins() async {
         let r = await pickFirstReachable(["a", "b"], staggerMs: 1500) { (o: String) async -> Int? in o == "a" ? 1 : 2 }
         XCTAssertEqual(r?.origin, "a")

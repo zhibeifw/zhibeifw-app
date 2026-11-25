@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.Routes
+import com.zhibeifw.app.core.seriesStatusText
+import com.zhibeifw.app.design.ZIcon
 import com.zhibeifw.app.data.SeriesCard
 import com.zhibeifw.app.design.C
 import com.zhibeifw.app.design.generated.Tok
@@ -52,15 +54,18 @@ internal fun TvIconButton(click: () -> Unit, modifier: Modifier = Modifier, labe
 }
 
 @Composable
-internal fun TvPill(text: String, click: () -> Unit, modifier: Modifier = Modifier) {
+internal fun TvPill(text: String, click: () -> Unit, modifier: Modifier = Modifier, icon: String? = null) {
     TvButton(click, modifier) {
-        Text(text, Modifier.padding(horizontal = Tok.Space.scale[3].d, vertical = Tok.Space.scale[1].d),
-            maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Row(Modifier.padding(horizontal = Tok.Space.scale[3].d, vertical = Tok.Space.scale[1].d),
+            horizontalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d), verticalAlignment = Alignment.CenterVertically) {
+            if (icon != null) ZIcon(icon, Tok.Menu.iconSize.d, LocalContentColor.current)
+            Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
 @Composable
-internal fun TvCoverCard(model: AppModel, card: SeriesCard, modifier: Modifier = Modifier, removeFavorite: (() -> Unit)? = null) {
+internal fun TvCoverCard(model: AppModel, card: SeriesCard, modifier: Modifier = Modifier, subtitle: String? = card.lastTitle?.let { "更新至 $it" }, removeFavorite: (() -> Unit)? = null) {
     val title = card.featureTitle ?: card.title
     Column(modifier) {
         val shape = RoundedCornerShape(TV.coverRadius.d)
@@ -68,7 +73,7 @@ internal fun TvCoverCard(model: AppModel, card: SeriesCard, modifier: Modifier =
             androidx.tv.material3.Card(
                 onClick = { model.nav.push(Routes.series(card.id)) },
                 onLongClick = open,
-                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { contentDescription = title },
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).semantics { contentDescription = listOfNotNull(title, subtitle).joinToString("，") },
                 shape = androidx.tv.material3.CardDefaults.shape(shape)
             ) {
                 CoverImage(model.images, card.coverPath, card.id, shape, Modifier.fillMaxSize(), originVersion = model.net.originVersion)
@@ -80,7 +85,7 @@ internal fun TvCoverCard(model: AppModel, card: SeriesCard, modifier: Modifier =
         }
         Text(title, Modifier.padding(top = Tok.Space.scale[1].d), style = MaterialTheme.typography.titleMedium,
             maxLines = 2, overflow = TextOverflow.Ellipsis)
-        card.lastTitle?.let { Text("更新至 $it", color = C.labelSecondary(), style = MaterialTheme.typography.bodySmall) }
+        subtitle?.let { Text(it, color = C.labelSecondary(), style = MaterialTheme.typography.bodySmall) }
     }
 }
 
@@ -119,11 +124,12 @@ internal fun TvHome(model: AppModel, focusHomeTab: () -> Unit) {
     }
 }
 
-internal fun LazyListScope.tvCardGrid(model: AppModel, cards: List<SeriesCard>, loadMore: (suspend () -> Unit)? = null, removeFavorite: ((String) -> Unit)? = null) {
+internal fun LazyListScope.tvCardGrid(model: AppModel, cards: List<SeriesCard>, loadMore: (suspend () -> Unit)? = null, removeFavorite: ((String) -> Unit)? = null,
+    status: (SeriesCard) -> String = { seriesStatusText(it.status) }) {
     items(cards.chunked(4), key = { it.first().id }) { row ->
         Row(Modifier.fillMaxWidth().padding(horizontal = TV.margin.d, vertical = Tok.Space.scale[2].d),
             horizontalArrangement = Arrangement.spacedBy(TV.gap.d)) {
-            row.forEach { card -> TvCoverCard(model, card, Modifier.weight(1f), removeFavorite?.let { remove -> { remove(card.id) } }) }
+            row.forEach { card -> TvCoverCard(model, card, Modifier.weight(1f), status(card), removeFavorite?.let { remove -> { remove(card.id) } }) }
             repeat(4 - row.size) { Spacer(Modifier.weight(1f)) }
         }
         if (row.last().id == cards.last().id) LaunchedEffect(row.last().id) { loadMore?.invoke() }

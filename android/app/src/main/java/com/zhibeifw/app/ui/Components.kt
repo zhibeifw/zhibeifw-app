@@ -730,6 +730,29 @@ fun MoreButton(label: String = "更多操作", items: () -> List<List<MenuItem>>
 // ---------------- 空状态、错误、提示条 ----------------
 
 @Composable
+internal fun UnavailableCourseView(
+    course: com.zhibeifw.app.data.CourseDetails.Gone,
+    removeFavorite: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val television = androidx.compose.ui.res.booleanResource(com.zhibeifw.app.R.bool.is_television)
+    Column(modifier.fillMaxWidth().padding(horizontal = CP.EmptyState.paddingH.d),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(CP.RetryButton.topGap.d, Alignment.CenterVertically)) {
+        ZIcon("book-outline", Tok.PageHeader.iconSize.d, C.labelSecondary())
+        Txt(course.title ?: "这门课已下架", S.sectionTitle, C.labelPrimary(),
+            if (television && !course.favorited) Modifier.focusable() else Modifier, align = TextAlign.Center)
+        if (course.title != null) Txt("已下架", S.body, C.labelSecondary())
+        if (course.favorited) {
+            if (television) TvPill("取消收藏", removeFavorite, Modifier.tvEntryFocus())
+            else androidx.compose.material3.OutlinedButton(onClick = removeFavorite) {
+                androidx.compose.material3.Text("取消收藏")
+            }
+        }
+    }
+}
+
+@Composable
 fun EmptyStateView(text: String, modifier: Modifier = Modifier, retry: (() -> Unit)? = null) {
     Column(
         modifier.fillMaxWidth().padding(horizontal = CP.EmptyState.paddingH.d),

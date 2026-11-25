@@ -43,6 +43,29 @@ final class StoreTests: XCTestCase {
             }, featured: featured)
     }
 
+    func testSeriesDetailsDistinguishReadFailureFromDelisting() throws {
+        try store.replaceIndex(index([("课", "类", "ongoing", ["第一集"]), ("空课", "类", "ongoing", [])]))
+        XCTAssertEqual(store.loadSeriesDetails("已移除"), .gone(title: nil, favorited: false))
+        try store.recordPlayback(episodeId: "旧集", seriesId: "已移除", position: 10, duration: 100, seriesTitle: "收听时的课名")
+        try store.addFavorite("已移除", title: "")
+        XCTAssertEqual(try store.loadFavorites().first?.title, "收听时的课名")
+        try store.addFavorite("已移除", title: "收藏时的课名")
+        XCTAssertEqual(store.loadSeriesDetails("已移除"), .gone(title: "收藏时的课名", favorited: true))
+        try store.removeFavorite("已移除")
+        XCTAssertEqual(store.loadSeriesDetails("已移除"), .gone(title: "收听时的课名", favorited: false))
+        guard case .ready(_, let empty) = store.loadSeriesDetails("空课") else { return XCTFail("空课仍在目录中") }
+        XCTAssertTrue(empty.isEmpty)
+
+        for table in ["user_favorite", "user_progress"] {
+            try db.exec("ALTER TABLE \(table) RENAME TO unavailable")
+            XCTAssertEqual(store.loadSeriesDetails("课"), .readFailed)
+            try db.exec("ALTER TABLE unavailable RENAME TO \(table)")
+            guard case .ready(let header, let episodes) = store.loadSeriesDetails("课") else { return XCTFail("重读应恢复课程") }
+            XCTAssertEqual(header.title, "课")
+            XCTAssertEqual(episodes.map(\.title), ["第一集"])
+        }
+    }
+
     func testMigrateFreshAndIdempotent() throws {
         XCTAssertEqual(db.userVersion, 3)
         let again = try Migrator.migrate(db)

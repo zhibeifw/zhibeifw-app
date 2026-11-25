@@ -7,6 +7,8 @@ import com.zhibeifw.app.core.IndexFile
 import com.zhibeifw.app.core.CategoryEntry
 import com.zhibeifw.app.core.SeriesEntry
 import com.zhibeifw.app.core.Prog
+import com.zhibeifw.app.core.EpisodeEntry
+import com.zhibeifw.app.data.CourseDetails
 import com.zhibeifw.app.data.Db
 import com.zhibeifw.app.data.Migrator
 import com.zhibeifw.app.data.Store
@@ -42,6 +44,32 @@ class StoreDeviceTest {
     fun tearDown() {
         db.db.close()
         dir.deleteRecursively()
+    }
+
+    @Test
+    fun courseDetailsDistinguishMissingEmptyAndFailedReads() {
+        val episode = EpisodeEntry("e", "第一集", "e.mp3", null)
+        store.replaceIndex(IndexFile(listOf(CategoryEntry("c", "分类", null, null)), listOf(
+            SeriesEntry("s", "课程", "c", "", "ended", null, listOf(episode), null),
+            SeriesEntry("empty", "空课程", "c", "", "ongoing", null, emptyList(), null)
+        ), emptyList()))
+        assertEquals(CourseDetails.Gone(null, false), store.loadCourseDetails("missing"))
+        store.recordPlayback("e0", "missing", 10.0, 100.0, "收听时的课名")
+        store.addFavorite("missing", "")
+        assertEquals("收听时的课名", store.loadFavorites().single().title)
+        store.addFavorite("missing", "收藏时的课名")
+        assertEquals(CourseDetails.Gone("收藏时的课名", true), store.loadCourseDetails("missing"))
+        store.removeFavorite("missing")
+        assertEquals(CourseDetails.Gone("收听时的课名", false), store.loadCourseDetails("missing"))
+        assertTrue((store.loadCourseDetails("empty") as CourseDetails.Ready).episodes.isEmpty())
+        for (table in listOf("user_favorite", "user_progress")) {
+            db.exec("ALTER TABLE $table RENAME TO unavailable")
+            assertEquals(CourseDetails.ReadFailed, store.loadCourseDetails("s"))
+            db.exec("ALTER TABLE unavailable RENAME TO $table")
+            val ready = store.loadCourseDetails("s") as CourseDetails.Ready
+            assertEquals("课程", ready.header.title)
+            assertEquals(listOf("e"), ready.episodes.map { it.id })
+        }
     }
 
     @Test

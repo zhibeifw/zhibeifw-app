@@ -14,7 +14,6 @@ import com.zhibeifw.app.core.DlStatus
 import com.zhibeifw.app.core.PlayContext
 import com.zhibeifw.app.core.UpdateChannel
 import com.zhibeifw.app.core.isHttpsOrigin
-import com.zhibeifw.app.core.launchFreshWaitMs
 import com.zhibeifw.app.core.parseDomains
 import com.zhibeifw.app.core.shouldSyncOnForeground
 import com.zhibeifw.app.data.AppFiles
@@ -36,6 +35,7 @@ import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
 import com.zhibeifw.app.net.editPrefs
 import com.zhibeifw.app.net.readPrefs
+import com.zhibeifw.app.player.StartResult
 import com.zhibeifw.app.player.PlayerController
 import com.zhibeifw.app.ui.SheetSpec
 import com.zhibeifw.app.widget.WidgetFeeder
@@ -54,7 +54,6 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 
 sealed class Phase {
     object Launching : Phase()
@@ -73,7 +72,8 @@ data class AlertButton(
 data class AlertSpec(
     val title: String,
     val message: String? = null,
-    val buttons: List<AlertButton> = listOf(AlertButton("好"))
+    val buttons: List<AlertButton> = listOf(AlertButton("好")),
+    val alwaysShowDialog: Boolean = false
 )
 
 /** 全 App 的状态与动作（与 iOS AppModel.swift 同样的结构）。页面只读它、调它。 */
@@ -133,7 +133,6 @@ class AppModel(private val ctx: Context) {
 
     /** 启动页期间：打开数据库、迁移、读本机数据。返回后启动页才关（setKeepOnScreenCondition）。 */
     private suspend fun boot() {
-        val t0 = System.currentTimeMillis()
         val ok = withContext(Dispatchers.IO) {
             UpdateDownloads.cleanupInstalledUpdate(ctx)
             files.prepare()
@@ -166,6 +165,13 @@ class AppModel(private val ctx: Context) {
         val p = PlayerController(ctx, store, files, net)
         player = p
         p.onProgressSaved = { progressVersion++ }
+        p.onFailure = { error ->
+            val episode = p.current
+            alert = if (error.canRetry) AlertSpec(error.message, buttons = listOf(
+                AlertButton("关闭", cancel = true),
+                AlertButton("重试") { if (p.current === episode && p.error == error) p.retry() }
+            )) else AlertSpec(error.message, alwaysShowDialog = true)
+        }
         if (!isTelevision) {
             val dm = DownloadManager(SystemDownloader(ctx), store, files)
             dm.origin = { net.ensureRoutes() }
@@ -173,8 +179,7 @@ class AppModel(private val ctx: Context) {
             dm.onBatchFailed = { alert = AlertSpec("部分下载失败，请稍后重试") }
             dm.onDiskFull = { alert = AlertSpec("手机存储空间不足，下载失败") }
             downloads = dm
-            p.onDamaged =
-                { id -> dm.removeDownload(id); alert = AlertSpec("这一集的下载文件已损坏，请重新下载") }
+            p.onDamaged = dm::removeDownload
             runCatching { dm.reconcile() }
         }
         connectivity.onReconnect.add {
@@ -184,12 +189,8 @@ class AppModel(private val ctx: Context) {
 
         if (store.isInitialized) {
             loadHome()
-            val wait = launchFreshWaitMs(connectivity.connected, System.currentTimeMillis() - t0)
-            if (wait > 0) {
-                val job = scope.async { syncCatalog(false) }
-                withTimeoutOrNull(wait) { job.await() }
-            } else scope.launch { syncCatalog(false) }
             phase = Phase.Ready
+            scope.launch { syncCatalog(false) }
             onReady()
         } else {
             phase = Phase.Initializing(1, false)
@@ -207,22 +208,22 @@ class AppModel(private val ctx: Context) {
     /** 正在首次初始化：网络恢复和“重试”同时来时只跑一轮 */
     private var initRunning = false
 
-    suspend fun runInitialization() {
+    suspend fun runInitialization(showAttempts: Boolean = true) {
         if (initRunning) return
         initRunning = true
         try {
-            initializeOnce()
+            initializeOnce(showAttempts)
         } finally {
             initRunning = false
         }
     }
 
-    private suspend fun initializeOnce() {
-        phase = Phase.Initializing(1, false)
+    private suspend fun initializeOnce(showAttempts: Boolean) {
+        if (showAttempts) phase = Phase.Initializing(1, false)
         val ok = CatalogSync.initializeWithRetry(
             store,
             net,
-            onAttempt = { n -> phase = Phase.Initializing(n, false) })
+            onAttempt = { n -> if (showAttempts) phase = Phase.Initializing(n, false) })
         if (ok) {
             loadHome()
             phase = Phase.Ready
@@ -285,7 +286,7 @@ class AppModel(private val ctx: Context) {
     /** 同步目录。userInitiated：主页下拉刷新。有新内容就立刻换上主页。 */
     /** 取 index.json 只有这几处：启动、切回前台（自动，主页顶栏显示“正在更新…”）、下拉刷新、刷新网络线路。
      *  点开课程、在“最近”里点已下架的课都只看本机目录，不联网。 */
-    suspend fun syncCatalog(userInitiated: Boolean): SyncSummary? {
+    suspend fun syncCatalog(userInitiated: Boolean, fromRouteCheck: Boolean = false): SyncSummary? {
         // 已经在更新（启动、回到前台时的自动更新）：等它做完，不另起一次；直接返回的话，下拉刷新的转圈会一闪就没
         inflightSync?.let { running ->
             val s = running.await()
@@ -296,7 +297,7 @@ class AppModel(private val ctx: Context) {
             return s
         }
         syncing = true
-        if (!userInitiated) autoUpdating = true
+        if (!userInitiated && !fromRouteCheck) autoUpdating = true
         try {
             // 由同步任务自己做完时清掉：下拉刷新的页面被关掉、等的人被取消时，同步还在跑，不能让下一次另起一个
             lateinit var task: Deferred<SyncSummary>
@@ -313,7 +314,8 @@ class AppModel(private val ctx: Context) {
             lastSyncAt = System.currentTimeMillis()
             // 有新内容立刻换上；用户下拉刷新则完成后一律重读
             if (userInitiated || s.changed) loadHome()
-            syncFailed = if (s.failed) userInitiated || connectivity.connected else false
+            if (!s.failed) syncFailed = false
+            else if (!fromRouteCheck) syncFailed = userInitiated || connectivity.connected
             return s
         } finally {
             syncing = false; autoUpdating = false
@@ -353,7 +355,7 @@ class AppModel(private val ctx: Context) {
                 if (play && !p.looksPlaying) p.resume()
                 if (!play && p.looksPlaying) p.pause()
             } else {
-                p.start(episodeId, PlayContext.Single)
+                if (p.start(episodeId, PlayContext.Single) != StartResult.STARTED) return@withContext
             }
             widgets.quickUpdateNowPlaying(play)
         }
@@ -458,7 +460,7 @@ class AppModel(private val ctx: Context) {
             openPlayer()
             return
         }
-        if (p.start(episodeId, ctx)) openPlayer() else alert = AlertSpec("这一集已下架")
+        startEpisode(p, episodeId, ctx, open = true)
     }
 
     fun togglePlay(episodeId: String, ctx: PlayContext) {
@@ -466,7 +468,15 @@ class AppModel(private val ctx: Context) {
         if (p.current?.episodeId == episodeId) {
             p.toggle(); return
         }
-        if (!p.start(episodeId, ctx)) alert = AlertSpec("这一集已下架")
+        startEpisode(p, episodeId, ctx, open = false)
+    }
+
+    private fun startEpisode(player: PlayerController, id: String, ctx: PlayContext, open: Boolean) {
+        when (player.start(id, ctx)) {
+            StartResult.STARTED -> if (open) openPlayer()
+            StartResult.GONE -> alert = AlertSpec("这一集已下架")
+            StartResult.READ_FAILED -> alert = AlertSpec("课程读取失败，请重试")
+        }
     }
 
     /** “最近”里点某一集：本机目录里没有、也没下载过，就是已下架。只看本机目录，不联网（只有启动和下拉刷新取 index.json）。 */
@@ -477,10 +487,23 @@ class AppModel(private val ctx: Context) {
                 PlayContext.Single
             ) else togglePlay(row.episodeId, PlayContext.Single)
         }
-        if (!row.gone || safe("读下载记录") { store.getDownload(row.episodeId) }?.state == DlStatus.DONE) {
-            go(); return
+        if (row.gone) {
+            val message = try {
+                when {
+                    store.getDownload(row.episodeId)?.state == DlStatus.DONE -> null
+                    store.seriesExists(row.seriesId) -> "这一集已下架"
+                    else -> "这门课已下架"
+                }
+            } catch (e: Exception) {
+                Log.w("AppModel", "读取最近播放课程失败", e)
+                "课程读取失败，请重试"
+            }
+            if (message != null) {
+                alert = AlertSpec(message)
+                return
+            }
         }
-        alert = AlertSpec(if (safe("读课程") { store.seriesExists(row.seriesId) } == true) "这一集已下架" else "这门课已下架")
+        go()
     }
 
     // ---------- 进度、收藏 ----------
@@ -593,7 +616,8 @@ class AppModel(private val ctx: Context) {
     suspend fun refreshRoutes(): String {
         val (origin, same) = net.refreshRoutes()
         if (origin == null) return "暂时无法连接"
-        syncCatalog(true)
+        if (phase is Phase.Initializing) runInitialization(showAttempts = false)
+        else syncCatalog(false, fromRouteCheck = true)
         return if (same) "线路正常" else "已切换到备用线路，连接正常"
     }
 

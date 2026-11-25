@@ -118,13 +118,6 @@ struct MacMiniPlayer: View {
                 .font(.system(size: Tok.Component.MacMiniPlayer.controlIconSize))
                 .labelStyle(.iconOnly)
                 .buttonStyle(.plain)
-                if let error = p.error {
-                    HStack {
-                        Text(error == .gone ? "这一集已下架" : error == .damaged ? "这一集的文件已损坏" : "暂时无法播放，请检查网络后重试")
-                        if error == .cannotPlay { Button("重试", systemImage: "arrow.clockwise") { p.retry() } }
-                    }
-                    .foregroundStyle(C.danger)
-                }
             }
             .padding(.horizontal, Tok.Component.MacMiniPlayer.padding)
             .padding(.vertical, Tok.Component.MacMiniPlayer.verticalPadding)

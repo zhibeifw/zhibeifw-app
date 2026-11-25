@@ -17,6 +17,7 @@ import com.zhibeifw.app.data.Migrator
 import com.zhibeifw.app.data.Store
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.player.PlayerController
+import com.zhibeifw.app.player.StartResult
 import com.zhibeifw.app.player.PlayerError
 import com.zhibeifw.app.player.SEEK_BACK_SECONDS
 import com.zhibeifw.app.player.SEEK_FORWARD_SECONDS
@@ -130,7 +131,7 @@ class PlayerControllerDeviceTest {
         download(1, wav(8.0))
         record("课_1", 3.0, 8.0); store.hideFromRecent("课_1")
         val p = make()
-        assertTrue(p.start("课_1", PlayContext.Series("课")))
+        assertEquals(StartResult.STARTED, p.start("课_1", PlayContext.Series("课")))
         assertTrue("点了马上显示暂停图标", p.looksPlaying)
         until("在出声") { p.isPlaying }
         assertTrue(p.player.currentPosition >= 2900)
@@ -210,6 +211,9 @@ class PlayerControllerDeviceTest {
         until("播完停住", 6_000) { !p.looksPlaying }
         assertEquals("不接下一集", "课_1", p.current?.episodeId)
         assertEquals(SleepSetting.Off, p.sleep)
+        p.saveNow()
+        withContext(store.progressIo) { }
+        assertTrue("退到后台后仍是已听完", store.loadProgress("课_1")!!.completed)
     }
 
     @Test
@@ -279,6 +283,45 @@ class PlayerControllerDeviceTest {
     }
 
     // ---------- 加载期间的操作 ----------
+
+    @Test
+    fun failedEpisodeLookupDoesNotReportGone() = onMain {
+        val p = make()
+        assertEquals(StartResult.GONE, p.start("missing", PlayContext.Single))
+        db.exec("ALTER TABLE catalog_episode RENAME TO unavailable")
+        assertEquals(StartResult.READ_FAILED, p.start("课_1", PlayContext.Single))
+        assertNull(p.current)
+    }
+
+    @Test
+    fun failedProgressReadPreservesPositionForRetry() = onMain {
+        download(1, wav(12.0))
+        record("课_1", 4.0, 12.0)
+        db.exec("ALTER TABLE user_progress RENAME TO unavailable")
+        val p = make()
+        p.start("课_1", PlayContext.Single)
+        until("提示读取失败") { p.error == PlayerError.READ_FAILED }
+        assertEquals(0, p.player.mediaItemCount)
+        db.exec("ALTER TABLE unavailable RENAME TO user_progress")
+        assertEquals(4.0, store.loadProgress("课_1")!!.position, 0.0)
+        p.retry()
+        until("从原位置续播") { p.isPlaying && p.player.currentPosition >= 4000 }
+        p.pause()
+    }
+
+    @Test
+    fun togglePausesRetryWhilePreparing() = onMain {
+        val p = make()
+        p.start("课_1", PlayContext.Single)
+        until("首次无法播放") { p.error == PlayerError.CANNOT_PLAY }
+        download(1, wav(8.0))
+        p.toggle()
+        assertTrue(p.loadingPlayback)
+        p.toggle()
+        assertFalse("重试加载时按暂停应立即撤销播放", p.looksPlaying)
+        until("暂停状态下完成准备") { p.player.playbackState == androidx.media3.common.Player.STATE_READY }
+        assertFalse(p.player.playWhenReady)
+    }
 
     @Test
     fun pauseWhileLoadingStaysSilentAndKeepsProgress() = onMain {

@@ -22,6 +22,7 @@ struct WatchRootView: View {
     @Environment(AppCore.self) private var core
     @State private var continuation: RecentRow?
     @State private var refreshingRoutes = false
+    @State private var routeLabel = "刷新网络线路"
 
     var body: some View {
         @Bindable var model = model
@@ -36,11 +37,10 @@ struct WatchRootView: View {
                         Text("暂时无法连接")
                         Button("重试", systemImage: "arrow.clockwise") { Task { await core.runInitialization() } }
                             .disabled(refreshingRoutes)
-                        Button(refreshingRoutes ? "正在检测…" : "刷新网络线路", systemImage: "network") {
+                        Button(refreshingRoutes ? "正在检测…" : routeLabel, systemImage: "network") {
                             refreshingRoutes = true
                             Task {
-                                _ = await Network.shared.refreshRoutes()
-                                await core.runInitialization()
+                                routeLabel = await core.refreshRoutes()
                                 refreshingRoutes = false
                             }
                         }

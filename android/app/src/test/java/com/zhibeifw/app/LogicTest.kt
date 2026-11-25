@@ -33,6 +33,7 @@ class FormatTest {
         assertEquals(PillState(PillKind.NEW, "62 分钟"), pillState(null, 3710.0))
         assertEquals(PillState(PillKind.HALF, "剩 14:20"), pillState(Prog(100.0, 960.0, false)))
         assertEquals(PillState(PillKind.DONE, "62 分钟"), pillState(Prog(0.0, 3710.0, true)))
+        assertEquals("62 分钟", pillState(Prog(0.0, 0.0, true), 3710.0).text)
         assertEquals(PillState(PillKind.DONE, "已听完"), pillState(Prog(0.0, 0.0, true)))
         assertEquals(0.0, progressRatio(5.0, 0.0), 0.0)
         assertEquals(1.0, progressRatio(50.0, 10.0), 0.0)
@@ -242,9 +243,6 @@ class InteractionTest {
         assertTrue(shouldSyncOnForeground(60_000, 0, false))
         assertFalse(shouldSyncOnForeground(59_999, 0, false))
         assertFalse(shouldSyncOnForeground(99_999, 0, true))
-        assertEquals(0L, launchFreshWaitMs(false, 10))
-        assertEquals(2000L, launchFreshWaitMs(true, 1000))
-        assertEquals(0L, launchFreshWaitMs(true, 5000))
     }
 
     @Test
@@ -289,6 +287,20 @@ class InteractionTest {
 }
 
 class RaceTest {
+    @Test
+    fun manualCheckKeepsCurrentUntilItFails() = runBlocking {
+        for (healthy in listOf(true, false)) {
+            val probes = java.util.concurrent.CopyOnWriteArrayList<String>()
+            val winner = pickFirstReachable(listOf("backup", "current"), staggerMs = 1, checking = "current") { origin ->
+                probes.add(origin)
+                if (origin == "current") kotlinx.coroutines.delay(20)
+                if (healthy || origin == "backup") 1 else null
+            }
+            assertEquals(if (healthy) "current" else "backup", winner?.first)
+            assertEquals(if (healthy) listOf("current") else listOf("current", "backup"), probes.toList())
+        }
+    }
+
     @Test
     fun firstFastWins() = runBlocking {
         assertEquals(

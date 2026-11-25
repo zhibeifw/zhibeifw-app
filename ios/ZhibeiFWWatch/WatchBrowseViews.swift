@@ -10,9 +10,14 @@ struct WatchHomeView: View {
                     .listRowBackground(Color.clear)
             }
             if core.autoUpdating { ProgressView("正在更新") }
-            if core.syncFailed { Text("无法更新，显示上次内容").font(.footnote).foregroundStyle(.secondary) }
+            if core.syncFailed {
+                HStack {
+                    Text("无法更新，显示的是上一次更新的内容").font(.footnote).foregroundStyle(.secondary)
+                    Button("重试") { Task { await core.syncCatalog(userInitiated: true) } }
+                }
+            }
             if !core.home.ongoing.isEmpty {
-                Section("最新课程") {
+                Section("新课程") {
                     ForEach(core.home.ongoing) { card in
                         NavigationLink(value: WatchRoute.series(card.id)) {
                             WatchCourseLabel(
@@ -29,6 +34,17 @@ struct WatchHomeView: View {
                             WatchCourseLabel(title: card.featureTitle ?? card.title, cover: card.coverPath, id: card.id)
                         }
                     }
+                }
+            }
+            ForEach(core.home.categories) { category in
+                Section {
+                    ForEach(category.series) { card in
+                        NavigationLink(value: WatchRoute.series(card.id)) {
+                            WatchCourseLabel(title: card.title, cover: card.coverPath, id: card.id, subtitle: nil)
+                        }
+                    }
+                } header: {
+                    NavigationLink(value: WatchRoute.category(category.id, category.name)) { Text(category.name) }
                 }
             }
             NavigationLink(value: WatchRoute.categories) { Label("浏览全部分类", systemImage: "square.grid.2x2") }
@@ -100,13 +116,16 @@ struct WatchSearchView: View {
     var body: some View {
         List {
             if searching { ProgressView("正在搜索") }
+            if submitted.isEmpty { Text("输入课程名搜索").foregroundStyle(.secondary) }
             if let result {
                 if result.rows.isEmpty {
                     Text("未找到相关内容")
                 } else {
                     if result.fallback { Text("已显示“\(result.matched)”的结果").font(.footnote) }
                     ForEach(result.rows) { row in
-                        NavigationLink(row.title, value: WatchRoute.series(row.id))
+                        NavigationLink(value: WatchRoute.series(row.id)) {
+                            WatchCourseLabel(title: row.title, cover: row.coverPath, id: row.id, subtitle: seriesStatusText(row.status))
+                        }
                     }
                 }
             }
@@ -134,14 +153,13 @@ struct WatchSeriesView: View {
     let id: String
     @Environment(AppCore.self) private var core
     @Environment(WatchModel.self) private var model
-    @State private var header: SeriesHeader?
-    @State private var episodes: [EpisodeRow] = []
+    @State private var details: SeriesDetails?
     @State private var oldestFirst = true
-    @State private var loaded = false
 
     var body: some View {
         List {
-            if let header {
+            switch details {
+            case .ready(let header, let episodes):
                 WatchCourseLabel(
                     title: header.title, cover: header.coverPath, id: id,
                     subtitle: seriesInfoText(category: false, count: episodes.count, status: header.status))
@@ -157,28 +175,33 @@ struct WatchSeriesView: View {
                             progress: row.progress, duration: row.epDuration ?? 0, compactPlayback: true)
                     }
                 }
-            } else if loaded {
-                ContentUnavailableView("课程已下架", systemImage: "xmark.circle")
-            } else {
+            case .gone(let title, let favorited):
+                UnavailableCourseView(title: title, favorited: favorited) { core.removeFavorite(id) }
+                .listRowBackground(Color.clear)
+            case .readFailed:
+                Text("课程读取失败")
+                Button("重试", action: reload)
+            case nil:
                 ProgressView()
             }
         }
         .navigationTitle("课程")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                NavigationLink {
-                    WatchSeriesActionsView(id: id, oldestFirst: $oldestFirst)
-                } label: {
-                    Image(systemName: "ellipsis")
-                }.accessibilityLabel("课程选项")
+                if case .ready = details {
+                    NavigationLink {
+                        WatchSeriesActionsView(id: id, oldestFirst: $oldestFirst)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                    }.accessibilityLabel("课程选项")
+                }
             }
         }
         .task(id: model.versions) {
-            header = try? core.store.loadSeriesHeader(id)
-            episodes = (try? core.store.loadEpisodes(id)) ?? []
-            loaded = true
+            reload()
         }
     }
+    private func reload() { details = core.store.loadSeriesDetails(id) }
 }
 
 struct WatchSeriesActionsView: View {

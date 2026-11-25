@@ -52,7 +52,13 @@ import kotlin.math.min
 //  · 定时存进度、睡眠定时：播放器所在线程（主线程）上的 Handler，在播放服务存活期间（前台服务）照常执行，不依赖界面。
 // 只有一处界面层状态：点了播放、还在找地址的那一小段（pendingStart），图标先变暂停。
 
-enum class PlayerError { CANNOT_PLAY, DAMAGED, GONE }
+enum class PlayerError(val message: String, val canRetry: Boolean = false) {
+    CANNOT_PLAY("网络异常，请检查网络后重试", true),
+    READ_FAILED("播放资料读取失败", true),
+    DAMAGED("这一集的下载文件已损坏，请重新下载"),
+    GONE("这一集已下架")
+}
+enum class StartResult { STARTED, GONE, READ_FAILED }
 data class NowPlaying(val info: EpisodeInfo, val ctx: PlayContext) {
     val episodeId get() = info.episodeId
     val seriesId get() = info.seriesId
@@ -101,6 +107,7 @@ class PlayerController(
     val loadingPlayback get() = looksPlaying && (pendingStart || buffering)
 
     var onProgressSaved: (() -> Unit)? = null
+    var onFailure: ((PlayerError) -> Unit)? = null
     var onDamaged: ((String) -> Unit)? = null
 
     private var lastSavedAt = Double.NEGATIVE_INFINITY
@@ -299,6 +306,11 @@ class PlayerController(
         }
     }
 
+    private fun failRead(error: Throwable) {
+        Log.w("Player", "读取播放资料失败", error)
+        fail(PlayerError.READ_FAILED)
+    }
+
     private fun fail(e: PlayerError) {
         clearStall()
         attached?.pause()
@@ -307,14 +319,20 @@ class PlayerController(
         isPlaying = false
         buffering = false
         error = e
+        onFailure?.invoke(e)
     }
 
     // ---------- 播放 ----------
 
-    fun start(episodeId: String, ctx: PlayContext): Boolean {
-        val info = runCatching { store.getEpisodeInfo(episodeId) }.getOrNull() ?: return false
+    fun start(episodeId: String, ctx: PlayContext): StartResult {
+        val info = try {
+            store.getEpisodeInfo(episodeId)
+        } catch (e: Exception) {
+            Log.w("Player", "读取单集失败", e)
+            return StartResult.READ_FAILED
+        } ?: return StartResult.GONE
         play(info, ctx)
-        return true
+        return StartResult.STARTED
     }
 
     fun play(info: EpisodeInfo, ctx: PlayContext) {
@@ -327,6 +345,7 @@ class PlayerController(
             }
         }
         markedDone = false
+        needsReload = false
         positionKnown = false
         durationRecorded = false
         clearStall()
@@ -337,10 +356,11 @@ class PlayerController(
         pendingStart = true
 
         scope.launch {
-            val local = withContext(Dispatchers.IO) {
-                runCatching { files.localAudio(info.episodeId, store) }.getOrDefault(AppFiles.LocalAudio.None)
+            val localResult = withContext(Dispatchers.IO) {
+                runCatching { files.localAudio(info.episodeId, store) }
             }
             if (gen != generation) return@launch
+            val local = localResult.getOrElse { failRead(it); return@launch }
             if (local is AppFiles.LocalAudio.Missing) {
                 onDamaged?.invoke(info.episodeId)
                 fail(PlayerError.DAMAGED)
@@ -353,14 +373,14 @@ class PlayerController(
             } else routes()?.let { uri = buildUrl(it, info.audioPath) }
             if (gen != generation) return@launch
             val u = uri ?: run { fail(PlayerError.CANNOT_PLAY); return@launch }
-            val prog = withContext(store.progressIo) { runCatching { store.loadProgress(info.episodeId) }.getOrNull() }
+            val progressResult = withContext(store.progressIo) { runCatching { store.loadProgress(info.episodeId) } }
             if (gen != generation) return@launch
+            val prog = progressResult.getOrElse { failRead(it); return@launch }
             val connected = connect()
             if (gen != generation) return@launch
             if (!connected) { fail(PlayerError.CANNOT_PLAY); return@launch }
             val startAt = prog?.let { if (it.completed) 0.0 else it.position } ?: 0.0
             val known = prog?.duration ?: 0.0
-            needsReload = false
             streaming = !isLocal
             position = startAt
             duration = known
@@ -513,7 +533,9 @@ class PlayerController(
 
     private fun onFinished() {
         val c = current ?: return
-        val dur = if (duration > 0) duration else position
+        val dur = if (player.duration > 0) player.duration / 1000.0 else maxOf(duration, position)
+        positionKnown = false
+        position = 0.0
         save(dur, dur) // 播完：算听完
         if (sleep == SleepSetting.End) { // 睡眠定时“单集结束时”优先于接下一集
             sleep = SleepSetting.Off; sleepLeft = null
@@ -532,7 +554,7 @@ class PlayerController(
         if (info != null) play(info, c.ctx) // 自动接下一集：MediaItem 换了，锁屏信息同时更新
         else {
             // 这一集到此结束：之后播放器报的“暂停”不再存位置，免得用归零的位置把“已听完”冲掉
-            stopAtEnd(); positionKnown = false; needsReload = true; position = 0.0
+            stopAtEnd(); needsReload = true
         }
     }
 

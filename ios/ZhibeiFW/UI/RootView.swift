@@ -40,19 +40,19 @@ struct InitView: View {
     var failed: Bool
     @Environment(AppModel.self) private var model
     @State private var refreshing = false
+    @State private var routeLabel = "刷新网络线路"
 
     var body: some View {
         VStack(spacing: CP.Init.spinnerGap) {
             if failed {
                 Text("暂时无法连接").zFont(S.body).foregroundStyle(C.labelSecondary)
                 RetryButton(title: "重试") { Task { await model.runInitialization() } }
-                RetryButton(title: refreshing ? "正在检测…" : "刷新网络线路") {
+                RetryButton(title: refreshing ? "正在检测…" : routeLabel) {
                     guard !refreshing else { return }
                     refreshing = true
                     Task {
-                        _ = await Network.shared.refreshRoutes()
+                        routeLabel = await model.refreshRoutes()
                         refreshing = false
-                        await model.runInitialization()
                     }
                 }
             } else {

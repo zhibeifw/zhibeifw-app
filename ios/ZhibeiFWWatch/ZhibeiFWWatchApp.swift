@@ -48,7 +48,6 @@ final class WatchModel {
             self.downloads = manager
             self.core.player.onDamaged = { [weak self] id in
                 self?.downloads?.removeDownload(id)
-                self?.core.alert = AlertSpec(title: "下载文件已损坏，请重新下载")
             }
             manager.onChange = { [weak self] in self?.downloadVersion += 1 }
             manager.onBatchFailed = { [weak self] in self?.core.alert = AlertSpec(title: "部分下载失败，请稍后重试") }

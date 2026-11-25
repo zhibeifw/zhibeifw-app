@@ -105,7 +105,7 @@ fun RecentView(model: AppModel) {
     var rows by remember { mutableStateOf<List<RecentRow>>(emptyList()) }
     val list = rememberLazyListState()
     LaunchedEffect(model.catalogVersion, model.progressVersion, model.downloadsVersion) {
-        rows = withContext(Dispatchers.IO) { runCatching { if (model.isTelevision) model.store.loadRecent(200) else model.store.loadRecent() }.getOrDefault(emptyList()) }
+        rows = withContext(Dispatchers.IO) { runCatching { model.store.loadRecent() }.getOrDefault(emptyList()) }
     }
     PageScaffold(
         model,
@@ -116,7 +116,7 @@ fun RecentView(model: AppModel) {
             TextButton(enabled = rows.isNotEmpty(), onClick = {
                 model.alert = AlertSpec(
                     "清空最近列表？",
-                    if (model.isTelevision) "各课程的收听进度和已听完标记会保留。" else "列表中的记录会被移除。各课程的收听进度、已听完标记和已下载内容不受影响。",
+                    if (model.isTelevision) "列表中的记录会被移除。各课程的收听进度、已听完标记不受影响。" else "列表中的记录会被移除。各课程的收听进度、已听完标记和已下载内容不受影响。",
                     listOf(
                         AlertButton("取消", cancel = true),
                         AlertButton(
@@ -165,10 +165,12 @@ fun FavoritesView(model: AppModel) {
                 Modifier.padding(top = (Tok.Space.scale[6] * 4).d)
             )
         }
-        if (model.isTelevision) tvCardGrid(model, rows.map { f ->
-            com.zhibeifw.app.data.SeriesCard(f.id, f.title, f.coverPath, f.status.orEmpty(),
-                featureTitle = if (f.gone) "${f.title}（已下架）" else null)
-        }, removeFavorite = model::removeFavorite)
+        if (model.isTelevision) {
+            val gone = rows.filter { it.gone }.mapTo(mutableSetOf()) { it.id }
+            tvCardGrid(model, rows.map { f ->
+                com.zhibeifw.app.data.SeriesCard(f.id, f.title, f.coverPath, f.status.orEmpty())
+            }, removeFavorite = model::removeFavorite, status = { if (it.id in gone) "已下架" else seriesStatusText(it.status) })
+        }
         else items(rows, key = { it.id }) { f ->
             Box(Modifier.padding(bottom = CP.SeriesRow.gap.d)) {
                 SeriesRowView(

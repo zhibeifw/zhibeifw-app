@@ -68,9 +68,6 @@ struct WatchPlayerView: View {
                     .font(.callout)
                     .buttonStyle(.plain)
                     .frame(minHeight: Tok.Component.WatchPlayer.actionHeight)
-                    if p.error != nil {
-                        Button("重试播放", systemImage: "arrow.clockwise") { p.retry() }
-                    }
                 }
             } else {
                 ContentUnavailableView("尚未播放", systemImage: "play.circle", description: Text("选择一节课开始收听"))
@@ -147,7 +144,6 @@ struct WatchPlayerActionsView: View {
     var body: some View {
         List {
             if let current = core.player.current {
-                if core.player.error != nil { Button("重试播放", systemImage: "arrow.clockwise") { core.player.retry() } }
                 WatchDownloadActionRows(id: current.episodeId, download: download) {
                     model.confirm("删除此下载？", message: "将停止当前播放，保留收听进度。") {
                         model.deleteDownloads([current.episodeId])

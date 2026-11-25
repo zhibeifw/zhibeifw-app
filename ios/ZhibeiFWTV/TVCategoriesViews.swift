@@ -62,7 +62,7 @@ struct TVCategoryView: View {
                     alignment: .leading, spacing: 60
                 ) {
                     ForEach(rows) { c in
-                        TVSeriesCard(card: c, width: TVLayout.smallCardWidth)
+                        TVSeriesCard(card: c, width: TVLayout.smallCardWidth, subtitle: seriesStatusText(c.status))
                             .onAppear { if c.id == rows.last?.id { more() } }
                     }
                 }

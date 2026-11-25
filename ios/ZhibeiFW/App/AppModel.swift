@@ -165,7 +165,6 @@ final class AppModel {
         player.onDamaged = { [weak self] id in
             guard let self else { return }
             self.downloads.removeDownload(id)
-            self.alert = AlertSpec(title: "这一集的下载文件已损坏，请重新下载")
         }
         await reconcileDownloads()
     }

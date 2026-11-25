@@ -16,6 +16,7 @@ ios/            iOS 和 Apple TV 版（Swift、SwiftUI），Xcode 工程 ios/Zhi
   ZhibeiFW/     iPhone / iPad 版的界面、下载、检查更新
   ZhibeiFWTV/   Apple TV 版（开发中）
 android/        Android 版（Kotlin、Jetpack Compose），Gradle 工程
+windows/        Windows 桌面版（C#、WPF），支持 x64 和 ARM64
 doc/            设计令牌（design-tokens.json）和图标数据
 tools/          gen_design.py：由设计令牌生成两端的常量文件；pre-commit：提交前用 gitleaks 检查；format/：Swift 格式化配置
 Version.xcconfig  两端共用的版本号
@@ -42,6 +43,8 @@ cd android
 ```
 
 正式包需要签名密钥，从 `~/.gradle/gradle.properties` 读取 `ZBFW_UPLOAD_STORE_FILE`、`ZBFW_UPLOAD_STORE_PASSWORD`、`ZBFW_UPLOAD_KEY_ALIAS`、`ZBFW_UPLOAD_KEY_PASSWORD`，仓库里没有密钥。
+
+**Windows** 使用 .NET 10 SDK。构建、测试和双架构安装器见 [windows/README.md](windows/README.md)。
 
 **版本号**：两端都读根目录的 `Version.xcconfig`。`MARKETING_VERSION` 是版本号（日期，如 `2026.11.03`），一个版本号只正式发布一次；`CURRENT_PROJECT_VERSION` 是版本号去点加两位序号（如 `2026110302`），同一版本里每构建一次加一。
 

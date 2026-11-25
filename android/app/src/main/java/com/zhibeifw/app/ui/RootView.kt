@@ -87,6 +87,7 @@ fun SplashView() {
 @Composable
 fun InitView(model: AppModel, attempt: Int, failed: Boolean) {
     var refreshing by remember { mutableStateOf(false) }
+    var routeLabel by remember { mutableStateOf("刷新网络线路") }
     Column(
         Modifier.fillMaxSize().padding(horizontal = CP.EmptyState.paddingH.d),
         verticalArrangement = Arrangement.spacedBy(
@@ -98,11 +99,11 @@ fun InitView(model: AppModel, attempt: Int, failed: Boolean) {
         if (failed) {
             Txt("暂时无法连接", S.body, C.labelSecondary())
             RetryButton("重试") { model.launch { model.runInitialization() } }
-            RetryButton(if (refreshing) "正在检测…" else "刷新网络线路") {
+            RetryButton(if (refreshing) "正在检测…" else routeLabel) {
                 if (refreshing) return@RetryButton
                 refreshing = true
                 model.launch {
-                    model.net.refreshRoutes(); refreshing = false; model.runInitialization()
+                    try { routeLabel = model.refreshRoutes() } finally { refreshing = false }
                 }
             }
         } else {
@@ -124,7 +125,7 @@ fun InitView(model: AppModel, attempt: Int, failed: Boolean) {
 fun AlertLayer(model: AppModel) {
     val a = model.alert
     // 只是告知、不用用户做决定的（没有说明文字、只有一个“好”）：用 Material 的 Snackbar，几秒后自动消失
-    val notice = a != null && a.message == null && a.buttons.size == 1 && a.buttons[0].title == "好"
+    val notice = a != null && !a.alwaysShowDialog && a.message == null && a.buttons.size == 1 && a.buttons[0].title == "好"
     val snack = remember { SnackbarHostState() }
     // 先把文字记下来再清掉 alert；显示放在另一个以文字为键的协程里，清 alert 不会把它取消
     var pending by remember { mutableStateOf<String?>(null) }

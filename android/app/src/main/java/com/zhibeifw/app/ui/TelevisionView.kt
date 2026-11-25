@@ -29,9 +29,9 @@ import androidx.navigation.compose.rememberNavController
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.Routes
 import com.zhibeifw.app.core.PlayContext
-import com.zhibeifw.app.core.Prog
-import com.zhibeifw.app.core.clock
+import com.zhibeifw.app.core.pillState
 import com.zhibeifw.app.core.seriesInfoText
+import com.zhibeifw.app.data.CourseDetails
 import com.zhibeifw.app.data.RecentRow
 import com.zhibeifw.app.design.C
 import com.zhibeifw.app.design.ZIcon
@@ -139,9 +139,8 @@ internal fun TelevisionView(model: AppModel) {
 
 @Composable
 internal fun TvSeriesView(model: AppModel, id: String) {
-    val details = courseDetails(model, id)
-    val header = details?.header
-    val episodes = details?.episodes.orEmpty()
+    var attempt by remember(id) { mutableIntStateOf(0) }
+    val details = courseDetails(model, id, attempt)
     var oldestFirst by rememberSaveable(id) { mutableStateOf(true) }
     val list = rememberLazyListState()
     val listEntry = remember(id) { FocusRequester() }
@@ -149,10 +148,19 @@ internal fun TvSeriesView(model: AppModel, id: String) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
         return
     }
-    if (header == null) {
-        EmptyStateView("这门课已下架")
+    if (details == CourseDetails.ReadFailed) {
+        Column(Modifier.fillMaxSize(), horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center) {
+            Text("课程读取失败")
+            TvPill("重试", { attempt++ }, Modifier.tvEntryFocus())
+        }
         return
     }
+    if (details is CourseDetails.Gone) {
+        UnavailableCourseView(details, { model.removeFavorite(id) }, Modifier.fillMaxSize())
+        return
+    }
+    val (header, episodes) = details as CourseDetails.Ready
     Row(Modifier.fillMaxSize().padding(horizontal = Tok.Television.margin.d, vertical = Tok.Television.gap.d),
         horizontalArrangement = Arrangement.spacedBy(Tok.Space.pageMargin.d)) {
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
@@ -164,36 +172,31 @@ internal fun TvSeriesView(model: AppModel, id: String) {
             }
             Text(seriesInfoText(false, episodes.size, header.status))
             Row(horizontalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
-                TvPill(if (header.favorited) "已收藏" else "收藏", { model.toggleFavorite(id, header.title, header.coverPath) }, Modifier.tvEntryFocus())
+                TvPill(if (header.favorited) "已收藏" else "收藏", { model.toggleFavorite(id, header.title, header.coverPath) },
+                    Modifier.tvEntryFocus(), icon = if (header.favorited) "bookmark" else "bookmark-outline")
                 TvPill(if (oldestFirst) "从旧到新" else "从新到旧", {
                     oldestFirst = !oldestFirst
                     list.requestScrollToItem(0)
-                }, Modifier.focusProperties { if (episodes.isNotEmpty()) right = listEntry })
+                }, Modifier.focusProperties { if (episodes.isNotEmpty()) right = listEntry }, icon = "swap-vertical")
             }
             header.description?.takeIf { it.isNotBlank() }?.let { Text(it, Modifier.focusable()) }
         }
-        LazyColumn(Modifier.weight(2f), state = list, contentPadding = PaddingValues(Tok.Space.scale[1].d), verticalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
-            itemsIndexed(if (oldestFirst) episodes else episodes.asReversed(), key = { _, ep -> ep.id }) { index, ep ->
-                val item = EpisodeItem(ep.id, id, ep.title, ep.progress, ep.epDuration, null)
-                TvEpisode(model, item, ep.title, { model.playAndOpen(ep.id, PlayContext.Series(id)) },
-                    if (index == list.firstVisibleItemIndex) Modifier.focusRequester(listEntry) else Modifier) {
-                    val mark = model.markItem(item)
-                    TvIconButton(mark.action, label = mark.title) {
-                        ZIcon(if (model.completedNow(item)) "checkmark-circle" else "checkmark-circle-outline",
-                            Tok.Menu.iconSize.d, LocalContentColor.current)
+        Column(Modifier.weight(2f)) {
+            Text("全部课程", style = MaterialTheme.typography.titleMedium)
+            LazyColumn(state = list, contentPadding = PaddingValues(Tok.Space.scale[1].d), verticalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
+                itemsIndexed(if (oldestFirst) episodes else episodes.asReversed(), key = { _, ep -> ep.id }) { index, ep ->
+                    val item = EpisodeItem(ep.id, id, ep.title, ep.progress, ep.epDuration, null)
+                    TvEpisode(model, item, ep.title, { model.playAndOpen(ep.id, PlayContext.Series(id)) },
+                        if (index == list.firstVisibleItemIndex) Modifier.focusRequester(listEntry) else Modifier) {
+                        val mark = model.markItem(item)
+                        TvIconButton(mark.action, label = mark.title) {
+                            mark.icon?.let { ZIcon(it, Tok.Menu.iconSize.d, LocalContentColor.current) }
+                        }
                     }
                 }
             }
         }
     }
-}
-
-private fun tvProgressText(progress: Prog?, duration: Double?): String = when {
-    progress?.completed == true -> "已听完"
-    progress != null && progress.position > 0 && progress.duration > 0 ->
-        "剩余 " + clock((progress.duration - progress.position).coerceAtLeast(0.0))
-    duration != null && duration > 0 -> clock(duration)
-    else -> ""
 }
 
 @Composable
@@ -209,11 +212,12 @@ internal fun TvRecentRow(model: AppModel, row: RecentRow) {
                 CoverImage(model.images, row.coverPath, row.seriesId, shape,
                     Modifier.width((Tok.Space.MinTouchTarget.android * 2).d).aspectRatio(16f / 9f), originVersion = model.net.originVersion)
                 Column(Modifier.weight(1f)) {
-                    Text(row.epTitle, style = MaterialTheme.typography.titleMedium)
-                    Text(row.seriesTitle)
+                    Text(row.seriesTitle, style = MaterialTheme.typography.titleMedium)
+                    Text(row.epTitle)
                 }
-                if (model.player?.current?.episodeId == row.episodeId && model.player?.looksPlaying == true) AudioWaveformIcon()
-                Text(if (row.gone) "已下架" else tvProgressText(model.liveProg(item), row.epDuration))
+                val progress = model.liveProg(item)
+                TvPlaybackIcon(model, item, progress?.completed == true)
+                Text(if (row.gone) "已下架" else pillState(progress, row.epDuration ?: 0.0).text)
             }
         }
         TvIconButton({ model.goToSeries(row.seriesId) }, label = "前往课程，${row.seriesTitle}") {
@@ -223,19 +227,25 @@ internal fun TvRecentRow(model: AppModel, row: RecentRow) {
 }
 
 @Composable
+private fun TvPlaybackIcon(model: AppModel, item: EpisodeItem, completed: Boolean) {
+    val player = model.player
+    val current = player?.current?.episodeId == item.episodeId
+    if (current && player?.looksPlaying == true && !player.loadingPlayback) AudioWaveformIcon()
+    else PlaybackIcon(if (completed) "refresh" else "play", Tok.Menu.iconSize.d, LocalContentColor.current,
+        current && player?.loadingPlayback == true)
+}
+
+@Composable
 private fun TvEpisode(model: AppModel, item: EpisodeItem, title: String, play: () -> Unit, modifier: Modifier, action: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(Tok.Space.scale[1].d)) {
         TvButton(play, modifier.weight(1f), MaterialTheme.shapes.medium,
             scale = androidx.tv.material3.ButtonScale.None) {
             Row(Modifier.fillMaxWidth().padding(Tok.Space.scale[2].d), verticalAlignment = Alignment.CenterVertically) {
-                val p = model.player
                 val progress = model.liveProg(item)
-                if (p?.current?.episodeId == item.episodeId && p.looksPlaying && !p.loadingPlayback) AudioWaveformIcon()
-                else PlaybackIcon(if (progress?.completed == true) "refresh" else "play", Tok.Menu.iconSize.d, LocalContentColor.current,
-                    p?.current?.episodeId == item.episodeId && p.loadingPlayback)
+                TvPlaybackIcon(model, item, progress?.completed == true)
                 Text(title, Modifier.weight(1f).padding(horizontal = Tok.Space.scale[1].d))
-                Text(tvProgressText(progress, item.epDuration))
+                Text(pillState(progress, item.epDuration ?: 0.0).text)
             }
         }
         action()

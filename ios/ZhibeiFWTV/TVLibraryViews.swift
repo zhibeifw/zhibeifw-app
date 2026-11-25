@@ -18,7 +18,7 @@ struct TVRecentView: View {
     @State private var rows: [RecentRow]
 
     /// 进页面时就读好（第一帧就要有能选中的东西，返回键才不会被当成退出 App）。
-    init(store: Store) { _rows = State(initialValue: (try? store.loadRecent(limit: 200)) ?? []) }
+    init(store: Store) { _rows = State(initialValue: (try? store.loadRecent()) ?? []) }
 
     var body: some View {
         Group {
@@ -45,7 +45,7 @@ struct TVRecentView: View {
         }
         .navigationTitle("最近播放")
         .task(id: [core.catalogVersion, core.progressVersion]) {
-            rows = (try? core.store.loadRecent(limit: 200)) ?? []
+            rows = (try? core.store.loadRecent()) ?? []
         }
     }
 
@@ -61,12 +61,20 @@ struct TVRecentView: View {
                 HStack(spacing: 32) {
                     CoverImage(path: r.coverPath, colorId: r.seriesId, radius: 8)
                         .frame(width: 192, height: TVLayout.coverHeight(192))
+                    PlaybackLoadingView(loading: p?.current?.episodeId == r.episodeId && p?.loadingPlayback == true) {
+                        if let p, p.current?.episodeId == r.episodeId, p.looksPlaying {
+                            AudioWaveformIcon(player: p)
+                        } else {
+                            Image(systemName: prog?.completed == true ? "arrow.clockwise" : "play.fill")
+                        }
+                    }
+                    .accessibilityHidden(true)
                     VStack(alignment: .leading, spacing: 6) {
-                        Text(r.epTitle).lineLimit(2)
-                        Text(r.seriesTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
+                        Text(r.seriesTitle).lineLimit(2)
+                        Text(r.epTitle).font(.callout).foregroundStyle(.secondary).lineLimit(1)
                     }
                     Spacer()
-                    Text(r.gone ? "已下架" : progressText(prog, knownDuration: r.epDuration))
+                    Text(r.gone ? "已下架" : pillState(prog, knownDuration: r.epDuration ?? 0).text)
                         .font(.callout).foregroundStyle(.secondary)
                 }
             }
@@ -74,7 +82,7 @@ struct TVRecentView: View {
             Button {
                 model.goToSeries(r.seriesId)
             } label: {
-                Label("前往课程", systemImage: "arrow.right")
+                Label("前往课程", systemImage: "arrow.forward.circle")
                     .labelStyle(.iconOnly)
             }
             .buttonStyle(.bordered)
@@ -103,9 +111,10 @@ struct TVFavoritesView: View {
     var body: some View {
         Group {
             if rows.isEmpty {
-                Text("还没有收藏的课程").foregroundStyle(.secondary).focusable()
+                Text("暂无收藏").foregroundStyle(.secondary).focusable()
             } else {
                 ScrollView(.vertical) {
+                    Text("\(rows.count) 门课").foregroundStyle(.secondary)
                     LazyVGrid(
                         columns: Array(repeating: GridItem(.fixed(TVLayout.smallCardWidth), spacing: TVLayout.cardGap), count: 4),
                         alignment: .leading, spacing: 60
@@ -114,6 +123,7 @@ struct TVFavoritesView: View {
                             TVSeriesCard(
                                 card: SeriesCard(id: f.id, title: f.title, coverPath: f.coverPath, status: f.status ?? ""),
                                 width: TVLayout.smallCardWidth,
+                                subtitle: f.gone ? "已下架" : seriesStatusText(f.status),
                                 onRemoveFavorite: { core.removeFavorite(f.id) }
                             )
                         }

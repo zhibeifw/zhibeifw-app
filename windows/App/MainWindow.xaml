@@ -1,0 +1,446 @@
+<Window x:Class="Zhibei.Desktop.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml" xmlns:sys="clr-namespace:System;assembly=mscorlib" xmlns:local="clr-namespace:Zhibei.Desktop"
+        Title="智悲佛网" Icon="App.ico" Width="1180" Height="760" MinWidth="560" MinHeight="440"
+        FontFamily="Segoe UI, Microsoft YaHei UI, Microsoft YaHei" TextOptions.TextFormattingMode="Display" WindowStartupLocation="CenterScreen" UseLayoutRounding="True">
+  <Window.Resources>
+    <Style x:Key="CategoryTileButton" TargetType="Button">
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Grid>
+              <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource TileRadius}"/>
+              <Border x:Name="Feedback" CornerRadius="{StaticResource TileRadius}" IsHitTestVisible="False"/>
+              <ContentPresenter Margin="{TemplateBinding Padding}"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"/>
+            </Grid>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Feedback" Property="Background" Value="#0DFFFFFF"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Feedback" Property="Background" Value="#18000000"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+    <Style x:Key="Plain" TargetType="Button">
+      <Setter Property="Background" Value="Transparent"/><Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="4"/><Setter Property="HorizontalContentAlignment" Value="Center"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="Surface" CornerRadius="6" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <DataTemplate x:Key="SkipSecondsIcon">
+      <Grid Width="24" Height="24">
+        <Path x:Name="DirectionArrow" Data="M 4.5,8.6 A 8.5,8.5 0 1 0 12,4.2 M 15.3,1.5 L 12,4.2 L 15.3,7.1"
+              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" StrokeThickness="1.6"
+              StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" RenderTransformOrigin=".5,.5"/>
+        <TextBlock Text="{Binding}" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" Margin="0,3,0,0"/>
+      </Grid>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding Tag, RelativeSource={RelativeSource AncestorType=Button}}" Value="Forward">
+          <Setter TargetName="DirectionArrow" Property="RenderTransform"><Setter.Value><ScaleTransform ScaleX="-1"/></Setter.Value></Setter>
+        </DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+    <Style x:Key="IconButton" TargetType="Button" BasedOn="{StaticResource Plain}">
+      <Setter Property="FontSize" Value="18"/>
+      <Setter Property="MinHeight" Value="32"/><Setter Property="MinWidth" Value="32"/>
+    </Style>
+    <Style x:Key="GlyphButton" TargetType="Button" BasedOn="{StaticResource IconButton}">
+      <Setter Property="ContentTemplate"><Setter.Value><DataTemplate>
+        <local:CatalogIcon NameOfIcon="{Binding}" Width="{Binding FontSize, RelativeSource={RelativeSource AncestorType=Button}}" Height="{Binding Width, RelativeSource={RelativeSource Self}}"/>
+      </DataTemplate></Setter.Value></Setter>
+    </Style>
+    <ControlTemplate x:Key="PlayerButtonSurface" TargetType="Button">
+      <Border x:Name="Surface" CornerRadius="22" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center" RecognizesAccessKey="True"/>
+      </Border>
+      <ControlTemplate.Triggers>
+        <Trigger Property="IsPressed" Value="True"><Setter TargetName="Surface" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/></Trigger>
+      </ControlTemplate.Triggers>
+    </ControlTemplate>
+    <Style x:Key="PlayerControl" TargetType="Button" BasedOn="{StaticResource Plain}">
+      <Setter Property="Width" Value="{DynamicResource Player.controlSize}"/>
+      <Setter Property="Height" Value="{DynamicResource Player.controlSize}"/>
+      <Setter Property="Margin" Value="{DynamicResource PlayerControlMargin}"/>
+      <Setter Property="Template" Value="{StaticResource PlayerButtonSurface}"/>
+      <Style.Triggers>
+        <Trigger Property="IsEnabled" Value="False"><Setter Property="Opacity" Value=".4"/></Trigger>
+      </Style.Triggers>
+    </Style>
+    <Style x:Key="PlayerPrimaryControl" TargetType="Button" BasedOn="{StaticResource PlayerControl}">
+      <Setter Property="Background" Value="{DynamicResource SolidBackgroundFillColorSecondaryBrush}"/>
+    </Style>
+    <Style x:Key="SideItem" TargetType="ListBoxItem">
+      <Setter Property="Padding" Value="10,6"/><Setter Property="Margin" Value="0,1"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem">
+        <Border x:Name="Item" CornerRadius="6" Background="Transparent" Padding="{TemplateBinding Padding}">
+          <StackPanel Orientation="Horizontal">
+            <local:CatalogIcon NameOfIcon="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}" TextElement.Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Width="16" Height="16" Margin="0,0,9,0"/>
+            <ContentPresenter VerticalAlignment="Center"/>
+          </StackPanel>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Item" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
+          <Trigger Property="IsSelected" Value="True">
+            <Setter TargetName="Item" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+          </Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="PillAction" TargetType="Button" BasedOn="{StaticResource Plain}">
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/>
+      <Setter Property="Padding" Value="14,6"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="Button">
+        <Border x:Name="Pill" CornerRadius="20" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+          <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+        <ControlTemplate.Triggers>
+          <Trigger Property="IsMouseOver" Value="True"><Setter TargetName="Pill" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/></Trigger>
+          <Trigger Property="IsPressed" Value="True"><Setter TargetName="Pill" Property="Opacity" Value=".75"/></Trigger>
+        </ControlTemplate.Triggers>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <Style x:Key="LoadingSpinner" TargetType="ProgressBar">
+      <Setter Property="IsIndeterminate" Value="True"/>
+      <Setter Property="AutomationProperties.Name" Value="正在加载"/>
+      <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}"/>
+      <Setter Property="IsHitTestVisible" Value="False"/>
+      <Setter Property="Tag" Value="{DynamicResource {x:Static SystemParameters.ClientAreaAnimationKey}}"/>
+      <Setter Property="Template"><Setter.Value>
+        <ControlTemplate TargetType="ProgressBar">
+          <Viewbox Stretch="Uniform">
+            <Canvas x:Name="Wheel" Width="24" Height="24" RenderTransformOrigin=".5,.5">
+              <Canvas.RenderTransform><RotateTransform/></Canvas.RenderTransform>
+              <Canvas.Resources>
+                <Style TargetType="Line">
+                  <Setter Property="Stroke" Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=ProgressBar}}"/>
+                  <Setter Property="StrokeThickness" Value="2.5"/>
+                  <Setter Property="StrokeStartLineCap" Value="Round"/>
+                  <Setter Property="StrokeEndLineCap" Value="Round"/>
+                </Style>
+              </Canvas.Resources>
+              <Line X1="12" Y1="2.5" X2="12" Y2="6.5" Opacity="1"/>
+              <Line X1="18.7" Y1="5.3" X2="15.9" Y2="8.1" Opacity=".23"/>
+              <Line X1="21.5" Y1="12" X2="17.5" Y2="12" Opacity=".34"/>
+              <Line X1="18.7" Y1="18.7" X2="15.9" Y2="15.9" Opacity=".45"/>
+              <Line X1="12" Y1="21.5" X2="12" Y2="17.5" Opacity=".56"/>
+              <Line X1="5.3" Y1="18.7" X2="8.1" Y2="15.9" Opacity=".67"/>
+              <Line X1="2.5" Y1="12" X2="6.5" Y2="12" Opacity=".78"/>
+              <Line X1="5.3" Y1="5.3" X2="8.1" Y2="8.1" Opacity=".89"/>
+            </Canvas>
+          </Viewbox>
+          <ControlTemplate.Triggers>
+            <MultiTrigger>
+              <MultiTrigger.Conditions>
+                <Condition Property="IsVisible" Value="True"/>
+                <Condition Property="Tag"><Condition.Value><sys:Boolean>True</sys:Boolean></Condition.Value></Condition>
+              </MultiTrigger.Conditions>
+              <MultiTrigger.EnterActions>
+                <BeginStoryboard Name="RotateSpinner"><Storyboard>
+                  <DoubleAnimationUsingKeyFrames Storyboard.TargetName="Wheel"
+                    Storyboard.TargetProperty="(UIElement.RenderTransform).(RotateTransform.Angle)" Duration="0:0:0.8" RepeatBehavior="Forever">
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.0" Value="0"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.1" Value="45"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.2" Value="90"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.3" Value="135"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.4" Value="180"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.5" Value="225"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.6" Value="270"/>
+                    <DiscreteDoubleKeyFrame KeyTime="0:0:0.7" Value="315"/>
+                  </DoubleAnimationUsingKeyFrames>
+                </Storyboard></BeginStoryboard>
+              </MultiTrigger.EnterActions>
+              <MultiTrigger.ExitActions><RemoveStoryboard BeginStoryboardName="RotateSpinner"/></MultiTrigger.ExitActions>
+            </MultiTrigger>
+          </ControlTemplate.Triggers>
+        </ControlTemplate>
+      </Setter.Value></Setter>
+    </Style>
+    <Style x:Key="PlaybackLine" TargetType="ProgressBar">
+      <Setter Property="Foreground" Value="{DynamicResource AccentFillColorDefaultBrush}"/>
+      <Setter Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/>
+      <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ProgressBar">
+        <Grid x:Name="PART_Track">
+          <Border Background="{TemplateBinding Background}" CornerRadius="4"/>
+          <Border x:Name="PART_Indicator" HorizontalAlignment="Left" Background="{TemplateBinding Foreground}" CornerRadius="4"/>
+        </Grid>
+      </ControlTemplate></Setter.Value></Setter>
+    </Style>
+    <ControlTemplate x:Key="EpisodeButtonContent" TargetType="Button">
+      <Border Background="Transparent" Padding="{TemplateBinding Padding}">
+        <ContentPresenter HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}" VerticalAlignment="Center"/>
+      </Border>
+    </ControlTemplate>
+    <DataTemplate x:Key="EpisodeTemplate">
+      <Border x:Name="EpisodeSurface" Background="Transparent" CornerRadius="8" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1">
+        <Grid>
+          <Button x:Name="PlayEpisodeButton" HorizontalContentAlignment="Stretch" Style="{StaticResource Plain}" Template="{StaticResource EpisodeButtonContent}" Padding="8,10" Click="EpisodePlay" AutomationProperties.Name="{Binding AccessibleTitle}">
+            <DockPanel>
+              <Border DockPanel.Dock="Right" Width="{Binding ActualWidth, ElementName=MarkEpisodeButton}"/>
+              <StackPanel><TextBlock Text="{Binding Title}" FontWeight="SemiBold" TextWrapping="Wrap"/>
+                <Border HorizontalAlignment="Left" CornerRadius="16" Padding="9,3" Margin="0,7,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}">
+                  <StackPanel Orientation="Horizontal">
+                    <local:CatalogIcon x:Name="PillGlyph" NameOfIcon="{Binding PlaybackGlyph}" Width="14" Height="14" VerticalAlignment="Center"/>
+                    <local:SpectrumBars x:Name="Bands" Visibility="Collapsed" Levels="{Binding Levels}" Width="{StaticResource Spectrum.width}" Height="{StaticResource Spectrum.height}" VerticalAlignment="Center"/>
+                    <ProgressBar x:Name="Wait" Style="{StaticResource LoadingSpinner}" Visibility="Collapsed" Width="14" Height="14" VerticalAlignment="Center"/>
+                    <ProgressBar Style="{StaticResource PlaybackLine}" x:Name="Partial" Visibility="Collapsed" Width="36" Height="3" Minimum="0" Maximum="1" Value="{Binding Fraction, Mode=OneWay}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding Detail}" Margin="6,0,0,0"/>
+                  </StackPanel>
+                </Border>
+              </StackPanel>
+            </DockPanel>
+          </Button>
+          <Button x:Name="MarkEpisodeButton" HorizontalAlignment="Right" Margin="0,0,8,10" VerticalAlignment="Bottom" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Style="{StaticResource IconButton}" Template="{StaticResource EpisodeButtonContent}" ToolTip="{Binding ActionLabel}"
+                  AutomationProperties.Name="{Binding ActionLabel}" Click="EpisodeAction">
+            <local:CatalogIcon Width="22" Height="22" NameOfIcon="{Binding MarkIcon}"/>
+          </Button>
+        </Grid>
+      </Border>
+      <DataTemplate.Triggers>
+        <Trigger SourceName="EpisodeSurface" Property="IsMouseOver" Value="True"><Setter TargetName="EpisodeSurface" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}"/></Trigger>
+        <Trigger SourceName="PlayEpisodeButton" Property="IsPressed" Value="True"><Setter TargetName="EpisodeSurface" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/></Trigger>
+        <Trigger SourceName="MarkEpisodeButton" Property="IsPressed" Value="True"><Setter TargetName="EpisodeSurface" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}"/></Trigger>
+        <DataTrigger Binding="{Binding PartiallyPlayed}" Value="True"><Setter TargetName="Partial" Property="Visibility" Value="Visible"/></DataTrigger>
+        <DataTrigger Binding="{Binding Playing}" Value="True"><Setter TargetName="Bands" Property="Visibility" Value="Visible"/><Setter TargetName="PillGlyph" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <DataTrigger Binding="{Binding Buffering}" Value="True"><Setter TargetName="Wait" Property="Visibility" Value="Visible"/><Setter TargetName="PillGlyph" Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+    <DataTemplate x:Key="RecentTemplate">
+      <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="0,10">
+        <DockPanel>
+          <Button DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Content="arrow-forward-circle-outline" Click="EpisodeAction" ToolTip="前往课程" AutomationProperties.Name="前往课程"/>
+          <Button Style="{StaticResource Plain}" Padding="0" HorizontalContentAlignment="Stretch" Click="EpisodePlay" AutomationProperties.Name="{Binding AccessibleTitle}" ContextMenuOpening="RecentMenuOpening">
+            <Button.ContextMenu><ContextMenu/></Button.ContextMenu>
+            <DockPanel>
+              <local:CourseArtwork DockPanel.Dock="Left" Width="96" Height="54" Margin="0,0,14,0" CornerRadius="6"
+                                   CourseId="{Binding CourseId}" CoverPath="{Binding CoverPath}"/>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" Margin="8,0">
+                <local:CatalogIcon x:Name="RecentGlyph" NameOfIcon="{Binding PlaybackGlyph}" Width="14" Height="14"/>
+                <local:SpectrumBars x:Name="RecentBands" Visibility="Collapsed" Levels="{Binding Levels}" Width="{StaticResource Spectrum.width}" Height="{StaticResource Spectrum.height}"/>
+                <ProgressBar x:Name="RecentWait" Style="{StaticResource LoadingSpinner}" Visibility="Collapsed" Width="14" Height="14"/>
+                <TextBlock Text="{Binding Detail}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Margin="6,0,0,0"/>
+              </StackPanel>
+              <StackPanel VerticalAlignment="Center"><TextBlock Text="{Binding SeriesTitle}" TextTrimming="CharacterEllipsis"/>
+                <TextBlock Text="{Binding Title}" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+              </StackPanel>
+            </DockPanel>
+          </Button>
+        </DockPanel>
+      </Border>
+      <DataTemplate.Triggers>
+        <DataTrigger Binding="{Binding Playing}" Value="True"><Setter TargetName="RecentBands" Property="Visibility" Value="Visible"/><Setter TargetName="RecentGlyph" Property="Visibility" Value="Collapsed"/></DataTrigger>
+        <DataTrigger Binding="{Binding Buffering}" Value="True"><Setter TargetName="RecentWait" Property="Visibility" Value="Visible"/><Setter TargetName="RecentGlyph" Property="Visibility" Value="Collapsed"/></DataTrigger>
+      </DataTemplate.Triggers>
+    </DataTemplate>
+  </Window.Resources>
+  <Grid Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+    <Grid.ColumnDefinitions><ColumnDefinition x:Name="SideColumn" Width="204"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <Border x:Name="Sidebar" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,1,0" Padding="10,0,10,16">
+      <DockPanel>
+        <Button DockPanel.Dock="Top" Style="{StaticResource GlyphButton}" Click="ToggleSidebar" Content="sidebar" HorizontalAlignment="Right" AutomationProperties.Name="隐藏侧栏" ToolTip="隐藏侧栏" Margin="0,3,0,5"/>
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,8">
+          <TextBox x:Name="SidebarSearch" Padding="28,5,26,5" MaxLength="30" AutomationProperties.Name="搜索课程名或拼音" TextChanged="SearchChanged"/>
+          <local:CatalogIcon NameOfIcon="search-outline" Width="15" Height="15" HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0,0,0" IsHitTestVisible="False"/>
+          <TextBlock Text="课程名或拼音首字母" Margin="29,0,4,0" VerticalAlignment="Center" IsHitTestVisible="False" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+            <TextBlock.Style><Style TargetType="TextBlock"><Setter Property="Visibility" Value="Collapsed"/>
+              <Style.Triggers><DataTrigger Binding="{Binding Text, ElementName=SidebarSearch}" Value=""><Setter Property="Visibility" Value="Visible"/></DataTrigger></Style.Triggers>
+            </Style></TextBlock.Style>
+          </TextBlock>
+          <Button Click="ClearSearch" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,4,0"
+                  Padding="2" ToolTip="清除搜索" AutomationProperties.Name="清除搜索">
+            <Button.Style><Style TargetType="Button" BasedOn="{StaticResource Plain}"><Style.Triggers>
+              <DataTrigger Binding="{Binding Text, ElementName=SidebarSearch}" Value=""><Setter Property="Visibility" Value="Collapsed"/></DataTrigger>
+            </Style.Triggers></Style></Button.Style>
+            <local:CatalogIcon NameOfIcon="close-circle-outline" Width="15" Height="15"/>
+          </Button>
+        </Grid>
+
+        <Grid>
+          <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
+          <ListBox x:Name="Nav" Background="Transparent" BorderThickness="0" SelectionChanged="NavChanged" AutomationProperties.Name="导航">
+            <ListBoxItem Style="{StaticResource SideItem}" Tag="home-outline" Content="主页"/><ListBoxItem Style="{StaticResource SideItem}" Tag="grid-outline" Content="分类"/>
+            <ListBoxItem IsEnabled="False" Focusable="False" Padding="8,16,0,2"><TextBlock Text="资料库" FontWeight="SemiBold" FontSize="12"/></ListBoxItem>
+            <ListBoxItem Style="{StaticResource SideItem}" Tag="time-outline" Content="最近播放"/><ListBoxItem Style="{StaticResource SideItem}" Tag="bookmark-outline" Content="收藏"/>
+          </ListBox>
+          <Button Grid.Row="1" Style="{StaticResource Plain}" HorizontalContentAlignment="Left" Padding="10,6"
+                  Click="AboutClick" AutomationProperties.Name="关于智悲佛网">
+            <StackPanel Orientation="Horizontal">
+              <local:CatalogIcon NameOfIcon="information-circle-outline" Width="16" Height="16" Margin="0,0,9,0" VerticalAlignment="Center"/>
+              <TextBlock Text="关于" VerticalAlignment="Center"/>
+            </StackPanel>
+          </Button>
+        </Grid>
+      </DockPanel>
+    </Border>
+    <Grid Grid.Column="1" Background="{DynamicResource LayerFillColorAltBrush}">
+      <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="*"/></Grid.RowDefinitions>
+      <Border BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}" BorderThickness="0,0,0,1" Padding="20,3">
+        <DockPanel>
+          <Button x:Name="ClearRecentButton" Foreground="{DynamicResource SystemFillColorCriticalBrush}" DockPanel.Dock="Right" Style="{StaticResource GlyphButton}" Visibility="Collapsed" Content="trash-outline" AutomationProperties.Name="清空最近列表" ToolTip="清空最近列表" Click="ClearRecentClick"/>
+          <Button DockPanel.Dock="Left" Click="ToggleSidebar" Content="sidebar" ToolTip="显示侧栏" AutomationProperties.Name="显示侧栏" Margin="0,0,6,0">
+            <Button.Style><Style TargetType="Button" BasedOn="{StaticResource GlyphButton}"><Setter Property="Visibility" Value="Collapsed"/><Style.Triggers>
+              <DataTrigger Binding="{Binding Visibility, ElementName=Sidebar}" Value="Collapsed"><Setter Property="Visibility" Value="Visible"/></DataTrigger>
+            </Style.Triggers></Style></Button.Style>
+          </Button>
+          <Button x:Name="Back" DockPanel.Dock="Left" Content="chevron-back" AutomationProperties.Name="返回" ToolTip="返回" Click="GoBack" Style="{StaticResource GlyphButton}" Margin="0,0,8,0"/>
+          <TextBlock x:Name="Heading" VerticalAlignment="Center" FontSize="18" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+        </DockPanel>
+      </Border>
+      <Border x:Name="BrowseBackdrop" Grid.Row="1" ClipToBounds="True" Background="{DynamicResource LayerFillColorAltBrush}">
+        <DockPanel x:Name="BrowseArea" Margin="24,24,20,0">
+          <StackPanel x:Name="CatalogFailure" DockPanel.Dock="Top" Orientation="Horizontal" Visibility="Collapsed">
+            <TextBlock Text="无法更新，显示的是上一次更新的内容" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
+            <Button Content="重试" Click="RefreshClick" Margin="8,0,0,0"/>
+          </StackPanel>
+          <WrapPanel x:Name="Actions" DockPanel.Dock="Top"/>
+          <StackPanel x:Name="Hero" DockPanel.Dock="Top" Visibility="Collapsed" MaxWidth="820" Margin="0,0,0,8">
+            <Grid><Grid.ColumnDefinitions><ColumnDefinition Width="2*"/><ColumnDefinition Width="3*"/></Grid.ColumnDefinitions>
+              <ContentControl x:Name="HeroCover" VerticalAlignment="Top" HorizontalContentAlignment="Stretch" Margin="0,0,20,0" MaxWidth="300" Focusable="False"/>
+              <StackPanel Grid.Column="1" VerticalAlignment="Top"><TextBlock x:Name="CourseTitle" FontSize="28" FontWeight="Bold" TextWrapping="Wrap"/>
+                <WrapPanel Margin="0,6"><Button x:Name="CourseCategory" Style="{StaticResource Plain}" Click="HeroCategory" Padding="0"/>
+                  <TextBlock x:Name="CourseSummary" VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/></WrapPanel>
+                <WrapPanel x:Name="CourseActions"/>
+                <Expander x:Name="SynopsisPanel" Header="课程简介" Margin="0,6,0,0">
+                  <ScrollViewer VerticalScrollBarVisibility="Auto" MaxHeight="104" Focusable="True">
+                    <TextBlock x:Name="Synopsis" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+                  </ScrollViewer>
+                </Expander>
+              </StackPanel>
+            </Grid><TextBlock Text="全部课程" FontSize="20" FontWeight="SemiBold" Margin="0,24,0,4"/>
+          </StackPanel>
+          <Grid><TextBlock x:Name="EmptyState" Visibility="Collapsed" HorizontalAlignment="Center" VerticalAlignment="Center" TextWrapping="Wrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+            <ListBox x:Name="Tracks" MaxWidth="820" Visibility="Collapsed" BorderThickness="0" Background="Transparent" AutomationProperties.Name="单集列表" HorizontalContentAlignment="Stretch"
+                 ScrollViewer.HorizontalScrollBarVisibility="Disabled" VirtualizingPanel.VirtualizationMode="Recycling" ScrollViewer.CanContentScroll="True" VirtualizingPanel.ScrollUnit="Pixel">
+              <ListBox.ItemContainerStyle><Style TargetType="ListBoxItem">
+                <Setter Property="Margin" Value="{StaticResource ScrollContentInset}"/>
+                <Setter Property="HorizontalContentAlignment" Value="Stretch"/><Setter Property="Padding" Value="0"/><Setter Property="Focusable" Value="False"/>
+                <Setter Property="Template"><Setter.Value><ControlTemplate TargetType="ListBoxItem"><ContentPresenter/></ControlTemplate></Setter.Value></Setter>
+              </Style></ListBox.ItemContainerStyle>
+            </ListBox>
+            <ScrollViewer x:Name="PageScroll" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+              <Border Padding="{StaticResource ScrollContentInset}"><StackPanel x:Name="Page"/></Border>
+            </ScrollViewer>
+          </Grid>
+        </DockPanel>
+      </Border>
+      <Grid Grid.Row="1" VerticalAlignment="Bottom" x:Name="PlayerBar" IsVisibleChanged="PlayerInsetChanged"
+            Visibility="Collapsed" MaxWidth="{StaticResource Player.width}" Margin="16,0,16,12">
+        <Border CornerRadius="{StaticResource PlayerGlassCorner}" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+                IsHitTestVisible="False">
+          <Border.Effect><DropShadowEffect BlurRadius="18" ShadowDepth="4" Opacity=".14"/></Border.Effect>
+        </Border>
+        <Grid x:Name="PlayerGlassLayer" Visibility="Collapsed" IsHitTestVisible="False">
+          <Rectangle x:Name="PlayerGlassSample" Margin="{StaticResource PlayerGlassBleed}">
+            <Rectangle.Fill>
+              <VisualBrush Visual="{Binding ElementName=BrowseBackdrop}" ViewboxUnits="Absolute" Stretch="Fill"/>
+            </Rectangle.Fill>
+            <Rectangle.Effect><BlurEffect Radius="{StaticResource Player.glassBlur}" RenderingBias="Performance"/></Rectangle.Effect>
+          </Rectangle>
+          <Border Background="{DynamicResource SolidBackgroundFillColorBaseBrush}" Opacity="{StaticResource Player.glassTintOpacity}"/>
+        </Grid>
+        <Border CornerRadius="{StaticResource PlayerGlassCorner}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" IsHitTestVisible="False"/>
+        <Grid Margin="{DynamicResource PlayerPadding}">
+          <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/>
+          </Grid.ColumnDefinitions>
+          <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+            <Button x:Name="Speed" Width="{DynamicResource Player.rateWidth}" Margin="0" FontSize="15"
+                    Style="{StaticResource PlayerControl}" Click="SpeedMenu" AutomationProperties.Name="播放倍速" ToolTip="播放倍速"/>
+            <Button Style="{StaticResource PlayerControl}" Content="15" ContentTemplate="{StaticResource SkipSecondsIcon}"
+                    x:Name="BackButton" IsEnabled="{Binding IsEnabled, ElementName=Timeline}" MouseEnter="PlayerHover" MouseLeave="PlayerHover"
+                    IsKeyboardFocusWithinChanged="PlayerFocusChanged" Click="Back15" AutomationProperties.Name="后退15秒" ToolTip="后退15秒"/>
+            <Button HorizontalAlignment="Center" x:Name="PlayButton" Click="Toggle" Style="{StaticResource PlayerPrimaryControl}">
+              <Grid Width="20" Height="20">
+                <Path x:Name="PlayIcon" Width="15" Height="18" Stretch="Uniform" Fill="Black" Data="M320-200v-560l440 280-440 280Z"/>
+                <Path x:Name="PauseIcon" Width="15" Height="18" Stretch="Uniform" Fill="Black" Visibility="Collapsed" Data="M560-200v-560h160v560H560Zm-320 0v-560h160v560H240Z"/>
+                <TextBlock x:Name="RetryIcon" HorizontalAlignment="Center" VerticalAlignment="Center" FontFamily="Segoe Fluent Icons" Text="&#xE72C;" Visibility="Collapsed"/>
+                <ProgressBar x:Name="Buffering" Style="{StaticResource LoadingSpinner}" Width="18" Height="18" VerticalAlignment="Center" Visibility="Collapsed"/>
+              </Grid>
+            </Button>
+            <Button Style="{StaticResource PlayerControl}" Tag="Forward" Content="30" ContentTemplate="{StaticResource SkipSecondsIcon}"
+                    x:Name="ForwardButton" IsEnabled="{Binding IsEnabled, ElementName=Timeline}" MouseEnter="PlayerHover" MouseLeave="PlayerHover"
+                    IsKeyboardFocusWithinChanged="PlayerFocusChanged" Click="Forward30" AutomationProperties.Name="前进30秒" ToolTip="前进30秒"/>
+            <Button HorizontalAlignment="Center" x:Name="SleepChoice" Style="{StaticResource PlayerControl}" Click="SleepMenu"
+                    AutomationProperties.Name="睡眠定时" ToolTip="睡眠定时">
+              <Path Width="18" Height="18" Stretch="Uniform">
+                <Path.Style>
+                  <Style TargetType="Path">
+                    <Setter Property="Fill" Value="{DynamicResource TextFillColorPrimaryBrush}"/>
+                    <Setter Property="Data" Value="M524-40q-84 0-157.5-32t-128-86.5Q184-213 152-286.5T120-444q0-146 93-257.5T450-840q-18 99 11 193.5T561-481q71 71 165.5 100T920-370q-26 144-138 237T524-40Zm0-80q88 0 163-44t118-121q-86-8-163-43.5T504-425q-61-61-97-138t-43-163q-77 43-120.5 118.5T200-444q0 135 94.5 229.5T524-120Zm-20-305Z"/>
+                    <Style.Triggers>
+                      <DataTrigger Binding="{Binding Tag, ElementName=SleepChoice}" Value="True">
+                        <Setter Property="Fill" Value="Black"/>
+                        <Setter Property="Data" Value="M524-40q-84 0-157.5-32t-128-86.5Q184-213 152-286.5T120-444q0-146 93-257.5T450-840q-18 99 11 193.5T561-481q71 71 165.5 100T920-370q-26 144-138 237T524-40Z"/>
+                      </DataTrigger>
+                    </Style.Triggers>
+                  </Style>
+                </Path.Style>
+              </Path>
+            </Button>
+          </StackPanel>
+          <Grid Grid.Column="1" x:Name="PlayerInfo" MouseLeave="PlayerHover" Height="{StaticResource Player.height}"
+                Margin="{DynamicResource PlayerInfoMargin}" Background="Transparent">
+            <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+            <Grid.RowDefinitions><RowDefinition Height="*"/><RowDefinition Height="{StaticResource PlayerSeekRow}"/></Grid.RowDefinitions>
+            <Button x:Name="PlayerMetadata" Grid.ColumnSpan="2" Grid.RowSpan="2" Style="{StaticResource Plain}" Template="{StaticResource PlayerButtonSurface}"
+                    Click="PlayerCourse" Padding="0" ToolTip="前往课程"/>
+            <local:CourseArtwork x:Name="PlayerCover" Grid.RowSpan="2" Width="{StaticResource Player.artworkWidth}"
+                                 Height="{StaticResource Player.artworkHeight}" CornerRadius="6" Margin="{StaticResource PlayerCoverMargin}"
+                                 VerticalAlignment="Center" IsHitTestVisible="False"/>
+            <StackPanel x:Name="PlayerText" Grid.Column="1" VerticalAlignment="Bottom" IsHitTestVisible="False">
+              <TextBlock x:Name="PlayerTitle" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"/>
+              <TextBlock x:Name="PlayerSeries" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis"/>
+            </StackPanel>
+            <DockPanel x:Name="SeekTimes" Grid.Column="1" VerticalAlignment="Bottom" Margin="0,0,0,1" Opacity="0" IsHitTestVisible="False"
+                       TextElement.FontSize="12" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+              <TextBlock x:Name="ElapsedTime"/><TextBlock x:Name="RemainingTime" TextAlignment="Right"/>
+            </DockPanel>
+            <ProgressBar x:Name="SeekRail" Grid.Column="1" Grid.Row="1" Style="{StaticResource PlaybackLine}"
+                         VerticalAlignment="Center" Height="{StaticResource Player.idleTrackHeight}" IsHitTestVisible="False"
+                         Minimum="{Binding Minimum, ElementName=Timeline}" Maximum="{Binding Maximum, ElementName=Timeline}"
+                         Value="{Binding Value, ElementName=Timeline, Mode=OneWay}"/>
+            <Slider x:Name="Timeline" Grid.Column="1" Grid.Row="1" Minimum="0" Maximum="1" SmallChange="5" LargeChange="30"
+                    AutomationProperties.Name="播放进度" MouseEnter="PlayerHover" MouseLeave="PlayerHover" IsKeyboardFocusWithinChanged="PlayerFocusChanged"
+                    PreviewMouseLeftButtonDown="SeekStart" MouseMove="SeekMove" PreviewMouseLeftButtonUp="SeekEnd" LostMouseCapture="SeekReleased" ValueChanged="TimelineChanged">
+              <Slider.Template><ControlTemplate TargetType="Slider">
+                <Grid Background="Transparent"><Track x:Name="PART_Track" IsHitTestVisible="False"><Track.Thumb><Thumb Width="0" Opacity="0"/></Track.Thumb></Track></Grid>
+              </ControlTemplate></Slider.Template>
+            </Slider>
+          </Grid>
+          <Button Grid.Column="2" Width="{DynamicResource Player.controlSize}" Height="{DynamicResource Player.controlSize}"
+                  Style="{StaticResource GlyphButton}" Template="{StaticResource PlayerButtonSurface}"
+                  Content="ellipsis-horizontal" AutomationProperties.Name="更多播放操作"
+                  ToolTip="更多播放操作" Click="OpenPlayerMenu"/>
+        </Grid>
+      </Grid>
+    </Grid>
+    <Border x:Name="StartScreen" Visibility="Collapsed" Grid.ColumnSpan="2" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+      <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+        <ProgressBar x:Name="StartProgress" Style="{StaticResource LoadingSpinner}" Width="28" Height="28" Margin="0,0,0,16"/>
+        <TextBlock x:Name="StartTitle" Text="正在准备内容…" TextAlignment="Center" FontWeight="SemiBold" FontSize="18"/>
+        <TextBlock x:Name="StartMessage" Text="第一次使用需要联网，请稍候" Margin="0,8" TextAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <TextBlock x:Name="StartAttempt" Visibility="Collapsed" TextAlignment="Center" Foreground="{DynamicResource TextFillColorSecondaryBrush}"/>
+        <StackPanel x:Name="StartActions" Visibility="Collapsed" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,8,0,0">
+          <Button Click="RefreshClick" AutomationProperties.Name="重试"><StackPanel Orientation="Horizontal"><local:CatalogIcon NameOfIcon="refresh" Margin="0,0,5,0"/><TextBlock Text="重试"/></StackPanel></Button>
+          <Button x:Name="StartRouteButton" Click="StartRefreshRoute" AutomationProperties.Name="刷新网络线路" Margin="8,0,0,0"><StackPanel Orientation="Horizontal"><local:CatalogIcon NameOfIcon="refresh" Margin="0,0,5,0"/><TextBlock x:Name="StartRouteLabel" Text="刷新网络线路" AutomationProperties.LiveSetting="Polite"/></StackPanel></Button>
+        </StackPanel>
+      </StackPanel>
+    </Border>
+    <Border x:Name="LaunchScreen" Grid.ColumnSpan="2" Background="{DynamicResource SolidBackgroundFillColorBaseBrush}">
+      <Image Source="LaunchLogo.png" Width="160" Stretch="Uniform" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+    </Border>
+  </Grid>
+</Window>

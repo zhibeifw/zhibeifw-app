@@ -1,5 +1,6 @@
 package com.zhibeifw.app.data
 
+import android.util.Log
 import com.zhibeifw.app.core.DlStatus
 import com.zhibeifw.app.core.EpisodeEntry
 import com.zhibeifw.app.core.IndexFile
@@ -42,6 +43,12 @@ data class SeriesHeader(
     val categoryName: String?,
     val favorited: Boolean
 )
+
+sealed interface CourseDetails {
+    data class Ready(val header: SeriesHeader, val episodes: List<EpisodeRow>) : CourseDetails
+    data class Gone(val title: String?, val favorited: Boolean) : CourseDetails
+    data object ReadFailed : CourseDetails
+}
 
 data class EpisodeRow(
     val id: String,
@@ -361,6 +368,31 @@ class Store(val db: Db) {
             offset
         ).map(::card)
 
+    private fun savedCourse(id: String): CourseDetails.Gone {
+        val row = db.first(
+            """
+            SELECT COALESCE(
+                (SELECT series_title FROM user_favorite WHERE series_id = ?1 AND trim(series_title) <> ''),
+                (SELECT series_title FROM user_progress WHERE series_id = ?1 AND trim(series_title) <> '' ORDER BY updated DESC LIMIT 1),
+                (SELECT series_title FROM user_download WHERE series_id = ?1 AND trim(series_title) <> '' ORDER BY requested_at DESC LIMIT 1)
+            ) AS title, EXISTS (SELECT 1 FROM user_favorite WHERE series_id = ?1) AS favorited
+            """, id
+        )
+        return CourseDetails.Gone(row?.optStr("title"), row?.bool("favorited") == true)
+    }
+
+    fun loadCourseDetails(id: String): CourseDetails = try {
+        db.transaction {
+            val header = loadSeriesHeader(id) ?: run {
+                return@transaction savedCourse(id)
+            }
+            CourseDetails.Ready(header, loadEpisodes(id))
+        }
+    } catch (e: Exception) {
+        Log.w("Store", "读取课程详情失败", e)
+        CourseDetails.ReadFailed
+    }
+
     fun loadSeriesHeader(id: String): SeriesHeader? {
         val r = db.first(
             """
@@ -404,13 +436,14 @@ class Store(val db: Db) {
 
     fun loadFavorites() = db.all(
         """
-        SELECT f.series_id AS id, COALESCE(s.title, NULLIF(f.series_title, ''), '已下架的课程') AS title,
+        SELECT f.series_id AS id, COALESCE(s.title, NULLIF(trim(f.series_title), '')) AS title,
                COALESCE(s.cover_path, NULLIF(f.cover_path, ''), '') AS cover_path, s.status AS status, (s.id IS NULL) AS gone
         FROM user_favorite f LEFT JOIN catalog_series s ON s.id = f.series_id ORDER BY f.added DESC"""
     ).map {
+        val id = it.str("id")
         FavoriteRow(
-            it.str("id"),
-            it.str("title"),
+            id,
+            it.optStr("title") ?: savedCourse(id).title ?: "已下架的课程",
             it.str("cover_path"),
             it.optStr("status"),
             it.bool("gone")

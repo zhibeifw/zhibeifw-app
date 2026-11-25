@@ -381,6 +381,35 @@ object Tok {
             const val idleTrackOffset: Float = 4f
             const val metadataOffset: Float = 4f
         }
+        object WindowsMiniPlayer {
+            const val width: Float = 744f
+            const val height: Float = 56f
+            const val padding: Float = 16f
+            const val verticalPadding: Float = 8f
+            const val controlSize: Float = 40f
+            const val controlSpacing: Float = 4f
+            const val rateWidth: Float = 52f
+            const val infoLeadingSpace: Float = 20f
+            const val infoTrailingSpace: Float = 14f
+            const val artworkWidth: Float = 72f
+            const val artworkHeight: Float = 40f
+            const val artworkGap: Float = 12f
+            const val artworkMinTextWidth: Float = 112f
+            const val seekAreaHeight: Float = 18f
+            const val idleTrackHeight: Float = 2f
+            const val activeTrackHeight: Float = 4f
+            const val glassRadius: Float = 38f
+            const val glassBlur: Float = 18f
+            const val glassTintOpacity: Float = 0.63f
+            object Compact {
+                const val belowWidth: Float = 460f
+                const val padding: Float = 10f
+                const val controlSize: Float = 34f
+                const val rateWidth: Float = 44f
+                const val infoLeadingSpace: Float = 10f
+                const val infoTrailingSpace: Float = 8f
+            }
+        }
         object CompactPlayer {
             const val width: Float = 1080f
             const val artworkWidth: Float = 96f

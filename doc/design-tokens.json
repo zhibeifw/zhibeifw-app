@@ -609,6 +609,36 @@
       "idleTrackOffset": 4,
       "metadataOffset": 4
     },
+    "windowsMiniPlayer": {
+      "_来源": "Windows 播放栏采用留白更宽的桌面胶囊；封面与进度分列，窄窗优先保留文字和控件。",
+      "width": 744,
+      "height": 56,
+      "padding": 16,
+      "verticalPadding": 8,
+      "controlSize": 40,
+      "controlSpacing": 4,
+      "rateWidth": 52,
+      "infoLeadingSpace": 20,
+      "infoTrailingSpace": 14,
+      "artworkWidth": 72,
+      "artworkHeight": 40,
+      "artworkGap": 12,
+      "artworkMinTextWidth": 112,
+      "seekAreaHeight": 18,
+      "idleTrackHeight": 2,
+      "activeTrackHeight": 4,
+      "glassRadius": 38,
+      "glassBlur": 18,
+      "glassTintOpacity": 0.63,
+      "compact": {
+        "belowWidth": 460,
+        "padding": 10,
+        "controlSize": 34,
+        "rateWidth": 44,
+        "infoLeadingSpace": 10,
+        "infoTrailingSpace": 8
+      }
+    },
     "compactPlayer": {
       "_来源": "用户要求对照 CNET Vision Pro Apple Music 实机播放栏：单行、中央信息区及无独立底框的两侧控制。 用户要求加宽播放栏、放大封面和文字以提高可读性。",
       "width": 1080,

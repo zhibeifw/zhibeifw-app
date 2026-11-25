@@ -99,7 +99,7 @@ fun AppModel.markItem(e: EpisodeItem): MenuItem {
     val done = completedNow(e)
     return MenuItem(
         if (done) "标记为未听完" else "标记为已听完",
-        "checkmark-circle-outline"
+        if (done) "remove-circle-outline" else "checkmark-circle-outline"
     ) { markCompleted(e.episodeId, e.seriesId, !done) }
 }
 

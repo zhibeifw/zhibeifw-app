@@ -12,7 +12,7 @@ struct TVSearchView: View {
             VStack(alignment: .leading, spacing: 30) {
                 if result == nil {
                     // 没搜之前：和 iPhone 一样的提示
-                    Text("输入课程名或拼音首字母搜索，比如 jgj 找“金刚经”").foregroundStyle(.secondary)
+                    Text("输入课程名搜索").foregroundStyle(.secondary)
                 }
                 if let r = result {
                     if r.rows.isEmpty {
@@ -25,7 +25,7 @@ struct TVSearchView: View {
                             columns: Array(repeating: GridItem(.fixed(TVLayout.smallCardWidth), spacing: TVLayout.cardGap), count: 4),
                             alignment: .leading, spacing: 60
                         ) {
-                            ForEach(r.rows) { c in TVSeriesCard(card: c, width: TVLayout.smallCardWidth) }
+                            ForEach(r.rows) { c in TVSeriesCard(card: c, width: TVLayout.smallCardWidth, subtitle: seriesStatusText(c.status)) }
                         }
                     }
                 }

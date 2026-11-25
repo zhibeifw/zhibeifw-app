@@ -40,6 +40,7 @@ private struct MacInitView: View {
     let attempt: Int
     let failed: Bool
     @State private var refreshing = false
+    @State private var routeLabel = "刷新网络线路"
 
     var body: some View {
         VStack(spacing: 16) {
@@ -47,13 +48,12 @@ private struct MacInitView: View {
                 Text("暂时无法连接").font(.title3)
                 HStack {
                     Button("重试", systemImage: "arrow.clockwise") { Task { await core.runInitialization() } }
-                    Button(refreshing ? "正在检测…" : "刷新网络线路", systemImage: "arrow.clockwise") {
+                    Button(refreshing ? "正在检测…" : routeLabel, systemImage: "arrow.clockwise") {
                         guard !refreshing else { return }
                         refreshing = true
                         Task {
-                            _ = await Network.shared.refreshRoutes()
+                            routeLabel = await core.refreshRoutes()
                             refreshing = false
-                            await core.runInitialization()
                         }
                     }
                 }
@@ -93,7 +93,17 @@ private struct MacMainView: View {
         @Bindable var m = model
         return NavigationSplitView(columnVisibility: $m.columns) {
             // 侧边栏：主页、分类；资料库：最近播放、收藏。分类只放一个入口（14 个分类全列出来太长）
-            List(selection: $m.section) {
+            List(selection: Binding(
+                get: { normalizeText(model.query).isEmpty ? model.section : nil },
+                set: { selection in
+                    guard let selection else { return }
+                    if !model.query.isEmpty {
+                        model.query = ""
+                        model.path = []
+                    }
+                    model.section = selection
+                }
+            )) {
                 Label("主页", systemImage: "house").tag(MacSection.home)
                 Label("分类", systemImage: "square.grid.2x2").tag(MacSection.categories)
                 Section("资料库") {

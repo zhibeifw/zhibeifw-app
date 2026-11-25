@@ -6,17 +6,17 @@ struct SeriesView: View {
     @Environment(AppModel.self) private var model
     @Environment(\.windowWidth) private var W
     @Environment(\.colorScheme) private var scheme
-    @State private var header: SeriesHeader?
-    @State private var episodes: [EpisodeRow] = []
-    @State private var state: LoadState = .loading
+    @State private var details: SeriesDetails?
     /// 默认最旧到最新（第 1 课在最上面），和 Apple TV 一样
     @State private var oldestFirst = true
 
-    enum LoadState { case loading, ready, gone }
+    private var title: String {
+        if case .ready(let header, _) = details { header.title } else { "" }
+    }
 
     var body: some View {
         PageScaffold(
-            title: header?.title ?? "", largeTitle: false,
+            title: title, largeTitle: false,
             revealAt: Layout.coverHeight(W - 2 * CP.SeriesHeader.coverMargin) + CP.SeriesHeader.titleTop + S.seriesTitle.lineHeight,
             trailing: {
                 // HIG / SF Symbols：同一图标的空心 / 实心变体表示默认 / 非默认（同“邮件”的筛选按钮）
@@ -26,30 +26,23 @@ struct SeriesView: View {
                 .accessibilityLabel("排序")
             }
         ) {
-            switch state {
-            case .loading: ProgressView().frame(maxWidth: .infinity).padding(.top, Tok.Space.scale[6] * 3)
-            case .gone: EmptyStateView(text: "这门课已下架", symbol: "xmark.circle").padding(.top, Tok.Space.scale[6] * 3)
-            case .ready: if let h = header { content(h) }
+            switch details {
+            case nil: ProgressView().frame(maxWidth: .infinity).padding(.top, Tok.Space.scale[6] * 3)
+            case .gone(let title, let favorited):
+                UnavailableCourseView(title: title, favorited: favorited) { model.removeFavorite(seriesId) }
+                .padding(.top, Tok.Space.scale[6] * 3)
+            case .readFailed:
+                EmptyStateView(text: "课程读取失败", symbol: "exclamationmark.circle", retry: load)
+                    .padding(.top, Tok.Space.scale[6] * 3)
+            case .ready(let header, let episodes): content(header, episodes: episodes)
             }
         }
-        .task(id: model.catalogVersion) { load() }
-        .onChange(of: [model.progressVersion, model.favoritesVersion, model.downloadsVersion]) { refreshRows() }
+        .task(id: seriesId) { load() }
+        .onChange(of: [model.catalogVersion, model.progressVersion, model.favoritesVersion, model.downloadsVersion]) { load() }
     }
 
-    /// 只看本机目录，不联网（只有启动和下拉刷新取 index.json）。本机目录没有这门课 = 已下架
     private func load() {
-        if let h = try? model.store.loadSeriesHeader(seriesId) {
-            header = h
-            refreshRows()
-            state = .ready
-        } else {
-            state = .gone
-        }
-    }
-
-    private func refreshRows() {
-        episodes = (try? model.store.loadEpisodes(seriesId)) ?? []
-        header?.favorited = model.store.isFavorite(seriesId)
+        details = model.store.loadSeriesDetails(seriesId)
     }
 
     private func sortItems() -> [[MenuItem]] {
@@ -61,7 +54,7 @@ struct SeriesView: View {
         ]
     }
 
-    private func items() -> [EpisodeItem] {
+    private func items(_ episodes: [EpisodeRow]) -> [EpisodeItem] {
         let list = episodes.map {
             EpisodeItem(
                 episodeId: $0.id, seriesId: $0.seriesId, title: $0.title, progress: $0.progress, epDuration: $0.epDuration,
@@ -70,7 +63,7 @@ struct SeriesView: View {
         return oldestFirst ? list : list.reversed()
     }
 
-    @ViewBuilder private func content(_ h: SeriesHeader) -> some View {
+    @ViewBuilder private func content(_ h: SeriesHeader, episodes: [EpisodeRow]) -> some View {
         let m = Layout.pageMargin(W)
         let maxW: CGFloat = Layout.isTablet(W) ? CP.Player.tabletPortraitMaxWidth : .infinity
         VStack(spacing: 0) {
@@ -86,12 +79,12 @@ struct SeriesView: View {
                 Text(h.title).zFont(S.seriesTitle).foregroundStyle(C.labelPrimary).multilineTextAlignment(.center)
                     .padding(.top, CP.SeriesHeader.titleTop)
                     .accessibilityAddTraits(.isHeader)
-                buttons(h).padding(.top, CP.SeriesHeader.buttonsTop)
+                buttons(h, episodes: episodes).padding(.top, CP.SeriesHeader.buttonsTop)
                 if let d = h.description {
                     DescriptionBlock(text: d) { model.sheet = SheetSpec(title: h.title, category: h.categoryName, body: d) }.padding(
                         .top, CP.SeriesHeader.descTop)
                 }
-                infoLine(h).padding(.top, CP.SeriesHeader.infoTop)
+                infoLine(h, count: episodes.count).padding(.top, CP.SeriesHeader.infoTop)
             }
             .padding(.horizontal, m)
             Separator().padding(.horizontal, m).padding(.top, CP.SeriesHeader.separatorTop)
@@ -103,7 +96,7 @@ struct SeriesView: View {
             .padding(.top, CP.SeriesHeader.sectionTop)
             .padding(.bottom, CP.SeriesHeader.sectionBottom)
             LazyVStack(spacing: 0) {
-                ForEach(items()) { e in
+                ForEach(items(episodes)) { e in
                     EpisodeRowView(item: e, ctx: .series(seriesId)) { it in [model.downloadItems(for: it) + [model.markItem(it)]] }
                 }
             }
@@ -112,17 +105,16 @@ struct SeriesView: View {
         .frame(maxWidth: .infinity)
     }
 
-    private func buttons(_ h: SeriesHeader) -> some View {
-        let dl = seriesDownloadState()
+    private func buttons(_ h: SeriesHeader, episodes: [EpisodeRow]) -> some View {
+        let dl = seriesDownloadState(episodes)
         return HStack(spacing: CP.SeriesHeader.buttonGap) {
             pillButton(
                 icon: h.favorited ? "bookmark" : "bookmark-outline", title: h.favorited ? "已收藏" : "收藏",
                 label: h.favorited ? "取消收藏" : "收藏这门课"
             ) {
                 model.toggleFavorite(h.id, title: h.title, coverPath: h.coverPath)
-                header?.favorited.toggle()
             }
-            pillButton(icon: dl.icon, ring: dl.ring, title: dl.title, label: dl.title) { tapDownloadAll(dl) }
+            pillButton(icon: dl.icon, ring: dl.ring, title: dl.title, label: dl.title) { tapDownloadAll(dl, header: h, episodes: episodes) }
         }
     }
 
@@ -131,7 +123,7 @@ struct SeriesView: View {
         enum Kind { case start, pause, resume, allDone }
     }
 
-    private func seriesDownloadState() -> DlAll {
+    private func seriesDownloadState(_ episodes: [EpisodeRow]) -> DlAll {
         let ids = episodes.map(\.id)
         guard !ids.isEmpty else { return DlAll(title: "下载全部", icon: "arrow-down-circle-outline", ring: nil, kind: .start) }
         var done = 0, active = 0, paused = 0
@@ -149,8 +141,7 @@ struct SeriesView: View {
         return DlAll(title: "下载全部", icon: "arrow-down-circle-outline", ring: nil, kind: .start)
     }
 
-    private func tapDownloadAll(_ s: DlAll) {
-        guard let h = header else { return }
+    private func tapDownloadAll(_ s: DlAll, header h: SeriesHeader, episodes: [EpisodeRow]) {
         switch s.kind {
         case .start:
             let todo = episodes.filter { (model.downloads.items[$0.id]?.status ?? $0.dlState) == nil }
@@ -193,7 +184,7 @@ struct SeriesView: View {
         .accessibilityLabel(label)
     }
 
-    private func infoLine(_ h: SeriesHeader) -> some View {
+    private func infoLine(_ h: SeriesHeader, count: Int) -> some View {
         HStack(spacing: 0) {
             if let cn = h.categoryName {
                 Button {
@@ -210,7 +201,7 @@ struct SeriesView: View {
                 .accessibilityLabel("\(cn)，点按查看全部课程")
             }
             // 分类名后面是一整段文字：大字号放不下时整段换行，不拆成几块各自折行
-            Text(seriesInfoText(category: h.categoryName != nil, count: episodes.count, status: h.status)).zFont(S.caption).foregroundStyle(
+            Text(seriesInfoText(category: h.categoryName != nil, count: count, status: h.status)).zFont(S.caption).foregroundStyle(
                 C.labelSecondary)
             Spacer(minLength: 0)
         }

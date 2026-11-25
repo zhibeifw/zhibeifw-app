@@ -379,6 +379,35 @@ enum Tok {
             static let idleTrackOffset: CGFloat = 4
             static let metadataOffset: CGFloat = 4
         }
+        enum WindowsMiniPlayer {
+            static let width: CGFloat = 744
+            static let height: CGFloat = 56
+            static let padding: CGFloat = 16
+            static let verticalPadding: CGFloat = 8
+            static let controlSize: CGFloat = 40
+            static let controlSpacing: CGFloat = 4
+            static let rateWidth: CGFloat = 52
+            static let infoLeadingSpace: CGFloat = 20
+            static let infoTrailingSpace: CGFloat = 14
+            static let artworkWidth: CGFloat = 72
+            static let artworkHeight: CGFloat = 40
+            static let artworkGap: CGFloat = 12
+            static let artworkMinTextWidth: CGFloat = 112
+            static let seekAreaHeight: CGFloat = 18
+            static let idleTrackHeight: CGFloat = 2
+            static let activeTrackHeight: CGFloat = 4
+            static let glassRadius: CGFloat = 38
+            static let glassBlur: CGFloat = 18
+            static let glassTintOpacity: CGFloat = 0.63
+            enum Compact {
+                static let belowWidth: CGFloat = 460
+                static let padding: CGFloat = 10
+                static let controlSize: CGFloat = 34
+                static let rateWidth: CGFloat = 44
+                static let infoLeadingSpace: CGFloat = 10
+                static let infoTrailingSpace: CGFloat = 8
+            }
+        }
         enum CompactPlayer {
             static let width: CGFloat = 1080
             static let artworkWidth: CGFloat = 96

@@ -17,8 +17,22 @@ struct VisionBrowseView: View {
                 VisionHomeView()
             } else if section == .categories {
                 VisionCategoriesView(rows: categories)
-            } else if section == .favorites {
-                VisionFavoritesView(rows: favorites)
+            } else if section == .recent || section == .favorites {
+                VStack(spacing: Tok.Component.Vision.pageMargin) {
+                    if let libraryCount {
+                        Text(libraryCount)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .frame(maxWidth: .infinity)
+                    }
+                    if section == .recent {
+                        listContent
+                    } else {
+                        VisionFavoritesView(rows: favorites)
+                    }
+                }
+            } else if section == .search && submitted.isEmpty {
+                ContentUnavailableView("输入课程名搜索", systemImage: "magnifyingglass")
             } else {
                 listContent
             }
@@ -28,15 +42,15 @@ struct VisionBrowseView: View {
         .toolbar {
             if section == .recent {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
+                    Button(role: .destructive) {
                         core.alert = AlertSpec(
                             title: "清空最近列表？",
-                            message: "列表中的记录会被移除。各课程的收听进度、已听完标记和已下载内容不受影响。",
+                            message: "列表中的记录会被移除。各课程的收听进度、已听完标记不受影响。",
                             buttons: [
                                 AlertButton(title: "取消", role: .cancel),
                                 AlertButton(title: "清空", role: .destructive) { core.clearRecent() },
                             ])
-                    } label: { Text("清空").visionHitTarget() }
+                    } label: { Label("清空", systemImage: "trash").visionHitTarget() }
                     .disabled(recent.isEmpty)
                 }
             }
@@ -63,6 +77,14 @@ struct VisionBrowseView: View {
             favorites = (try? core.store.loadFavorites()) ?? []
         }
     }
+    private var libraryCount: String? {
+        switch section {
+        case .recent where !recent.isEmpty: "\(recent.count) 条记录"
+        case .favorites where !favorites.isEmpty: "\(favorites.count) 门课"
+        default: nil
+        }
+    }
+
     private var listContent: some View {
         List {
             switch section {
@@ -87,14 +109,14 @@ struct VisionBrowseView: View {
                                         id: row.id, title: row.epTitle, progress: row.progress, duration: row.epDuration ?? 0, showsTime: false)
                                 }
                                 Spacer()
-                                Text(pillState(progress, knownDuration: row.epDuration ?? 0).text)
+                                Text(row.gone ? "已下架" : pillState(progress, knownDuration: row.epDuration ?? 0).text)
                                     .font(.subheadline).foregroundStyle(.secondary).monospacedDigit()
                             }.frame(maxWidth: .infinity, alignment: .leading).visionHitTarget()
                         }.buttonStyle(.plain)
                         Button {
                             model.showSeries(row.seriesId)
                         } label: {
-                            Label("前往课程", systemImage: "arrow.right").visionHitTarget()
+                            Label("前往课程", systemImage: "arrow.forward.circle").visionHitTarget()
                         }
                         .buttonStyle(.bordered)
                         .labelStyle(.iconOnly)
@@ -104,7 +126,7 @@ struct VisionBrowseView: View {
             case .search:
                 if searching { ProgressView("正在搜索") }
                 if let results {
-                    if results.rows.isEmpty { ContentUnavailableView.search(text: submitted) }
+                    if results.rows.isEmpty { ContentUnavailableView("未找到相关内容", systemImage: "magnifyingglass") }
                     if results.fallback { Text("已显示“\(results.matched)”的结果").foregroundStyle(.secondary) }
                     ForEach(results.rows) { row in
                         NavigationLink(value: VisionRoute.series(row.id)) {
@@ -167,27 +189,27 @@ struct VisionSeriesView: View {
     let id: String
     @Environment(AppCore.self) private var core
     @Environment(VisionModel.self) private var model
-    @State private var header: SeriesHeader?
-    @State private var episodes: [EpisodeRow] = []
+    @State private var details: SeriesDetails?
     @State private var oldestFirst = true
     var body: some View {
         List {
-            if let header {
+            switch details {
+            case .ready(let header, let episodes):
                 ViewThatFits(in: .horizontal) {
                     HStack(alignment: .top, spacing: Tok.Component.Vision.sectionGap) {
                         courseArtwork(header)
-                        courseInformation(header)
+                        courseInformation(header, count: episodes.count)
                     }
                     VStack(alignment: .leading, spacing: Tok.Component.Vision.cardGap) {
                         courseArtwork(header)
-                        courseInformation(header)
+                        courseInformation(header, count: episodes.count)
                     }
                 }
                 .padding(.vertical)
                 .listRowBackground(Color.clear)
                 .listRowSeparator(.hidden)
                 .buttonStyle(.borderless)
-                if let description = header.description {
+                if let description = header.description, !description.isEmpty {
                     DisclosureGroup { Text(description).foregroundStyle(.secondary) } label: { Text("课程简介").visionHitTarget() }
                 }
                 Text("全部课程")
@@ -215,23 +237,34 @@ struct VisionSeriesView: View {
                         .help(row.progress?.completed == true ? "标记为未听完" : "标记为已听完")
                     }
                 }
-            } else {
-                ContentUnavailableView("课程暂不可用", systemImage: "book.closed")
+            case nil: ProgressView()
+            case .readFailed:
+                VStack {
+                    Text("课程读取失败")
+                    Button(action: reload) { Text("重试").visionHitTarget() }
+                }
+            case .gone(let title, let favorited):
+                UnavailableCourseView(title: title, favorited: favorited) { core.removeFavorite(id) }
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
             }
         }
         .listStyle(.plain)
         .listRowSpacing(Tok.Component.Vision.hitGap)
         .navigationTitle("课程")
         .task(id: model.versions) {
-            header = try? core.store.loadSeriesHeader(id); episodes = (try? core.store.loadEpisodes(id)) ?? []
+            reload()
         }
     }
+    private func reload() { details = core.store.loadSeriesDetails(id) }
+
     private func courseArtwork(_ header: SeriesHeader) -> some View {
         VisionArtwork(path: header.coverPath, large: true)
             .frame(width: Tok.Component.Vision.cardWidth)
             .clipShape(RoundedRectangle(cornerRadius: Tok.Radius.cardLarge))
     }
-    private func courseInformation(_ header: SeriesHeader) -> some View {
+    private func courseInformation(_ header: SeriesHeader, count: Int) -> some View {
         VStack(alignment: .leading, spacing: Tok.Component.Vision.cardGap) {
             Text(header.title).font(.largeTitle).bold().fixedSize(horizontal: false, vertical: true)
             if let category = header.categoryName {
@@ -249,7 +282,7 @@ struct VisionSeriesView: View {
                 .foregroundStyle(.primary)
                 .hoverEffect(.highlight)
             }
-            Text(seriesInfoText(category: false, count: episodes.count, status: header.status))
+            Text(seriesInfoText(category: false, count: count, status: header.status))
                 .foregroundStyle(.secondary)
             HStack(spacing: Tok.Component.Vision.hitGap) {
                 Button {

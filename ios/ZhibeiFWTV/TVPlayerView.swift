@@ -69,20 +69,15 @@ private struct TVPlayerControls: View {
                 Spacer(minLength: 8)
                 moreMenu
             }
-            if let err = p.error {
-                Text(errorText(err)).foregroundStyle(C.danger).padding(.top, 40)
-                if err == .cannotPlay { Button("重试") { p.retry() }.padding(.top, 20) }
-            } else {
-                TVProgressBar(player: p).padding(.top, 48)
-                HStack {
-                    Text(clock(p.position))
-                    Spacer()
-                    Text(rightLabel)
-                }
-                .font(.callout).monospacedDigit().foregroundStyle(.secondary)
-                .padding(.top, 14)
-                controlRow.padding(.top, 56)
+            TVProgressBar(player: p).padding(.top, 48)
+            HStack {
+                Text(clock(p.position))
+                Spacer()
+                Text(rightLabel)
             }
+            .font(.callout).monospacedDigit().foregroundStyle(.secondary)
+            .padding(.top, 14)
+            controlRow.padding(.top, 56)
         }
         .confirmationDialog(
             dialogTitle, isPresented: Binding(get: { dialog != nil }, set: { if !$0 { dialog = nil } }), titleVisibility: .visible
@@ -194,13 +189,7 @@ private struct TVPlayerControls: View {
         Button("取消", role: .cancel) {}
     }
 
-    private func errorText(_ e: PlayerError) -> String {
-        switch e {
-        case .cannotPlay: "暂时无法播放，请检查网络后重试"
-        case .damaged: "这一集的文件已损坏"
-        case .gone: "这一集已下架"
-        }
-    }
+
 }
 
 /// 进度条：tvOS 没有系统滑块，这是电视版唯一一处自己画的组件。颜色和 iPhone 的进度条一样（progressFill / progressTrack）。

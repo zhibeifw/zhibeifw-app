@@ -11,11 +11,14 @@ struct VisionHomeView: View {
                         .padding(.horizontal, Tok.Component.Vision.pageMargin)
                 }
                 if core.syncFailed {
-                    Text("无法更新，显示上次内容").foregroundStyle(.secondary)
-                        .padding(.horizontal, Tok.Component.Vision.pageMargin)
+                    HStack {
+                        Text("无法更新，显示的是上一次更新的内容").foregroundStyle(.secondary)
+                        Button { Task { await core.syncCatalog(userInitiated: true) } } label: { Text("重试").visionHitTarget() }
+                    }
+                    .padding(.horizontal, Tok.Component.Vision.pageMargin)
                 }
                 if !core.home.ongoing.isEmpty {
-                    VisionCardShelf(title: "最新课程", cards: core.home.ongoing, large: true)
+                    VisionCardShelf(title: "新课程", cards: core.home.ongoing, large: true)
                 }
                 if !core.home.featured.isEmpty {
                     VisionCardShelf(title: "编辑精选", cards: core.home.featured)
@@ -83,7 +86,6 @@ struct VisionCourseCard: View {
             )
             .frame(maxWidth: fillsWidth ? .infinity : nil, alignment: .leading)
             .contentShape(RoundedRectangle(cornerRadius: Tok.Radius.cardLarge))
-            .visionDebugBoundary()
         }
         .buttonStyle(.plain)
         .hoverEffect(.highlight)
@@ -117,7 +119,6 @@ struct VisionCategoriesView: View {
                             .background(resolveCategoryColor(row.color, id: row.id).color)
                             .clipShape(RoundedRectangle(cornerRadius: Tok.Radius.cardLarge))
                             .contentShape(RoundedRectangle(cornerRadius: Tok.Radius.cardLarge))
-            .visionDebugBoundary()
                     }
                     .buttonStyle(.plain)
                     .hoverEffect(.highlight)
@@ -145,7 +146,7 @@ struct VisionFavoritesView: View {
                         .contextMenu { Button("取消收藏") { core.removeFavorite(row.id) } }
                     }
                 }
-                .padding(Tok.Component.Vision.pageMargin)
+                .padding([.horizontal, .bottom], Tok.Component.Vision.pageMargin)
             }
         }
     }

@@ -24,8 +24,11 @@ struct TVHomeView: View {
                         .padding(.horizontal, TVLayout.pageMargin)
                 }
                 if core.syncFailed {
-                    Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
-                        .padding(.horizontal, TVLayout.pageMargin)
+                    HStack {
+                        Text("无法更新，显示的是上一次更新的内容").font(.callout).foregroundStyle(.secondary)
+                        Button("重试") { Task { await core.syncCatalog(userInitiated: true) } }
+                    }
+                    .padding(.horizontal, TVLayout.pageMargin)
                 }
                 if !home.ongoing.isEmpty {
                     TVCardRow(title: "新课程", cards: home.ongoing, width: TVLayout.largeCardWidth)
@@ -84,6 +87,7 @@ struct TVSeriesCard: View {
     let card: SeriesCard
     let width: CGFloat
     /// 收藏页：长按确认键出“取消收藏”
+    var subtitle: String? = nil
     var onRemoveFavorite: (() -> Void)? = nil
 
     var body: some View {
@@ -100,8 +104,8 @@ struct TVSeriesCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 // 和 iPhone 一致：编辑精选用精选标题，新课程下面写“更新至 最后一集”
                 Text(card.featureTitle ?? card.title).font(.callout).lineLimit(2)
-                if let last = card.lastTitle {
-                    Text("更新至 \(last)").font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                if let detail = subtitle ?? card.lastTitle.map({ "更新至 " + $0 }) {
+                    Text(detail).font(.caption).foregroundStyle(.secondary).lineLimit(1)
                 }
             }
         }
@@ -114,5 +118,6 @@ struct TVSeriesCard: View {
                 .frame(width: width, height: TVLayout.coverHeight(width))
         }
         .buttonStyle(.card)
+        .accessibilityLabel([card.featureTitle ?? card.title, subtitle ?? card.lastTitle.map { "更新至 " + $0 }].compactMap { $0 }.joined(separator: "，"))
     }
 }

@@ -257,9 +257,12 @@ final class PlayerControllerTests: XCTestCase {
         _ = try store.recordPlayback(episodeId: "课_1", seriesId: "课", position: 3, duration: 8, seriesTitle: "课", episodeTitle: "第1课", coverPath: "")
         try store.hideFromRecent("课_1")
         let p = make(routes: { nil })
+        var reported: [PlayerError] = []
+        p.onFailure = { reported.append($0) }
         p.start("课_1", ctx: .series("课"))
         XCTAssertTrue(p.looksPlaying, "拿地址期间先显示暂停图标")
         await until("提示无法播放") { p.error == .cannotPlay }
+        XCTAssertEqual(reported, [.cannotPlay])
         XCTAssertFalse(p.looksPlaying)
         XCTAssertEqual(store.loadProgress("课_1")?.position, 3, "原来的进度不被清零")
         XCTAssertTrue(try store.loadRecent().isEmpty, "失败的那一集不进最近")

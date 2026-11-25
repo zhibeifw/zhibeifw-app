@@ -80,7 +80,6 @@ final class AppCore {
     func boot() async {
         guard !booted else { return }
         booted = true
-        let t0 = Date()
         files.prepare()
         do {
             let db = try SQLiteDB(path: files.dbPath.path)
@@ -103,6 +102,24 @@ final class AppCore {
         }
         importV1Prefs()
         player = PlayerController(store: store, files: files)
+        player.onFailure = { [weak self] error in
+            guard let self else { return }
+            switch error {
+            case .gone:
+                alert = AlertSpec(title: "这一集已下架")
+            case .damaged:
+                alert = AlertSpec(title: "这一集的下载文件已损坏，请重新下载")
+            case .cannotPlay:
+                let episode = player.current?.episodeId
+                alert = AlertSpec(title: "网络异常，请检查网络后重试", buttons: [
+                    AlertButton(title: "关闭", role: .cancel),
+                    AlertButton(title: "重试") { [weak self] in
+                        guard let player = self?.player, player.current?.episodeId == episode, player.error == .cannotPlay else { return }
+                        player.retry()
+                    },
+                ])
+            }
+        }
         player.onProgressSaved = { [weak self] in self?.progressVersion += 1 }
         Network.shared.onOriginChange = { OriginWatcher.shared.bump() }
         startCloudSync()
@@ -110,26 +127,8 @@ final class AppCore {
 
         if store.isInitialized {
             loadHome()
-            // 有网络时等联网检查最多到启动后约 3 秒；没网不等
-            let online = Connectivity.shared.connected
-            let wait = launchFreshWaitMs(online: online, elapsedMs: Date().timeIntervalSince(t0) * 1000)
-            if wait > 0 {
-                // 同步做完或时间到，谁先到算谁；时间到了同步照样在后台做完，只是启动页不再等它
-                let (done, cont) = AsyncStream<Void>.makeStream()
-                Task {
-                    await self.syncCatalog(userInitiated: false)
-                    cont.finish()
-                }
-                let timer = Task {
-                    try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000))
-                    cont.finish()
-                }
-                for await _ in done {}
-                timer.cancel()
-            } else {
-                Task { await self.syncCatalog(userInitiated: false) }
-            }
             phase = .ready
+            Task { await self.syncCatalog(userInitiated: false) }
             onReady?()
         } else {
             await runInitialization()
@@ -166,14 +165,14 @@ final class AppCore {
     /// 正在首次初始化：网络恢复和“重试”同时来时只跑一轮
     @ObservationIgnored private var initRunning = false
 
-    func runInitialization() async {
+    func runInitialization(showAttempts: Bool = true) async {
         guard !initRunning else { return }
         initRunning = true
         defer { initRunning = false }
-        phase = .initializing(attempt: 1, failed: false)
+        if showAttempts { phase = .initializing(attempt: 1, failed: false) }
         let ok = await CatalogSync.initializeWithRetry(
             store: store, net: Network.shared,
-            onAttempt: { [weak self] n in self?.phase = .initializing(attempt: n, failed: false) })
+            onAttempt: { [weak self] n in if showAttempts { self?.phase = .initializing(attempt: n, failed: false) } })
         if ok {
             loadHome()
             phase = .ready
@@ -206,7 +205,7 @@ final class AppCore {
     /// 取 index.json 只有这几处：启动、切回前台（自动，主页顶栏显示“正在更新…”）、下拉刷新、刷新网络线路。
     /// 点开课程、在“最近”里点已下架的课都只看本机目录，不联网。
     @discardableResult
-    func syncCatalog(userInitiated: Bool) async -> SyncSummary? {
+    func syncCatalog(userInitiated: Bool, fromRouteCheck: Bool = false) async -> SyncSummary? {
         // 已经在更新（启动、回到前台时的自动更新）：等它做完，不另起一次；直接返回的话，下拉刷新的转圈会一闪就没
         if let running = inflightSync {
             let s = await running.value
@@ -217,7 +216,7 @@ final class AppCore {
             return s
         }
         syncing = true
-        if !userInitiated { autoUpdating = true }
+        if !userInitiated && !fromRouteCheck { autoUpdating = true }
         defer { syncing = false; autoUpdating = false }
         let task = Task { await CatalogSync.sync(store: store, net: Network.shared) }
         inflightSync = task
@@ -227,7 +226,8 @@ final class AppCore {
         // 有新内容立刻换上；用户下拉刷新则完成后一律重读
         if userInitiated || s.changed { loadHome() }
         // 提示条：试遍线路仍失败、且连着网（用户主动刷新时不论有没有网都显示）
-        if s.failed { syncFailed = userInitiated || Connectivity.shared.connected } else { syncFailed = false }
+        if !s.failed { syncFailed = false }
+        else if !fromRouteCheck { syncFailed = userInitiated || Connectivity.shared.connected }
         return s
     }
 
@@ -316,7 +316,11 @@ final class AppCore {
     func refreshRoutes() async -> String {
         let (origin, same) = await Network.shared.refreshRoutes()
         guard origin != nil else { return "暂时无法连接" }
-        _ = await syncCatalog(userInitiated: true)
+        if case .initializing = phase {
+            await runInitialization(showAttempts: false)
+        } else {
+            _ = await syncCatalog(userInitiated: false, fromRouteCheck: true)
+        }
         return same ? "线路正常" : "已切换到备用线路，连接正常"
     }
 }

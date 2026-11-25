@@ -182,27 +182,32 @@ class Network(private val ctx: Context) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** 并发调用共用同一次选择。 */
-    suspend fun resolve(): String? {
-        val d = resolveLock.withLock {
-            resolving ?: run {
-                // 选完（成功、出错都算）由这次选择自己放开，不由等的人放开：
-                // 某个等的人被取消时选择还在进行，放开了会让下一个调用再起一次，两次同时探测、同时写设置
-                lateinit var task: Deferred<String?>
-                task = scope.async(start = CoroutineStart.LAZY) {
-                    try {
-                        doResolve()
-                    } finally {
-                        withContext(NonCancellable) { resolveLock.withLock { if (resolving === task) resolving = null } }
+    suspend fun resolve(checking: String? = null): String? {
+        while (true) {
+            var started = false
+            val d = resolveLock.withLock {
+                resolving ?: run {
+                    started = true
+                    // 选完（成功、出错都算）由这次选择自己放开，不由等的人放开：
+                    // 某个等的人被取消时选择还在进行，放开了会让下一个调用再起一次，两次同时探测、同时写设置
+                    lateinit var task: Deferred<String?>
+                    task = scope.async(start = CoroutineStart.LAZY) {
+                        try {
+                            doResolve(checking)
+                        } finally {
+                            withContext(NonCancellable) { resolveLock.withLock { if (resolving === task) resolving = null } }
+                        }
                     }
+                    resolving = task
+                    task.also { it.start() }
                 }
-                resolving = task
-                task.also { it.start() }
             }
+            val result = d.await()
+            if (started || checking == null) return result
         }
-        return d.await()
     }
 
-    private suspend fun doResolve(): String? {
+    private suspend fun doResolve(checking: String?): String? {
         val p = ctx.readPrefs()
         val saved = p[PrefKeys.domains]?.let { parseDomains(it) }
         val origins = orderOrigins(
@@ -210,7 +215,7 @@ class Network(private val ctx: Context) {
             saved?.domains ?: emptyList(),
             NetConfig.builtinDomains
         )
-        val won = pickFirstReachable(origins, probeScope = scope) { origin ->
+        val won = pickFirstReachable(origins, probeScope = scope, checking = checking) { origin ->
             val r = get(
                 buildUrl(origin, DOMAINS_PATH),
                 null,
@@ -225,6 +230,7 @@ class Network(private val ctx: Context) {
             ) else null // 内容必须是格式正确的 domains.json
         }
         if (won == null) {
+            if (checking != null) ctx.editPrefs { it.remove(PrefKeys.lastService) }
             setService(null); return null
         }
         ctx.editPrefs {
@@ -235,13 +241,11 @@ class Network(private val ctx: Context) {
         return won.first
     }
 
-    /** 手动入口（只有“关于 → 刷新网络线路”用）：忘掉记住的域名，重新选。返回 (选到的域名, 和原来是否同一个)。 */
+    /** 手动检测优先保留当前线路，失败后才检查其他候选。 */
     suspend fun refreshRoutes(): Pair<String?, Boolean> {
-        val before = ctx.readPrefs()[PrefKeys.lastService] ?: service
-        ?: NetConfig.builtinDomains.first()
+        val before = service ?: ctx.readPrefs()[PrefKeys.lastService] ?: NetConfig.builtinDomains.first()
         setService(null)
-        ctx.editPrefs { it.remove(PrefKeys.lastService) }
-        val r = resolve()
+        val r = resolve(checking = before)
         return r to (r != null && r == before)
     }
 
@@ -318,11 +322,14 @@ class Network(private val ctx: Context) {
  * 放在 coroutineScope 里的话要等落选的探测各自超时才能返回，“谁先到用谁”就成了等最慢的那个。
  */
 suspend fun <T : Any> pickFirstReachable(
-    origins: List<String>,
+    candidates: List<String>,
     staggerMs: Long = NetConfig.RACE_STAGGER_MS,
     probeScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    checking: String? = null,
     probe: suspend (String) -> T?
 ): Pair<String, T>? {
+    if (checking != null) probe(checking)?.let { return checking to it }
+    val origins = candidates.filter { it != checking }
     if (origins.isEmpty()) return null
     val events =
         Channel<Pair<Int, T?>>(Channel.UNLIMITED) // i ≥ 0：第 i 个的结果；i < 0：第 (-1-i) 个的计时到了

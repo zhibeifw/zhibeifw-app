@@ -59,6 +59,7 @@ final class PlayerController {
     @ObservationIgnored private let store: Store
     @ObservationIgnored private let files: AppFiles
     @ObservationIgnored var onProgressSaved: (() -> Void)?
+    @ObservationIgnored var onFailure: ((PlayerError) -> Void)?
     @ObservationIgnored var onDamaged: ((String) -> Void)?
     @ObservationIgnored private var observers: [NSKeyValueObservation] = []
     /// 当前这个音频的加载状态：直接看音频本身（隔着播放器看“当前音频的状态”，换音频时会漏掉失败）
@@ -258,7 +259,10 @@ final class PlayerController {
         needsReload = true
         isPlaying = false
         buffering = false
-        error = e
+        if error != e {
+            error = e
+            onFailure?(e)
+        }
     }
 
     // MARK: 播放

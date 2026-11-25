@@ -19,6 +19,12 @@ struct SeriesHeader: Equatable {
     var categoryId: String; var categoryName: String?; var favorited: Bool
 }
 
+enum SeriesDetails: Equatable {
+    case ready(SeriesHeader, [EpisodeRow])
+    case gone(title: String?, favorited: Bool)
+    case readFailed
+}
+
 struct EpisodeRow: Identifiable, Equatable {
     var id: String; var seriesId: String; var title: String; var audioPath: String; var pos: Int; var epDuration: Double?
     var progress: Prog?
@@ -246,6 +252,30 @@ final class Store: @unchecked Sendable {
         ).map(card)
     }
 
+    private func savedCourse(_ id: String) throws -> (title: String?, favorited: Bool) {
+        let row = try db.first(
+            """
+            SELECT COALESCE(
+                (SELECT series_title FROM user_favorite WHERE series_id = ?1 AND trim(series_title) <> ''),
+                (SELECT series_title FROM user_progress WHERE series_id = ?1 AND trim(series_title) <> '' ORDER BY updated DESC LIMIT 1),
+                (SELECT series_title FROM user_download WHERE series_id = ?1 AND trim(series_title) <> '' ORDER BY requested_at DESC LIMIT 1)
+            ) AS title, EXISTS (SELECT 1 FROM user_favorite WHERE series_id = ?1) AS favorited
+            """, [id])
+        return (row?.optStr("title"), row?.bool("favorited") == true)
+    }
+
+    func loadSeriesDetails(_ id: String) -> SeriesDetails {
+        do {
+            guard let header = try loadSeriesHeader(id) else {
+                let saved = try savedCourse(id)
+                return .gone(title: saved.title, favorited: saved.favorited)
+            }
+            return .ready(header, try loadEpisodes(id))
+        } catch {
+            return .readFailed
+        }
+    }
+
     func loadSeriesHeader(_ id: String) throws -> SeriesHeader? {
         guard
             let r = try db.first(
@@ -284,13 +314,15 @@ final class Store: @unchecked Sendable {
     func loadFavorites() throws -> [FavoriteRow] {
         try db.all(
             """
-            SELECT f.series_id AS id, COALESCE(s.title, NULLIF(f.series_title, ''), '已下架的课程') AS title,
+            SELECT f.series_id AS id, COALESCE(s.title, NULLIF(trim(f.series_title), '')) AS title,
                    COALESCE(s.cover_path, NULLIF(f.cover_path, ''), '') AS cover_path, s.status AS status, (s.id IS NULL) AS gone
             FROM user_favorite f LEFT JOIN catalog_series s ON s.id = f.series_id ORDER BY f.added DESC
             """
         ).map {
-            FavoriteRow(
-                id: $0.str("id"), title: $0.str("title"), coverPath: $0.str("cover_path"), status: $0.optStr("status"),
+            let id = $0.str("id")
+            let title = try $0.optStr("title") ?? savedCourse(id).title ?? "已下架的课程"
+            return FavoriteRow(
+                id: id, title: title, coverPath: $0.str("cover_path"), status: $0.optStr("status"),
                 gone: $0.bool("gone"))
         }
     }
