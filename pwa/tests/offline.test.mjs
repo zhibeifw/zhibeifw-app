@@ -3,24 +3,38 @@ import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import vm from 'node:vm';
 
-test('带查询串与定位的离线导航命中同一目录内的入口；音频交由浏览器处理', async () => {
+test('离线导航使用未重定向的主页，包括旧入口与带查询串或定位的链接；音频交由浏览器处理', async () => {
  const scope='https://example.test/listen/';
  const handlers = new Map();
  const self = {registration:{scope},addEventListener:(name,fn)=>handlers.set(name,fn)};
  const keys=[];
- const cache={match:async key=>{keys.push(key);return 'cached';}};
+ const saved=new Map();
+ const directPage=new Response('离线主页', {headers:{'Content-Type':'text/html'}});
+ const redirectedPage=directPage.clone();
+ Object.defineProperty(redirectedPage,'redirected',{value:true});
+ const cache={
+  addAll:async requests=>{
+   for(const request of requests) {
+    const response=request.url===scope+'index.html' ? redirectedPage : directPage;
+    saved.set(request.url,response);
+   }
+  },
+  match:async key=>{keys.push(key);return saved.get(key);},
+ };
  const code=await readFile(new URL('../sw.js',import.meta.url),'utf8');
- vm.runInNewContext(code,{self,URL,caches:{open:async()=>cache}});
+ vm.runInNewContext(code,{self,URL,Request,caches:{open:async()=>cache}});
+ await new Promise(resolve=>handlers.get('install')({waitUntil:resolve}));
  async function request(url,mode='navigate'){
   let result;
   handlers.get('fetch')({request:{url,method:'GET',mode},respondWith:value=>{result=value;}});
   return result;
  }
- for(const path of ['?via=app#recent','index.html#favorites','#series/test']) {
-  assert.equal(await request(scope+path),'cached');
-  assert.equal(keys.at(-1),scope+'index.html');
+ for(const path of ['', '?via=app#recent','index.html#favorites','#series/test']) {
+  const response=await request(scope+path);
+  assert.equal(response.redirected,false);
+  assert.equal(keys.at(-1),scope);
  }
- assert.equal(await request(scope+'assets/bookmark_24px.svg','no-cors'),'cached');
+ assert.equal(await request(scope+'assets/bookmark_24px.svg','no-cors'),directPage);
  assert.equal(await request('https://zbfw.org/audio.m4a','no-cors'),undefined);
  assert.equal(await request(scope+'audio.m4a','no-cors'),undefined);
  assert.equal(await request('https://example.test/'),undefined);

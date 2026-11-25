@@ -7,13 +7,15 @@ const icons = 'zbfw-icons:' + scope;
 const covers = 'zbfw-covers:' + scope;
 const coverAvailability = new Map();
 const files = {{files}};
-const paths = new Set(files.map(file => new URL(file, scope).href));
+const indexPath = new URL('index.html', scope).href;
+// 直接缓存目录入口，避免托管服务把 index.html 重定向后的响应交给浏览器导航。
+const paths = new Set(files.map(file => file === 'index.html' ? scope : new URL(file, scope).href));
 const installIcons = new Set(['icon.png', 'icon-192.png', 'icon-512.png']
   .map(name => new URL('assets/' + name, scope).href));
 
 self.addEventListener('install', event => {
   event.waitUntil(caches.open(shell).then(cache =>
-    cache.addAll(files.map(file => new Request(new URL(file, scope), {cache: 'reload'})))
+    cache.addAll([...paths].map(path => new Request(path, {cache: 'reload'})))
   ));
 });
 
@@ -26,7 +28,7 @@ self.addEventListener('activate', event => {
     if (await caches.has('zbfw-shell-v1')) {
       const old = await caches.open('zbfw-shell-v1');
       for (const request of await old.keys()) {
-        if (paths.has(request.url) || installIcons.has(request.url) || request.url === scope) {
+        if (paths.has(request.url) || installIcons.has(request.url) || request.url === indexPath) {
           await old.delete(request);
         }
       }
@@ -47,7 +49,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(request.url);
   url.hash = '';
   if (request.mode === 'navigate') url.search = '';
-  const key = url.href === scope ? new URL('index.html', scope).href : url.href;
+  const key = request.mode === 'navigate' && url.href === indexPath ? scope : url.href;
   if (paths.has(key)) {
     event.respondWith(caches.open(shell).then(async cache => await cache.match(key) || fetch(request)));
   } else if (installIcons.has(key)) {
