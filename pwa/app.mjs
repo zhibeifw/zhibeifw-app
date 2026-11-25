@@ -7,6 +7,7 @@ const $=s=>document.querySelector(s),main=$('#content'),audio=$('#audio');
 const seekInput = $('#seek');
 const playerDetails = seekInput.closest('.player-details');
 const sleepButton = $('#sleep');
+const speedInput = $('#speed');
 let catalog=null,current=null,context='series',positionReady=false,pendingPosition=0,saveTime=0,waiting=false,reverse=false,stale=false;
 let favorites=readRecords('favorites');
 let progress=readRecords('progress');
@@ -326,7 +327,7 @@ async function startEpisode(s,e,ctx){
  const saved=progress.get(e.id);pendingPosition=saved?.completed?0:saved?.position||0;
  startedPlaying=false;
  revealOnPlay=true;
- audio.defaultPlaybackRate=Number($('#speed').value);
+ audio.defaultPlaybackRate=Number(speedInput.value);
  audio.src=mediaURL(origin,e.audioPath);
  $('#player').hidden=false;$('#toggle').disabled=false;$('#now-title').textContent=s.title;$('#now-episode').textContent=e.title;$('#now-cover').src=mediaURL(currentOrigin(),s.coverPath);$('#now-link').href=route('series',s.id);
  updateMediaSession();startAudio();syncPlaybackUI();navigator.storage?.persist?.().catch(()=>{});
@@ -539,7 +540,11 @@ function setStopAfterEpisode(enabled){
 sleepButton.onclick=()=>setStopAfterEpisode(!stopAfterEpisode);
 seekInput.oninput=()=>showSeekPosition(seekInput.valueAsNumber, Number(seekInput.max));
 seekInput.onchange=()=>seek(seekInput.valueAsNumber);
-$('#speed').onchange=e=>{audio.defaultPlaybackRate=audio.playbackRate=+e.target.value;updateSeek();};
+speedInput.onchange=()=>{
+ audio.defaultPlaybackRate=audio.playbackRate=Number(speedInput.value);
+ $('#speed-label').textContent=speedInput.value+'×';
+ updateSeek();
+};
 $('.skip').onclick=e=>{e.preventDefault();main.focus();};
 function setNavigation(open){
  document.body.classList.toggle('nav-open',open);
