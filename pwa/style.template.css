@@ -68,7 +68,7 @@ nav [aria-current="page"]{font-weight:600}
 .category{padding:{{size18px}};border-radius:{{size10px}};aspect-ratio:1.9;display:flex;flex-direction:column;justify-content:space-between;color:white;font-size:{{size1_18rem}};font-weight:650}
 .category i{align-self:flex-end;width:{{size28px}};height:{{size28px}}}.category:hover{filter:brightness(1.06)}
 .crumb{display:inline-flex;gap:{{size6px}};align-items:center;color:var(--quiet);margin-bottom:{{size12px}};font-size:{{size_88rem}}}
-.series-heading{display:grid;grid-template-columns:minmax(0,41%) minmax(0,1fr);gap:{{size32px}};align-items:end;padding:{{size12px}} 0 {{size36px}}}
+.series-heading{display:grid;grid-template-columns:min(41%,{{size320px}}) minmax(0,1fr);gap:{{size32px}};align-items:end;padding:{{size12px}} 0 {{size36px}}}
 .series-heading>.cover{box-shadow:0 {{size9px}} {{size24px}} rgb(0 0 0 / 24%);border-radius:{{size10px}}}
 .series-heading h1{font-size:clamp({{size1_65rem}},2.2vw,{{size2_25rem}});line-height:1.18;letter-spacing:-.035em}
 .speaker{font-size:{{size1_35rem}};line-height:1.35;margin-top:{{size2px}}}
@@ -91,7 +91,7 @@ nav [aria-current="page"]{font-weight:600}
 .episode:hover,.episode:focus-within,.episode.active{background:var(--wash)}
 .episode-main{flex:1;min-width:0;display:flex;align-items:center;position:relative;gap:{{size12px}};min-height:{{size44px}};text-align:left;padding:{{size7px}} 0}
 .episode-main:not(:disabled):hover,.track .row-action:not(:disabled):hover{background:transparent}
-.track .episode-main>i,.track .episode-main>.loading{width:{{size24px}}}
+.track .episode-main>i{width:{{size24px}}}
 .episode-title{display:flex;align-items:center;justify-content:space-between;gap:{{size10px}};min-width:0;flex:1}
 .episode-title strong{font-weight:400;font-size:{{size_92rem}};overflow-wrap:anywhere}
 .episode-title small{flex:none;font-size:{{size_8rem}};font-variant-numeric:tabular-nums}
@@ -163,6 +163,25 @@ summary::-webkit-details-marker{display:none}
 .player-menu{position:absolute;bottom:calc(100% + {{size10px}});right:0;min-width:max-content;border-radius:{{size12px}};padding:{{size5px}};border:{{size1px}} solid var(--rule);background:var(--rail);box-shadow:0 {{size6px}} {{size24px}} #0003}
 .player-menu>*{display:block;width:100%;padding:{{size8px}} {{size14px}};text-align:left;font-size:{{size_9rem}}}
 .loading{display:inline-block;width:{{size18px}};height:{{size18px}};border-radius:50%;border:{{size2px}} solid var(--rule);border-top-color:currentColor;animation:spin 1s linear infinite}
+.track .episode-main>.loading{
+ display:inline-grid;
+ place-items:center;
+ flex:none;
+ width:{{size24px}};
+ height:{{size24px}};
+ border:0;
+ animation:none;
+}
+.track .episode-main>.loading::before{
+ content:"";
+ width:{{size18px}};
+ aspect-ratio:1;
+ background:conic-gradient(from 22.5deg,color-mix(in srgb,var(--quiet) 25%,transparent),var(--quiet));
+ mask-image:radial-gradient(circle closest-side,transparent 46%,#000 50% 96%,transparent),
+  repeating-conic-gradient(from -6deg,#000 0deg 12deg,transparent 12deg 45deg);
+ mask-composite:intersect;
+ animation:spin .8s steps(8) infinite;
+}
 @keyframes spin{to{transform:rotate(1turn)}}
 #notice{position:fixed;z-index:10;top:{{size16px}};left:50%;transform:translateX(-50%);max-width:90%;padding:{{size10px}} {{size16px}};border-radius:{{size10px}};background:var(--ink);color:var(--surface)}
 dialog{background:var(--background);color:var(--labelPrimary);border:{{size1px}} solid var(--rule);border-radius:{{size16px}};padding:{{size24px}};max-width:90vw}
@@ -171,7 +190,7 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
 @media(max-width:{{size1000px}}){
  :root{--sidebar:{{size200px}};--gutter:{{size24px}};--gap:{{size16px}}}
  .shelf{grid-auto-columns:calc((100% - 2 * var(--gap))/3)}
- .series-heading{grid-template-columns:minmax(0,42%) minmax(0,1fr);gap:{{size20px}}}
+ .series-heading{grid-template-columns:min(42%,{{size320px}}) minmax(0,1fr);gap:{{size20px}}}
  .actions{gap:{{size6px}};margin-top:{{size14px}}}.actions button{padding:{{size7px}} {{size12px}}}
 }
 @media(max-width:{{size840px}}){
@@ -217,4 +236,4 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
  #player{grid-template-areas:"info more" "controls controls" "seek seek";grid-template-columns:minmax(0,1fr) auto}
  .transport{width:100%;max-width:{{size320px}};justify-self:center;justify-content:space-between}
 }
-@media(prefers-reduced-motion:reduce){.loading{animation:none}}
+@media(prefers-reduced-motion:reduce){.loading,.track .episode-main>.loading::before{animation:none}}
