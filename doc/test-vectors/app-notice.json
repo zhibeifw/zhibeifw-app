@@ -1,0 +1,22 @@
+{
+  "cases": [
+    ["报名链接", "{\"enabled\":true,\"message\":\" 年度共修开放报名 \",\"link\":{\"label\":\" 查看详情 \",\"url\":\"https://zhibeifw.com/event?phase=signup#details\"}}", "年度共修开放报名", "查看详情", "https://zhibeifw.com/event?phase=signup#details", "message:年度共修开放报名"],
+    ["只有正文", "{\"enabled\":true,\"message\":\"欢迎参加年度共修。\"}", "欢迎参加年度共修。", null, null, "message:欢迎参加年度共修。"],
+    ["关闭", "{\"enabled\":false,\"message\":\"年度共修开放报名\"}", null, null, null, null],
+    ["开关须为布尔值", "{\"enabled\":1,\"message\":\"年度共修开放报名\"}", null, null, null, null],
+    ["正文须有内容", "{\"enabled\":true,\"message\":\" \"}", null, null, null, null],
+    ["正文须为字符串", "{\"enabled\":true,\"message\":12}", null, null, null, null],
+    ["网页链接须是 HTTPS", "{\"enabled\":true,\"message\":\"正文\",\"link\":{\"label\":\"详情\",\"url\":\"http://zhibeifw.com/event\"}}", "正文", null, null, "message:正文"],
+    ["拒绝凭据", "{\"enabled\":true,\"message\":\"正文\",\"link\":{\"label\":\"详情\",\"url\":\"https://user@zhibeifw.com/\"}}", "正文", null, null, "message:正文"],
+    ["拒绝相对地址", "{\"enabled\":true,\"message\":\"正文\",\"link\":{\"label\":\"详情\",\"url\":\"/event\"}}", "正文", null, null, "message:正文"],
+    ["拒绝脚本地址", "{\"enabled\":true,\"message\":\"<b>正文</b>\",\"link\":{\"label\":\"详情\",\"url\":\"javascript:alert(1)\"}}", "<b>正文</b>", null, null, "message:<b>正文</b>"],
+    ["忽略坏链接", "{\"enabled\":true,\"message\":\"正文\",\"link\":[]}", "正文", null, null, "message:正文"],
+    ["无效 JSON", "<html>暂时不可用</html>", null, null, null, null],
+    ["独立的公告编号", "{\"enabled\":true,\"message\":\"欢迎报名\",\"id\":\"practice-2026\"}", "欢迎报名", null, null, "id:practice-2026"],
+    ["相同公告编号更新正文", "{\"enabled\":true,\"message\":\"报名已延长\",\"id\":\"practice-2026\"}", "报名已延长", null, null, "id:practice-2026"],
+    ["新公告可用相同正文", "{\"enabled\":true,\"message\":\"欢迎报名\",\"id\":\"practice-2027\"}", "欢迎报名", null, null, "id:practice-2027"],
+    ["忽略有换行的编号", "{\"enabled\":true,\"message\":\"欢迎报名\",\"id\":\"practice-2026\\n\"}", "欢迎报名", null, null, "message:欢迎报名"],
+    ["忽略非字符串编号", "{\"enabled\":true,\"message\":\"欢迎报名\",\"id\":123}", "欢迎报名", null, null, "message:欢迎报名"],
+    ["忽略超过长度限制的编号", "{\"enabled\":true,\"message\":\"欢迎报名\",\"id\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\"}", "欢迎报名", null, null, "message:欢迎报名"]
+  ]
+}

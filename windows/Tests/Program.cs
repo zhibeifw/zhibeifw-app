@@ -24,6 +24,16 @@ foreach (var (name, validate) in new (string, Func<string, bool>)[] {
         foreach (var item in json.RootElement.GetProperty(group).EnumerateArray())
             Check((item.ValueKind == JsonValueKind.String && validate(item.GetString()!)) == (group == "valid"), name + " " + item);
 }
+using (var vectors = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "vectors", "app-notice.json"))))
+{
+    foreach (var row in vectors.RootElement.GetProperty("cases").EnumerateArray())
+    {
+        var notice = AppNotice.Parse(System.Text.Encoding.UTF8.GetBytes(row[1].GetString()!));
+        Check(notice?.Message == row[2].GetString() && notice?.Link?.Label == row[3].GetString() &&
+            notice?.Link?.Url.AbsoluteUri == row[4].GetString() &&
+            notice?.DismissalKey == row[5].GetString(), "公告：" + row[0].GetString());
+    }
+}
 Check(!Progress.Finished(69, 100) && Progress.Finished(70, 100), "长音频结尾");
 Check(!Progress.Finished(18, 20) && Progress.Finished(19, 20) && !Progress.Finished(0, 0), "短音频结尾");
 foreach (var (bin, band) in new[] { (2, 0), (12, 1), (50, 2), (200, 3) })

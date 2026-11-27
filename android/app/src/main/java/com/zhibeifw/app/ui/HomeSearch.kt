@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -50,6 +51,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -57,6 +59,7 @@ import androidx.compose.ui.text.input.ImeAction
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.Routes
 import com.zhibeifw.app.Tab
+import com.zhibeifw.app.core.AppNotice
 import com.zhibeifw.app.core.MAX_QUERY_LENGTH
 import com.zhibeifw.app.core.normalizeText
 import com.zhibeifw.app.core.resolveCategoryColor
@@ -78,6 +81,7 @@ import com.zhibeifw.app.design.ts
 @Composable
 fun HomeView(model: AppModel) {
     val h = model.home
+    val noticeAnchorHeight = with(LocalDensity.current) { 1.toDp() }
     // 后台自动检查更新时，顶部栏正中显示转圈 + “正在更新…”（居中、圈在左字在右）；
     // 放在顶部栏那一行里，出现、消失都不挤动内容
     PageScaffold(
@@ -96,7 +100,8 @@ fun HomeView(model: AppModel) {
             }
         }) {
         item("pills") {
-            Column {
+            // 让尚未加载提示时的首项仍可被列表测量，避免后到的提示出现在当前滚动位置上方。
+            Column(Modifier.heightIn(min = noticeAnchorHeight)) {
                 if (model.syncFailed) {
                     BannerView(
                         "无法更新，显示的是上一次更新的内容",
@@ -113,6 +118,12 @@ fun HomeView(model: AppModel) {
                             "更新" to { model.upgrade.installUpdate(od.version, od.apkPath) })
                     )
                     Spacer(Modifier.height(CP.Banner.bottomGap.d))
+                }
+                if (!model.isTelevision) {
+                    model.appNotice?.let { notice ->
+                        AppNoticeBanner(notice, model::openExternal, model::dismissAppNotice)
+                        Spacer(Modifier.height(CP.Banner.bottomGap.d))
+                    }
                 }
             }
         }
@@ -147,6 +158,47 @@ fun HomeView(model: AppModel) {
                     c.series,
                     false
                 ) { model.nav.push(Routes.series(it.id)) }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AppNoticeBanner(notice: AppNotice, openExternal: (String) -> Unit, dismiss: () -> Unit) {
+    val foreground = Tok.Color.appNoticeForeground.c()
+    val margin = Layout.pageMargin(windowWidth())
+    BoxWithConstraints(
+        Modifier.padding(horizontal = margin.d).fillMaxWidth()
+            .heightIn(min = CP.Banner.height.d)
+            .clip(RoundedCornerShape(CP.Banner.radius.d))
+            .background(Tok.Color.appNoticeBackground.c())
+            .padding(horizontal = CP.Banner.paddingH.d, vertical = CP.AppNotice.paddingV.d),
+        contentAlignment = Alignment.CenterStart
+    ) {
+        val linkWidth = maxWidth * CP.AppNotice.inlineLinkMaxFraction
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(CP.AppNotice.actionGap.d)
+        ) {
+            Txt(
+                notice.message, S.bannerText, foreground,
+                Modifier.weight(1f)
+            )
+            notice.link?.let { link ->
+                TextButton(
+                    onClick = { openExternal(link.url) },
+                    modifier = Modifier.widthIn(max = linkWidth)
+                ) {
+                    Txt(link.label, S.bannerAction, foreground)
+                }
+            }
+            IconButton(
+                onClick = dismiss,
+                modifier = Modifier.size(Tok.Space.MinTouchTarget.android.d)
+                    .semantics { contentDescription = "关闭公告" }
+            ) {
+                ZIcon("close", CP.AppNotice.closeIconSize.d, foreground)
             }
         }
     }

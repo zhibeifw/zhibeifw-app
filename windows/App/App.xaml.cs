@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Markup;
+using System.Windows.Media;
 using System.Text.Json;
 
 namespace Zhibei.Desktop;
@@ -14,6 +15,27 @@ public partial class App : Application
             using var design = JsonDocument.Parse(typeof(App).Assembly.GetManifestResourceStream("design.json")!);
             var root = design.RootElement;
             var component = root.GetProperty("component");
+            var colors = root.GetProperty("color");
+            foreach (var key in new[] { "appNoticeBackground", "appNoticeForeground" })
+                Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors.GetProperty(key).GetProperty("light").GetString())!);
+            var banner = component.GetProperty("banner");
+            var notice = component.GetProperty("appNotice");
+            Resources["NoticeRadius"] = new CornerRadius(banner.GetProperty("radius").GetDouble());
+            Resources["NoticeHeight"] = banner.GetProperty("height").GetDouble();
+            double noticePaddingH = banner.GetProperty("paddingH").GetDouble();
+            double noticePaddingV = notice.GetProperty("paddingV").GetDouble();
+            Resources["NoticePadding"] = new Thickness(noticePaddingH, noticePaddingV, noticePaddingH, noticePaddingV);
+            Resources["NoticeMargin"] = new Thickness(0, 0, 0, banner.GetProperty("bottomGap").GetDouble());
+            Resources["NoticeActionMargin"] = new Thickness(notice.GetProperty("actionGap").GetDouble(), 0, 0, 0);
+            Resources["NoticeCloseIconSize"] = notice.GetProperty("closeIconSize").GetDouble();
+            var fontStyles = root.GetProperty("font").GetProperty("style");
+            foreach (var role in new[] { "bannerText", "bannerAction" })
+            {
+                var font = fontStyles.GetProperty(role);
+                Resources[role + ".Size"] = font.GetProperty("size").GetDouble();
+                Resources[role + ".LineHeight"] = font.GetProperty("lineHeight").GetDouble();
+                Resources[role + ".Weight"] = FontWeight.FromOpenTypeWeight(font.GetProperty("weight").GetInt32());
+            }
             foreach (var setting in component.GetProperty("audioWaveform").EnumerateObject())
                 Resources["Spectrum." + setting.Name] = setting.Value.GetDouble();
             Resources["TileRadius"] = new CornerRadius(root.GetProperty("radius").GetProperty("tile").GetDouble());

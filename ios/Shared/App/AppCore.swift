@@ -47,6 +47,19 @@ final class AppCore {
     var home = HomeData()
     /// 主页顶部“无法更新，显示的是上一次更新的内容”。
     var syncFailed = false
+    #if os(iOS) || os(macOS) || os(visionOS)
+    private(set) var appNotice: AppNotice?
+    @ObservationIgnored private var appNoticeTask: Task<Void, Never>?
+    private static let dismissedNoticesPreference = "appNotice.dismissed"
+
+    func dismissAppNotice() {
+        guard let notice = appNotice else { return }
+        let defaults = UserDefaults.standard
+        let dismissed = defaults.stringArray(forKey: Self.dismissedNoticesPreference) ?? []
+        defaults.set(dismissed + [notice.dismissalKey], forKey: Self.dismissedNoticesPreference)
+        appNotice = nil
+    }
+    #endif
     /// 后台自动检查更新进行中（启动、切回前台时）：主页顶部显示“正在更新…”。下拉刷新有系统转圈，不算
     private(set) var autoUpdating = false
     @ObservationIgnored var lastSyncAt: Double = 0
@@ -177,6 +190,7 @@ final class AppCore {
             loadHome()
             phase = .ready
             lastSyncAt = Date().timeIntervalSince1970 * 1000
+            refreshAppNotice()
             onReady?()
         } else {
             phase = .initializing(attempt: CatalogSync.initAttempts, failed: true)
@@ -220,6 +234,7 @@ final class AppCore {
         defer { syncing = false; autoUpdating = false }
         let task = Task { await CatalogSync.sync(store: store, net: Network.shared) }
         inflightSync = task
+        refreshAppNotice()
         let s = await task.value
         inflightSync = nil
         lastSyncAt = Date().timeIntervalSince1970 * 1000
@@ -229,6 +244,21 @@ final class AppCore {
         if !s.failed { syncFailed = false }
         else if !fromRouteCheck { syncFailed = userInitiated || Connectivity.shared.connected }
         return s
+    }
+
+    private func refreshAppNotice() {
+        #if os(iOS) || os(macOS) || os(visionOS)
+        guard appNoticeTask == nil else { return }
+        appNoticeTask = Task {
+            defer { appNoticeTask = nil }
+            switch await Network.shared.request(AppNotice.path, etag: nil, maxBytes: AppNotice.sizeLimit) {
+            case .ok(let data, _):
+                let dismissed = UserDefaults.standard.stringArray(forKey: Self.dismissedNoticesPreference) ?? []
+                appNotice = parseAppNotice(data).flatMap { dismissed.contains($0.dismissalKey) ? nil : $0 }
+            default: appNotice = nil
+            }
+        }
+        #endif
     }
 
     /// 回到前台：到时间了就自动更新目录，用户数据全部重读一次（在别处，比如锁屏上，可能变了）。

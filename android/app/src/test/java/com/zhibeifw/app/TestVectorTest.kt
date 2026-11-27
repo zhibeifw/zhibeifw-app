@@ -10,6 +10,7 @@ import com.zhibeifw.app.core.isHttpsOrigin
 import com.zhibeifw.app.core.isValidId
 import com.zhibeifw.app.core.isValidRelativePath
 import com.zhibeifw.app.core.normalizeText
+import com.zhibeifw.app.core.parseAppNotice
 import com.zhibeifw.app.core.placeholderIndex
 import com.zhibeifw.app.core.remainingClock
 import com.zhibeifw.app.core.utf16Prefix
@@ -31,6 +32,18 @@ class TestVectorTest {
 
     private fun cases(v: Map<*, *>, k: String) = (v[k] as List<*>).map { it as List<*> }
     private fun list(v: Map<*, *>, k: String) = v[k] as List<*>
+
+    @Test
+    fun appNotice() {
+        for (row in cases(load("app-notice"), "cases")) {
+            val notice = parseAppNotice(row[1] as String)
+            assertEquals(row[0] as String, value(row[2]), notice?.message)
+            assertEquals(row[0] as String, value(row[3]), notice?.link?.label)
+            assertEquals(row[0] as String, value(row[4]), notice?.link?.url)
+            assertEquals(row[0] as String, value(row[5]), notice?.dismissalKey)
+        }
+        assertNull(parseAppNotice("""{"enabled":true,"message":"${"课".repeat(181)}"}"""))
+    }
 
     @Test
     fun versions() {

@@ -19,6 +19,8 @@ enum Tok {
     enum Color {
         static let background = ZColor(light: 0xFFFFFFFF, dark: 0xFF000000)
         static let backgroundSecondary = ZColor(light: 0xFFF2F2F7, dark: 0xFF1C1C1E)
+        static let appNoticeBackground = ZColor(light: 0xFFEAF2FF, dark: 0xFF1C304D)
+        static let appNoticeForeground = ZColor(light: 0xFF132C51, dark: 0xFFE3EFFF)
         static let labelPrimary = ZColor(light: 0xFF000000, dark: 0xFFFFFFFF)
         static let labelSecondary = ZColor(light: 0xFF6C6C70, dark: 0xFF98989F)
         static let labelTertiary = ZColor(light: 0xFF8E8E93, dark: 0xFF8E8E93)
@@ -168,6 +170,13 @@ enum Tok {
             static let paddingH: CGFloat = 16
             static let topGap: CGFloat = 0
             static let bottomGap: CGFloat = 16
+        }
+        enum AppNotice {
+            static let paddingV: CGFloat = 8
+            static let actionGap: CGFloat = 8
+            static let closeIconSize: CGFloat = 20
+            static let inlineTextWidth: CGFloat = 140
+            static let inlineLinkMaxFraction: CGFloat = 0.33
         }
         enum UpdatingHint {
             static let indicatorSize: CGFloat = 14

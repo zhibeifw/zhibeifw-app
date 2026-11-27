@@ -1,4 +1,4 @@
-import {validOrigin, parseCatalog, mediaURL} from './core.mjs';
+import {validOrigin, parseAppNotice, parseCatalog, mediaURL} from './core.mjs';
 import {read, write, cachedCatalog, cacheCatalog} from './storage.mjs';
 
 const builtin = ['https://zbfw.org', 'https://zbfw.app'];
@@ -97,6 +97,16 @@ async function resolveRoutes(current) {
 
 export function ensureOrigin() {
   return origin ?? (resolving ??= resolveRoutes().finally(() => { resolving = null; }));
+}
+
+export async function loadAppNotice() {
+  try {
+    const selected = await ensureOrigin();
+    const {data} = await jsonResponse(mediaURL(selected, 'app-notice.json'), 4096, {}, undefined, 5000);
+    return parseAppNotice(data);
+  } catch {
+    return null;
+  }
 }
 
 export function restoreCatalog() {

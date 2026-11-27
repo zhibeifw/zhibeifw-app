@@ -13,6 +13,19 @@ final class TestVectorTests: XCTestCase {
     /// JSON 里的 null 读出来是 NSNull，传给被测函数时换成 nil
     private func value(_ v: Any) -> Any? { v is NSNull ? nil : v }
 
+    func testAppNotice() throws {
+        let vectors = try load("app-notice")
+        for row in vectors["cases"] as! [[Any]] {
+            let notice = parseAppNotice(Data((row[1] as! String).utf8))
+            XCTAssertEqual(notice?.message, row[2] as? String, "\(row[0])")
+            XCTAssertEqual(notice?.link?.label, row[3] as? String, "\(row[0])")
+            XCTAssertEqual(notice?.link?.url.absoluteString, row[4] as? String, "\(row[0])")
+            XCTAssertEqual(notice?.dismissalKey, row[5] as? String, "\(row[0])")
+        }
+        let tooLong = "{\"enabled\":true,\"message\":\"\(String(repeating: "课", count: 181))\"}"
+        XCTAssertNil(parseAppNotice(Data(tooLong.utf8)))
+    }
+
     func testVersions() throws {
         let v = try load("versions")
         for c in v["compare"] as! [[Any]] {

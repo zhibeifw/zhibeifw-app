@@ -43,6 +43,9 @@ public partial class MainWindow : Window
     TrackRow? activeRow;
     string tag = "";
     bool catalogRefreshFailed;
+    AppNotice? appNotice;
+    Task? appNoticeRequest;
+    readonly HashSet<string> dismissedAppNotices = new(StringComparer.Ordinal);
     readonly SemaphoreSlim refreshGate = new(1);
     bool ready, settingNav, settingPlayer, seeking, closed;
     DateTime lastSync;
@@ -193,7 +196,7 @@ public partial class MainWindow : Window
                     StartAttempt.Visibility = attempt > 1 ? Visibility.Visible : Visibility.Collapsed;
                     StartActions.Visibility = Visibility.Collapsed;
                 }
-                try { result = await network.RefreshCatalog(tag, lifetime.Token); break; }
+                try { result = await network.RefreshCatalog(tag, lifetime.Token, RefreshAppNotice); break; }
                 catch (Exception ex) when (initial && attempt < 3 && !lifetime.IsCancellationRequested &&
                     ex is HttpRequestException or IOException or OperationCanceledException or JsonException)
                 { await Task.Delay(TimeSpan.FromSeconds(2 * attempt), lifetime.Token); }
@@ -276,6 +279,52 @@ public partial class MainWindow : Window
     void UpdateCatalogFailure() =>
         CatalogFailure.Visibility = catalogRefreshFailed && location.Page == "主页" ? Visibility.Visible : Visibility.Collapsed;
 
+    void RefreshAppNotice(string origin)
+    {
+        if (appNoticeRequest is { IsCompleted: false }) return;
+        appNoticeRequest = LoadAppNotice(origin);
+    }
+
+    async Task LoadAppNotice(string origin)
+    {
+        var value = await network.ReadAppNotice(origin, lifetime.Token);
+        if (closed) return;
+        try
+        {
+            if (value != null && (dismissedAppNotices.Contains(value.DismissalKey) ||
+                store.Setting("appNotice.dismissed." + value.DismissalKey) == "1"))
+                value = null;
+        }
+        catch (IOException error) { Trace.TraceWarning(error.Message); }
+        appNotice = value;
+        UpdateHomeNotice();
+    }
+
+    void UpdateHomeNotice()
+    {
+        HomeNotice.Visibility = location.Page == "主页" && appNotice != null ? Visibility.Visible : Visibility.Collapsed;
+        HomeNoticeMessage.Text = appNotice?.Message;
+        HomeNoticeLink.Content = appNotice?.Link?.Label;
+        HomeNoticeLink.Visibility = appNotice?.Link == null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    void OpenHomeNotice(object sender, RoutedEventArgs e)
+    {
+        if (appNotice?.Link is not { } link) return;
+        try { Process.Start(new ProcessStartInfo(link.Url.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Win32Exception) { }
+    }
+
+    void DismissHomeNotice(object sender, RoutedEventArgs e)
+    {
+        if (appNotice is not { } notice) return;
+        dismissedAppNotices.Add(notice.DismissalKey);
+        try { store.Set("appNotice.dismissed." + notice.DismissalKey, "1"); }
+        catch (IOException error) { Trace.TraceWarning(error.Message); }
+        appNotice = null;
+        UpdateHomeNotice();
+    }
+
     void Render()
     {
         renderNumber++;
@@ -283,6 +332,7 @@ public partial class MainWindow : Window
         Heading.Text = location.Page;
         Back.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateCatalogFailure();
+        UpdateHomeNotice();
         EmptyState.Visibility = Visibility.Collapsed;
         ClearRecentButton.Visibility = location.Page == "最近播放" ? Visibility.Visible : Visibility.Collapsed;
         Hero.Visibility = Visibility.Collapsed;

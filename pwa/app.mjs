@@ -1,6 +1,6 @@
 import {validPath,mediaURL,coverSourcePath,searchCourses,limitSearchText,normalizeQuery,newCourses,timeText,manualCompletion,playbackProgress,recentEntries} from './core.mjs';
-import {readRecords,writeRecord,recordCollection} from './storage.mjs';
-import {loadCatalog,currentOrigin,ensureOrigin,restoreCatalog} from './network.mjs';
+import {read,write,readRecords,writeRecord,recordCollection} from './storage.mjs';
+import {loadAppNotice,loadCatalog,currentOrigin,ensureOrigin,restoreCatalog} from './network.mjs';
 import {version} from './assets/version.mjs';
 import {palette,icons} from './assets/design.mjs';
 const $=s=>document.querySelector(s),main=$('#content'),audio=$('#audio');
@@ -20,6 +20,30 @@ function persist(id){if(!writeRecord('progress',id,progress.get(id)))notice('浏
 function el(tag,attrs={},...children){const node=document.createElement(tag);for(const [key,value] of Object.entries(attrs)){if(value==null)continue;if(key==='class')node.className=value;else if(key==='text')node.textContent=value;else if(key.startsWith('on'))node.addEventListener(key.slice(2),value);else node.setAttribute(key,String(value));}for(const c of children.flat())if(c!=null)node.append(c instanceof Node?c:document.createTextNode(String(c)));return node;}
 function icon(name){const node=el('i',{'aria-hidden':'true'});node.style.setProperty('--icon',`url("./assets/${name}_24px.svg")`);return node;}
 function setIcon(node,name){node.replaceChildren(icon(name));}
+const appNoticeRegion=el('aside',{class:'app-notice','aria-label':'公告',hidden:''});
+const dismissedAppNotices=new Set();
+const appNoticePreference=key=>'appNotice.dismissed.'+key;
+let appNoticeRequest, lastAppNoticeCheck=0;
+function refreshAppNotice(force){
+ if(appNoticeRequest || (!force && Date.now()-lastAppNoticeCheck<60000))return;
+ lastAppNoticeCheck=Date.now();
+ appNoticeRequest=loadAppNotice().then(value=>{
+  if(!value || dismissedAppNotices.has(value.dismissalKey) || read(appNoticePreference(value.dismissalKey),false)){
+   appNoticeRegion.hidden=true;
+   appNoticeRegion.replaceChildren();
+   return;
+  }
+  const link=value.link && el('a',{href:value.link.url,target:'_blank',rel:'noopener noreferrer'},value.link.label,icon('chevron_right'));
+  const close=el('button',{type:'button','aria-label':'关闭公告',onclick:()=>{
+   dismissedAppNotices.add(value.dismissalKey);
+   write(appNoticePreference(value.dismissalKey),true);
+   appNoticeRegion.hidden=true;
+   appNoticeRegion.replaceChildren();
+  }},icon('close'));
+  appNoticeRegion.replaceChildren(el('div',{class:'app-notice-content'},el('p',{},value.message),link),close);
+  appNoticeRegion.hidden=false;
+ }).finally(()=>{appNoticeRequest=null;});
+}
 for(const i of document.querySelectorAll('[data-icon]'))i.style.setProperty('--icon',`url("./assets/${i.dataset.icon}_24px.svg")`);
 const route=(type,id='')=>'#'+type+(id?'/'+encodeURIComponent(id):'');
 function getRoute(){const [type='home',...parts]=location.hash.slice(1).split('/');try{return [type||'home',decodeURIComponent(parts.join('/'))];}catch{return ['home',''];}}
@@ -179,6 +203,7 @@ function render(){
  if(type==='home'){
   pageTitle('主页');
   if(stale && navigator.onLine)main.append(el('p',{class:'muted'},'无法更新，显示的是上一次更新的内容',el('button',{onclick:()=>refresh(true)},'重试')));
+  main.append(appNoticeRegion);
   const ongoing=newCourses(catalog.series).map(course=>{
    const last=course.episodes.at(-1);
    return card(course,last?'更新至 '+last.title:'');
@@ -332,11 +357,13 @@ function renderInitialFailure(){
 }
 async function refresh(force=false,reroute=false){
  try{
+  if(!reroute)refreshAppNotice(force);
   const result=await loadCatalog(force,reroute,attempt=>{
    main.replaceChildren(el('div',{class:'empty','aria-live':'polite'},
     el('progress',{'aria-label':'加载中…'}),el('h2',{},'正在准备内容…'),el('p',{},'第一次使用需要联网，请稍候'),
     attempt>1?el('p',{},'正在重新连接（第 '+attempt+' 次）'):null));
   });
+  if(reroute && result.routeResult!=='暂时无法连接')refreshAppNotice(true);
   if(catalog!==result.catalog||stale!==result.stale){
    const enteringApp=!catalog && result.catalog;
    catalog=result.catalog;stale=result.stale;

@@ -24,6 +24,14 @@
       "light": "#F2F2F7",
       "dark": "#1C1C1E"
     },
+    "appNoticeBackground": {
+      "light": "#EAF2FF",
+      "dark": "#1C304D"
+    },
+    "appNoticeForeground": {
+      "light": "#132C51",
+      "dark": "#E3EFFF"
+    },
     "labelPrimary": {
       "light": "#000000",
       "dark": "#FFFFFF"
@@ -389,6 +397,13 @@
       "paddingH": 16,
       "topGap": 0,
       "bottomGap": 16
+    },
+    "appNotice": {
+      "paddingV": 8,
+      "actionGap": 8,
+      "closeIconSize": 20,
+      "inlineTextWidth": 140,
+      "inlineLinkMaxFraction": 0.33
     },
     "updatingHint": {
       "_说明": "主页后台更新时顶部的“正在更新…”：在顶栏正中，系统转圈在左、小字在右（2026-10-30 用户定，按常见做法；位置选了居中左右排）。iOS 转圈用系统 small 尺寸，Android 用下面的尺寸；gap 是圈和字之间的距离",

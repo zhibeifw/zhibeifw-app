@@ -2,6 +2,25 @@ export const validId = v => typeof v === 'string' && v.length > 0 && v.length <=
 export const validPath = v => typeof v === 'string' && v.length > 0 && v.length <= 300 && !/[\uD800-\uDFFF]/u.test(v) && !v.startsWith('/') && !v.includes('..') && !v.includes('//') && !/^[a-z][a-z\d+.-]*:/i.test(v) && !/[\\\x00-\x20\x7f?#%]/.test(v);
 export const validOrigin = v => {try { const u = new URL(v);return u.protocol === 'https:' && u.origin === v && !u.username && !u.password;}catch{return false;}};
 const title = v => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;
+export function parseAppNotice(config) {
+  if (config?.enabled !== true || typeof config.message !== 'string') return null;
+  const message = config.message.trim();
+  if (!message || message.length > 180) return null;
+  const label = typeof config.link?.label === 'string' ? config.link.label.trim() : '';
+  const address = typeof config.link?.url === 'string' ? config.link.url.trim() : '';
+  let link = null;
+  if (label && label.length <= 32 && address.length <= 1000 && /^https:\/\/[^/?#@]+(?=[/?#]|$)/i.test(address) &&
+      !/[\s\\\x00-\x1f\x7f]/.test(address)) {
+    try {
+      const url = new URL(address);
+      if (url.protocol === 'https:' && url.hostname && !url.username && !url.password) link = {label, url:address};
+    } catch {}
+  }
+  const id = typeof config.id === 'string' && config.id.length > 0 && config.id.length <= 64 &&
+    !/[^A-Za-z0-9_-]/.test(config.id) ? config.id : null;
+  return {dismissalKey:id ? 'id:' + id : 'message:' + message, message, link};
+}
+
 export function mediaURL(origin,path) {
  if(!validOrigin(origin) || !validPath(path)) throw Error('无效的资源地址');
  return origin + '/' + path.split('/').map(encodeURIComponent).join('/');

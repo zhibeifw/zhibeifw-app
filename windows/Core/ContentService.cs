@@ -71,9 +71,10 @@ public sealed class ContentService(Store store, HttpClient http)
         finally { routeGate.Release(); }
     }
 
-    public async Task<Catalog?> RefreshCatalog(string etag, CancellationToken token)
+    public async Task<Catalog?> RefreshCatalog(string etag, CancellationToken token, Action<string>? onOriginReady = null)
     {
         var origin = await EnsureOrigin(token);
+        onOriginReady?.Invoke(origin);
         var (data, tag) = await Fetch(Catalog.MediaUri(origin, "index.json"), Catalog.SizeLimit, etag, token);
         if (data == null) return null;
         string raw = new UTF8Encoding(false, true).GetString(data);
@@ -81,6 +82,21 @@ public sealed class ContentService(Store store, HttpClient http)
         token.ThrowIfCancellationRequested();
         store.CacheCatalog(raw, tag);
         return catalog;
+    }
+
+    public async Task<AppNotice?> ReadAppNotice(string origin, CancellationToken token)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);
+        timeout.CancelAfter(TimeSpan.FromSeconds(5));
+        try
+        {
+            var (data, _) = await Fetch(Catalog.MediaUri(origin, AppNotice.Path), AppNotice.SizeLimit, "", timeout.Token);
+            return data == null ? null : AppNotice.Parse(data);
+        }
+        catch (Exception error) when (error is HttpRequestException or IOException or InvalidDataException or OperationCanceledException)
+        {
+            return null;
+        }
     }
 
     async Task<(string Origin, string[] Domains)> ChooseRoute(List<string> origins, CancellationToken token)

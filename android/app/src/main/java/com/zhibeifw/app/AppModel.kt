@@ -9,11 +9,15 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringSetPreferencesKey
+import com.zhibeifw.app.core.AppNotice
 import com.zhibeifw.app.core.COVER_THUMB_WIDTHS
 import com.zhibeifw.app.core.DlStatus
+import com.zhibeifw.app.core.FileKind
 import com.zhibeifw.app.core.PlayContext
 import com.zhibeifw.app.core.UpdateChannel
 import com.zhibeifw.app.core.isHttpsOrigin
+import com.zhibeifw.app.core.parseAppNotice
 import com.zhibeifw.app.core.parseDomains
 import com.zhibeifw.app.core.shouldSyncOnForeground
 import com.zhibeifw.app.data.AppFiles
@@ -31,6 +35,7 @@ import com.zhibeifw.app.images.CoverArchive
 import com.zhibeifw.app.images.ImageLoader
 import com.zhibeifw.app.net.Connectivity
 import com.zhibeifw.app.net.NetConfig
+import com.zhibeifw.app.net.NetResult
 import com.zhibeifw.app.net.Network
 import com.zhibeifw.app.net.PrefKeys
 import com.zhibeifw.app.net.editPrefs
@@ -54,6 +59,8 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+
+private val dismissedAppNoticesPreference = stringSetPreferencesKey("appNotice.dismissed")
 
 sealed class Phase {
     object Launching : Phase()
@@ -100,6 +107,9 @@ class AppModel(private val ctx: Context) {
     private var lastSyncAt = 0L
     private var syncing = false
     private var inflightSync: Deferred<SyncSummary>? = null
+    var appNotice by mutableStateOf<AppNotice?>(null); private set
+    private var refreshingAppNotice = false
+    private val dismissedAppNotices = mutableSetOf<String>()
 
     /** 用户数据变了，按种类分开：各页面只跟自己用到的那几种，别的变了不用重读。 */
     /** 收听进度、已听完、最近列表 */
@@ -228,6 +238,7 @@ class AppModel(private val ctx: Context) {
             loadHome()
             phase = Phase.Ready
             lastSyncAt = System.currentTimeMillis()
+            refreshAppNotice()
             onReady()
         } else phase = Phase.Initializing(CatalogSync.INIT_ATTEMPTS, true)
     }
@@ -310,6 +321,7 @@ class AppModel(private val ctx: Context) {
             }
             inflightSync = task
             task.start()
+            refreshAppNotice()
             val s = task.await()
             lastSyncAt = System.currentTimeMillis()
             // 有新内容立刻换上；用户下拉刷新则完成后一律重读
@@ -319,6 +331,32 @@ class AppModel(private val ctx: Context) {
             return s
         } finally {
             syncing = false; autoUpdating = false
+        }
+    }
+
+    private fun refreshAppNotice() {
+        if (isTelevision || refreshingAppNotice) return
+        refreshingAppNotice = true
+        scope.launch {
+            try {
+                val result = net.request(AppNotice.PATH, null, FileKind.APP_NOTICE.limit)
+                val notice = (result as? NetResult.Ok)?.body?.toString(Charsets.UTF_8)?.let(::parseAppNotice)
+                val dismissed = ctx.readPrefs()[dismissedAppNoticesPreference].orEmpty()
+                appNotice = notice?.takeUnless { it.dismissalKey in dismissed || it.dismissalKey in dismissedAppNotices }
+            } finally {
+                refreshingAppNotice = false
+            }
+        }
+    }
+
+    fun dismissAppNotice() {
+        val notice = appNotice ?: return
+        dismissedAppNotices.add(notice.dismissalKey)
+        appNotice = null
+        scope.launch {
+            ctx.editPrefs { prefs ->
+                prefs[dismissedAppNoticesPreference] = prefs[dismissedAppNoticesPreference].orEmpty() + notice.dismissalKey
+            }
         }
     }
 

@@ -21,6 +21,8 @@ object Tok {
     object Color {
         val background = ZColor(light = 0xFFFFFFFF, dark = 0xFF000000)
         val backgroundSecondary = ZColor(light = 0xFFF2F2F7, dark = 0xFF1C1C1E)
+        val appNoticeBackground = ZColor(light = 0xFFEAF2FF, dark = 0xFF1C304D)
+        val appNoticeForeground = ZColor(light = 0xFF132C51, dark = 0xFFE3EFFF)
         val labelPrimary = ZColor(light = 0xFF000000, dark = 0xFFFFFFFF)
         val labelSecondary = ZColor(light = 0xFF6C6C70, dark = 0xFF98989F)
         val labelTertiary = ZColor(light = 0xFF8E8E93, dark = 0xFF8E8E93)
@@ -170,6 +172,13 @@ object Tok {
             const val paddingH: Float = 16f
             const val topGap: Float = 0f
             const val bottomGap: Float = 16f
+        }
+        object AppNotice {
+            const val paddingV: Float = 8f
+            const val actionGap: Float = 8f
+            const val closeIconSize: Float = 20f
+            const val inlineTextWidth: Float = 140f
+            const val inlineLinkMaxFraction: Float = 0.33f
         }
         object UpdatingHint {
             const val indicatorSize: Float = 14f

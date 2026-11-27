@@ -17,6 +17,10 @@ struct VisionHomeView: View {
                     }
                     .padding(.horizontal, Tok.Component.Vision.pageMargin)
                 }
+                if let notice = core.appNotice {
+                    AppNoticeBanner(notice: notice, dismiss: core.dismissAppNotice)
+                        .padding(.horizontal, Tok.Component.Vision.pageMargin)
+                }
                 if !core.home.ongoing.isEmpty {
                     VisionCardShelf(title: "新课程", cards: core.home.ongoing, large: true)
                 }

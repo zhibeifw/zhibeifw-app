@@ -33,6 +33,11 @@ struct HomeView: View {
                     )
                     .padding(.bottom, CP.Banner.bottomGap)
                 }
+                if let notice = model.core.appNotice {
+                    AppNoticeBanner(notice: notice, dismiss: model.core.dismissAppNotice)
+                        .padding(.horizontal, Layout.pageMargin(W))
+                        .padding(.bottom, CP.Banner.bottomGap)
+                }
                 VStack(alignment: .leading, spacing: Tok.Space.sectionGap) {
                     if !h.ongoing.isEmpty {
                         section("新课程", nil) {

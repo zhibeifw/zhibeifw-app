@@ -19,6 +19,15 @@ base_px = float(t['_pwa']['dimensions']['size17px'].removesuffix('px'))
 style = style.replace('{{baseFontPercent}}', f'{base_px / 16 * 100:g}%')
 for key,value in t['_pwa']['dimensions'].items():style=style.replace('{{'+key+'}}',value)
 style=style.replace('{{accent}}',t['_pwa']['accent'])
+for group, keys in [('banner', ['height', 'radius', 'paddingH', 'bottomGap']),
+                    ('appNotice', ['paddingV', 'actionGap', 'closeIconSize', 'inlineTextWidth'])]:
+ for key in keys:
+  style=style.replace('{{'+group+'.'+key+'}}', f"{t['component'][group][key]:g}px")
+for role in ['bannerText', 'bannerAction']:
+ font=t['font']['style'][role]
+ for key,value in {'size':f"{font['size']/16:g}rem", 'weight':str(font['weight']),
+                   'lineHeight':f"{font['lineHeight']/font['size']:g}"}.items():
+  style=style.replace('{{'+role+'.'+key+'}}',value)
 (root/'pwa/style.css').write_text('/* 自动生成：style.template.css 与 doc/design-tokens.json */\n'+style)
 
 version=(root/'Version.xcconfig').read_text()

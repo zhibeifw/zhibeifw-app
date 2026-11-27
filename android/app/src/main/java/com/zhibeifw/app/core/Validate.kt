@@ -1,12 +1,13 @@
 package com.zhibeifw.app.core
 
+import java.net.URI
 import java.text.Normalizer
 
 // 外部数据（服务器 JSON）的校验。一律当作不可信输入——只当数据，先校验大小、类型、长度，再入库。
 // 规则与 v1.0 validate.ts、iOS Validate.swift 逐条一致。JSON 解析用自己写的 Json.kt。
 
 enum class FileKind(val limit: Int) {
-    DOMAINS(10 * 1024), INDEX(10 * 1024 * 1024), UPGRADE(10 * 1024),
+    DOMAINS(10 * 1024), INDEX(10 * 1024 * 1024), UPGRADE(10 * 1024), APP_NOTICE(4096),
 
     /** 封面也是外部来的：服务器配错时一张“封面”不能写满缓存 */
     COVER(10 * 1024 * 1024)
@@ -105,6 +106,34 @@ private typealias JArr = List<*>
 
 private fun JObj.raw(k: String): Any? = this[k].takeIf { it != JsonNull }
 private fun number(v: Any?): Double? = v as? Double
+
+data class AppNotice(val dismissalKey: String, val message: String, val link: Link?) {
+    data class Link(val label: String, val url: String)
+
+    companion object {
+        const val PATH = "app-notice.json"
+    }
+}
+
+private val appNoticeId = Regex("[A-Za-z0-9_-]{1,64}")
+
+fun parseAppNotice(text: String): AppNotice? {
+    val config = parseJson(text, FileKind.APP_NOTICE) as? JObj ?: return null
+    if (config["enabled"] != true) return null
+    val message = (config["message"] as? String)?.trim()?.takeIf { it.length in 1..180 }
+        ?: return null
+    val id = (config["id"] as? String)?.takeIf(appNoticeId::matches)
+    val dismissalKey = if (id != null) "id:$id" else "message:$message"
+    val candidate = config["link"] as? JObj ?: return AppNotice(dismissalKey, message, null)
+    val label = (candidate["label"] as? String)?.trim()?.takeIf { it.length in 1..32 }
+    val address = (candidate["url"] as? String)?.trim()?.takeIf { it.length in 1..1000 }
+    val uri = address?.let { runCatching { URI(it) }.getOrNull() }
+    val link = if (
+        label != null && address != null && uri != null && uri.scheme.equals("https", ignoreCase = true) &&
+        !uri.host.isNullOrEmpty() && uri.rawUserInfo == null
+    ) AppNotice.Link(label, address) else null
+    return AppNotice(dismissalKey, message, link)
+}
 
 // ---------- domains.json ----------
 data class Domains(val domains: List<String>) {

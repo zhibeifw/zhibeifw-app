@@ -44,6 +44,10 @@ struct MacHomeView: View {
                     }
                     .padding(.horizontal, MacLayout.pageMargin)
                 }
+                if let notice = core.appNotice {
+                    AppNoticeBanner(notice: notice, dismiss: core.dismissAppNotice)
+                        .padding(.horizontal, MacLayout.pageMargin)
+                }
                 if !home.ongoing.isEmpty {
                     MacCardRow(title: "新课程", cards: home.ongoing, width: MacLayout.largeCardWidth)
                 }
