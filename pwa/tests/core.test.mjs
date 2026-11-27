@@ -1,6 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {validId, validPath, parseCatalog, completed, limitSearchText, searchCourses, mediaURL, coverSourcePath} from '../core.mjs';
+import {validId, validPath, parseCatalog, completed, limitSearchText, searchCourses, mediaURL, coverSourcePath, nativeCourseLink} from '../core.mjs';
+test('在原生 App 打开同一门课，Android 的回退地址保留课程', () => {
+ const id = '入中论_01';
+ const params = encodeURIComponent(id);
+ const page = `https://web.zhibeifw.org/#series/${params}`;
+ for (const ua of ['Mozilla/5.0 (iPhone)', 'Mozilla/5.0 (Macintosh; Intel Mac OS X)', 'Mozilla/5.0 (Apple Vision Pro)']) {
+  assert.equal(nativeCourseLink(id, page, ua), `zhibeifw://series?id=${params}`);
+ }
+ assert.equal(nativeCourseLink(id, page, 'Mozilla/5.0 (Linux; Android 16) Chrome/'),
+  `intent://series?id=${params}#Intent;scheme=zhibeifw;package=com.zhibeifw.app;S.browser_fallback_url=${encodeURIComponent(page)};end`);
+ assert.equal(nativeCourseLink(id, page, 'Mozilla/5.0 (Linux; Android 16) Firefox/'), `zhibeifw://series?id=${params}`);
+ assert.equal(nativeCourseLink(id, page, 'Mozilla/5.0 (Windows NT 10.0)'), `zhibeifw://series?id=${params}`);
+ assert.equal(nativeCourseLink(id, page, 'Mozilla/5.0 (X11; Linux x86_64)'), null);
+ assert.equal(nativeCourseLink(id, page, 'Mozilla/5.0 (Linux; Android 14; Google TV)'), null);
+ assert.equal(nativeCourseLink('课程;恶意参数', page, 'Mozilla/5.0 (iPhone)'), null);
+});
 test('按物理像素选择封面，保留原始版本号', () => {
  const path = '课程.v1/cover-2.jpg';
  for (const pixels of [96, 320]) assert.equal(coverSourcePath(path, pixels), '课程.v1/cover-2-320.jpg');

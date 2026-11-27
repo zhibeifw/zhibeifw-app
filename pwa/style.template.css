@@ -81,9 +81,9 @@ nav [aria-current="page"]{font-weight:600}
 .speaker{font-size:{{size1_35rem}};line-height:1.35;margin-top:{{size2px}}}
 .album-meta{font-size:{{size_84rem}};color:var(--quiet);font-weight:520;margin-top:{{size4px}}}
 .actions{display:flex;align-items:center;flex-wrap:wrap;gap:{{size10px}};margin-top:{{size22px}}}
-.actions button,.filled{display:inline-flex;align-items:center;justify-content:center;gap:{{size5px}};border-radius:{{size999px}};padding:{{size8px}} {{size19px}};min-height:{{size36px}};font-size:{{size_9rem}};font-weight:600}
-.actions button{color:var(--ink);background:var(--wash);border:{{size1px}} solid var(--rule)}
-.actions button:not(:disabled):hover{background:color-mix(in srgb,var(--ink) 16%,transparent)}
+.actions :is(button,a),.filled{display:inline-flex;align-items:center;justify-content:center;gap:{{size5px}};border-radius:{{size999px}};padding:{{size8px}} {{size19px}};min-height:{{size36px}};font-size:{{size_9rem}};font-weight:600}
+.actions :is(button,a){color:var(--ink);background:var(--wash);border:{{size1px}} solid var(--rule)}
+.actions :is(button,a):not(:disabled):hover{background:color-mix(in srgb,var(--ink) 16%,transparent)}
 .actions .filled,.actions .filled:not(:disabled):hover{background:var(--ink);color:var(--surface);border-color:transparent}
 .filled{background:var(--accent);color:white}
 .actions i{width:{{size17px}};height:{{size17px}}}
@@ -198,7 +198,7 @@ dialog::backdrop{background:#0006}.dialog-actions{display:flex;justify-content:f
  :root{--sidebar:{{size200px}};--gutter:{{size24px}};--gap:{{size16px}}}
  .shelf{grid-auto-columns:calc((100% - 2 * var(--gap))/3)}
  .series-heading{grid-template-columns:min(42%,{{size320px}}) minmax(0,1fr);gap:{{size20px}}}
- .actions{gap:{{size6px}};margin-top:{{size14px}}}.actions button{padding:{{size7px}} {{size12px}}}
+ .actions{gap:{{size6px}};margin-top:{{size14px}}}.actions :is(button,a){padding:{{size7px}} {{size12px}}}
 }
 @media(max-width:{{size840px}}){
  #content{padding-bottom:{{size140px}}}

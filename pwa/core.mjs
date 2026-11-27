@@ -1,4 +1,16 @@
 export const validId = v => typeof v === 'string' && v.length > 0 && v.length <= 100 && v === v.normalize('NFC') && /^[\p{L}\p{Nd}_-]+$/u.test(v);
+export function nativeCourseLink(id, pageURL, userAgent) {
+ if (!validId(id)) return null;
+ const destination = `series?id=${encodeURIComponent(id)}`;
+ if (/\bAndroid\b/i.test(userAgent)) {
+  if (/\b(?:Android TV|Google TV|AFT\w*)\b/i.test(userAgent)) return null;
+  if (/\b(?:Chrome|Chromium)\//.test(userAgent)) {
+   return `intent://${destination}#Intent;scheme=zhibeifw;package=com.zhibeifw.app;S.browser_fallback_url=${encodeURIComponent(pageURL)};end`;
+  }
+  return `zhibeifw://${destination}`;
+ }
+ return /\b(?:iPhone|iPad|iPod|Macintosh|visionOS|Vision Pro|Windows NT)\b/i.test(userAgent) ? `zhibeifw://${destination}` : null;
+}
 export const validPath = v => typeof v === 'string' && v.length > 0 && v.length <= 300 && !/[\uD800-\uDFFF]/u.test(v) && !v.startsWith('/') && !v.includes('..') && !v.includes('//') && !/^[a-z][a-z\d+.-]*:/i.test(v) && !/[\\\x00-\x20\x7f?#%]/.test(v);
 export const validOrigin = v => {try { const u = new URL(v);return u.protocol === 'https:' && u.origin === v && !u.username && !u.password;}catch{return false;}};
 const title = v => typeof v === 'string' && v.trim().length > 0 && v.length <= 200;

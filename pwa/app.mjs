@@ -1,4 +1,4 @@
-import {validPath,mediaURL,coverSourcePath,searchCourses,limitSearchText,normalizeQuery,newCourses,timeText,manualCompletion,playbackProgress,recentEntries} from './core.mjs';
+import {validPath,mediaURL,coverSourcePath,searchCourses,limitSearchText,normalizeQuery,newCourses,timeText,manualCompletion,playbackProgress,recentEntries,nativeCourseLink} from './core.mjs';
 import {read,write,readRecords,writeRecord,recordCollection} from './storage.mjs';
 import {loadAppNotice,loadCatalog,currentOrigin,ensureOrigin,restoreCatalog} from './network.mjs';
 import {version} from './assets/version.mjs';
@@ -238,7 +238,10 @@ function render(){
    el('p',{class:'album-meta'},el('a',{href:route('category',s.categoryId)},c?.name),
     (s.episodes.length?' · 共 '+s.episodes.length+' 节课':'')+' · '+courseStatus(s)));
   if(s.description)info.append(el('details',{class:'introduction'},el('summary',{},'课程简介'),el('p',{class:'description'},s.description)));
-  info.append(el('div',{class:'actions'},el('button',{'aria-pressed':isFavorite,onclick:()=>toggleFavorite(id)},icon(isFavorite?'bookmark_fill1':'bookmark'),isFavorite?'已收藏':'收藏')));
+  const appLink=nativeCourseLink(id,location.href,navigator.userAgent);
+  info.append(el('div',{class:'actions'},
+   el('button',{'aria-pressed':isFavorite,onclick:()=>toggleFavorite(id)},icon(isFavorite?'bookmark_fill1':'bookmark'),isFavorite?'已收藏':'收藏'),
+   appLink && el('a',{href:appLink},'在 App 中打开')));
   main.append(el('section',{class:'series-heading'},cover(s,'eager'),info),el('div',{class:'section-head track-head'},el('h2',{},'全部课程'),el('button',{onclick:()=>{reverse=!reverse;render();}},icon('swap_vert'),reverse?' 从新到旧':' 从旧到新')),el('ul',{class:'episode-list'},(reverse?[...s.episodes].reverse():s.episodes).map(e=>episodeRow(s,e))));document.title=s.title+' · 智悲佛网';
  }else if(type==='recent'){
   const entries=recentEntries(progress);
