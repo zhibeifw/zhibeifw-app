@@ -23,6 +23,7 @@ object Tok {
         val backgroundSecondary = ZColor(light = 0xFFF2F2F7, dark = 0xFF1C1C1E)
         val appNoticeBackground = ZColor(light = 0xFFEAF2FF, dark = 0xFF1C304D)
         val appNoticeForeground = ZColor(light = 0xFF132C51, dark = 0xFFE3EFFF)
+        val appNoticeLink = ZColor(light = 0xFF0057B8, dark = 0xFF82B8FF)
         val labelPrimary = ZColor(light = 0xFF000000, dark = 0xFFFFFFFF)
         val labelSecondary = ZColor(light = 0xFF6C6C70, dark = 0xFF98989F)
         val labelTertiary = ZColor(light = 0xFF8E8E93, dark = 0xFF8E8E93)
@@ -70,7 +71,8 @@ object Tok {
             val buttonLarge = ZTextStyle(size = 17f, weight = 600, lineHeight = 22f)
             val bannerText = ZTextStyle(size = 15f, weight = 400, lineHeight = 20f)
             val bannerAction = ZTextStyle(size = 15f, weight = 600, lineHeight = 20f)
-            val appNoticeText = ZTextStyle(size = 14f, weight = 400, lineHeight = 20f)
+            val appNoticeText = ZTextStyle(size = 12f, weight = 400, lineHeight = 16f)
+            val appNoticeAction = ZTextStyle(size = 12f, weight = 600, lineHeight = 16f)
             val description = ZTextStyle(size = 15f, weight = 400, lineHeight = 20f)
             val moreLink = ZTextStyle(size = 15f, weight = 600, lineHeight = 20f)
             val captionStrong = ZTextStyle(size = 13f, weight = 600, lineHeight = 18f)
@@ -177,9 +179,10 @@ object Tok {
         object AppNotice {
             const val paddingV: Float = 8f
             const val actionGap: Float = 8f
+            const val compactPaddingV: Float = 1f
+            const val inlineCloseGap: Float = 4f
+            const val controlSize: Float = 48f
             const val closeIconSize: Float = 20f
-            const val inlineTextWidth: Float = 140f
-            const val inlineLinkMaxFraction: Float = 0.33f
         }
         object UpdatingHint {
             const val indicatorSize: Float = 14f

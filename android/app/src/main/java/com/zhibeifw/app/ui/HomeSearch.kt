@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBars
-import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyListScope
@@ -57,8 +57,12 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.rememberTextMeasurer
+import androidx.compose.ui.text.withLink
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.Routes
 import com.zhibeifw.app.Tab
@@ -166,42 +170,77 @@ fun HomeView(model: AppModel) {
     }
 }
 
+private val adjacentHanCharacters = Regex("(?<=[\u4e00-\u9fff])(?=[\u4e00-\u9fff])")
+
 @Composable
 private fun AppNoticeBanner(notice: AppNotice, openExternal: (String) -> Unit, dismiss: () -> Unit) {
     val foreground = Tok.Color.appNoticeForeground.c()
+    val bodyStyle = S.appNoticeText.ts(foreground)
+    val linkStyle = S.appNoticeAction.ts(Tok.Color.appNoticeLink.c())
     val margin = Layout.pageMargin(windowWidth())
     val gap = CP.AppNotice.actionGap.d
-    val closeSize = Tok.Space.MinTouchTarget.android.d
+    val closeGap = CP.AppNotice.inlineCloseGap.d
+    val closeSize = CP.AppNotice.controlSize.d
+    val paddingV = CP.AppNotice.compactPaddingV.d
+    val wrappedPaddingV = CP.AppNotice.paddingV.d
+    val density = LocalDensity.current
     val measurer = rememberTextMeasurer()
     BoxWithConstraints(
         Modifier.padding(horizontal = margin.d).fillMaxWidth()
             .heightIn(min = CP.Banner.height.d)
             .clip(RoundedCornerShape(CP.Banner.radius.d))
             .background(Tok.Color.appNoticeBackground.c())
-            .padding(start = CP.Banner.paddingH.d, top = CP.AppNotice.paddingV.d, bottom = CP.AppNotice.paddingV.d),
+            .padding(start = CP.Banner.paddingH.d, top = paddingV, bottom = paddingV),
         contentAlignment = Alignment.CenterStart
     ) {
+        val availableWidth = maxWidth
         val link = notice.link
-        val inline = link != null && with(LocalDensity.current) {
-            val message = measurer.measure(notice.message, S.appNoticeText.ts(foreground))
-            val label = measurer.measure(link.label, S.captionStrong.ts(foreground))
-            val buttonWidth = maxOf(ButtonDefaults.MinWidth, label.size.width.toDp() + gap * 2)
-            message.lineCount == 1 && label.lineCount == 1 &&
-                message.size.width.toDp() + buttonWidth + closeSize + gap * 2 <= maxWidth
+        val linkLayout = link?.let { measurer.measure(it.label, linkStyle) }
+        val fitsSingleRow = linkLayout != null && with(density) {
+            val message = measurer.measure(notice.message, bodyStyle)
+            val buttonWidth = maxOf(ButtonDefaults.MinWidth, linkLayout.size.width.toDp() + gap * 2)
+            message.lineCount == 1 && linkLayout.lineCount == 1 &&
+                message.size.width.toDp() + buttonWidth + closeSize + gap + closeGap <= availableWidth
         }
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = if (link == null || inline) Alignment.CenterVertically else Alignment.Top,
-            horizontalArrangement = Arrangement.spacedBy(gap)
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = if (fitsSingleRow) Arrangement.Start else Arrangement.spacedBy(gap)
         ) {
-            if (link != null && !inline) {
-                Column(Modifier.weight(1f)) {
-                    Txt(notice.message, S.appNoticeText, foreground)
-                    AppNoticeLink(link, foreground, openExternal, inline = false)
+            val bodyModifier = Modifier.weight(1f)
+            val wrappedBodyModifier = bodyModifier.padding(vertical = wrappedPaddingV)
+            if (link != null && !fitsSingleRow) {
+                val label = with(density) {
+                    // 能放进一行的中文操作名称作为整体换行。
+                    if (linkLayout?.lineCount == 1 && linkLayout.size.width.toDp() <= availableWidth - closeSize - gap) {
+                        link.label.replace(adjacentHanCharacters, "\u2060")
+                    } else {
+                        link.label
+                    }
                 }
+                val content = buildAnnotatedString {
+                    append(notice.message)
+                    append(' ')
+                    withLink(LinkAnnotation.Clickable("app-notice", TextLinkStyles(style = linkStyle.toSpanStyle())) {
+                        openExternal(link.url)
+                    }) {
+                        append(label)
+                    }
+                }
+                Text(content, modifier = wrappedBodyModifier, style = bodyStyle)
             } else {
-                Txt(notice.message, S.appNoticeText, foreground, Modifier.weight(1f))
-                if (link != null) AppNoticeLink(link, foreground, openExternal, inline = true)
+                val modifier = if (link == null) wrappedBodyModifier else bodyModifier
+                Text(notice.message, modifier = modifier, style = bodyStyle)
+                if (link != null) {
+                    Spacer(Modifier.width(gap))
+                    TextButton(
+                        onClick = { openExternal(link.url) },
+                        contentPadding = PaddingValues(horizontal = gap)
+                    ) {
+                        Text(link.label, style = linkStyle)
+                    }
+                    Spacer(Modifier.width(closeGap))
+                }
             }
             IconButton(
                 onClick = dismiss,
@@ -211,17 +250,6 @@ private fun AppNoticeBanner(notice: AppNotice, openExternal: (String) -> Unit, d
                 ZIcon("close", CP.AppNotice.closeIconSize.d, foreground)
             }
         }
-    }
-}
-
-@Composable
-private fun AppNoticeLink(link: AppNotice.Link, color: Color, openExternal: (String) -> Unit, inline: Boolean) {
-    TextButton(
-        onClick = { openExternal(link.url) },
-        modifier = if (inline) Modifier else Modifier.widthIn(min = Tok.Space.MinTouchTarget.android.d),
-        contentPadding = if (inline) PaddingValues(horizontal = CP.AppNotice.actionGap.d) else PaddingValues()
-    ) {
-        Txt(link.label, S.captionStrong, color)
     }
 }
 

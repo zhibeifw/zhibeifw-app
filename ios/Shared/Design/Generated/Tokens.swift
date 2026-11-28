@@ -21,6 +21,7 @@ enum Tok {
         static let backgroundSecondary = ZColor(light: 0xFFF2F2F7, dark: 0xFF1C1C1E)
         static let appNoticeBackground = ZColor(light: 0xFFEAF2FF, dark: 0xFF1C304D)
         static let appNoticeForeground = ZColor(light: 0xFF132C51, dark: 0xFFE3EFFF)
+        static let appNoticeLink = ZColor(light: 0xFF0057B8, dark: 0xFF82B8FF)
         static let labelPrimary = ZColor(light: 0xFF000000, dark: 0xFFFFFFFF)
         static let labelSecondary = ZColor(light: 0xFF6C6C70, dark: 0xFF98989F)
         static let labelTertiary = ZColor(light: 0xFF8E8E93, dark: 0xFF8E8E93)
@@ -68,7 +69,8 @@ enum Tok {
             static let buttonLarge = ZTextStyle(size: 17, weight: 600, lineHeight: 22)
             static let bannerText = ZTextStyle(size: 15, weight: 400, lineHeight: 20)
             static let bannerAction = ZTextStyle(size: 15, weight: 600, lineHeight: 20)
-            static let appNoticeText = ZTextStyle(size: 14, weight: 400, lineHeight: 20)
+            static let appNoticeText = ZTextStyle(size: 12, weight: 400, lineHeight: 16)
+            static let appNoticeAction = ZTextStyle(size: 12, weight: 600, lineHeight: 16)
             static let description = ZTextStyle(size: 15, weight: 400, lineHeight: 20)
             static let moreLink = ZTextStyle(size: 15, weight: 600, lineHeight: 20)
             static let captionStrong = ZTextStyle(size: 13, weight: 600, lineHeight: 18)
@@ -175,9 +177,10 @@ enum Tok {
         enum AppNotice {
             static let paddingV: CGFloat = 8
             static let actionGap: CGFloat = 8
+            static let compactPaddingV: CGFloat = 1
+            static let inlineCloseGap: CGFloat = 4
+            static let controlSize: CGFloat = 48
             static let closeIconSize: CGFloat = 20
-            static let inlineTextWidth: CGFloat = 140
-            static let inlineLinkMaxFraction: CGFloat = 0.33
         }
         enum UpdatingHint {
             static let indicatorSize: CGFloat = 14

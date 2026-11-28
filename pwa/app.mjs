@@ -23,6 +23,17 @@ function setIcon(node,name){node.replaceChildren(icon(name));}
 const appNoticeRegion=el('aside',{class:'app-notice','aria-label':'公告',hidden:''});
 const dismissedAppNotices=new Set();
 const appNoticePreference=key=>'appNotice.dismissed.'+key;
+function layoutAppNotice(){
+ if(appNoticeRegion.hidden)return;
+ const content=appNoticeRegion.firstElementChild;
+ if(/[\r\n]/.test(content.textContent)){
+  appNoticeRegion.classList.remove('is-compact');
+  return;
+ }
+ appNoticeRegion.classList.add('is-compact');
+ appNoticeRegion.classList.toggle('is-compact',content.scrollWidth<=content.clientWidth);
+}
+new ResizeObserver(layoutAppNotice).observe(appNoticeRegion);
 let appNoticeRequest, lastAppNoticeCheck=0;
 function refreshAppNotice(force){
  if(appNoticeRequest || (!force && Date.now()-lastAppNoticeCheck<60000))return;
@@ -33,15 +44,16 @@ function refreshAppNotice(force){
    appNoticeRegion.replaceChildren();
    return;
   }
-  const link=value.link && el('a',{href:value.link.url,target:'_blank',rel:'noopener noreferrer'},value.link.label,icon('chevron_right'));
+  const link=value.link && el('a',{href:value.link.url,target:'_blank',rel:'noopener noreferrer'},value.link.label);
   const close=el('button',{type:'button','aria-label':'关闭公告',onclick:()=>{
    dismissedAppNotices.add(value.dismissalKey);
    write(appNoticePreference(value.dismissalKey),true);
    appNoticeRegion.hidden=true;
    appNoticeRegion.replaceChildren();
   }},icon('close'));
-  appNoticeRegion.replaceChildren(el('div',{class:'app-notice-content'},el('p',{},value.message),link),close);
+  appNoticeRegion.replaceChildren(el('p',{class:'app-notice-content'},el('span',{},value.message),link && ' ',link),close);
   appNoticeRegion.hidden=false;
+  layoutAppNotice();
  }).finally(()=>{appNoticeRequest=null;});
 }
 for(const i of document.querySelectorAll('[data-icon]'))i.style.setProperty('--icon',`url("./assets/${i.dataset.icon}_24px.svg")`);

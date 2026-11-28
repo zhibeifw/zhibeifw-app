@@ -32,6 +32,10 @@
       "light": "#132C51",
       "dark": "#E3EFFF"
     },
+    "appNoticeLink": {
+      "light": "#0057B8",
+      "dark": "#82B8FF"
+    },
     "labelPrimary": {
       "light": "#000000",
       "dark": "#FFFFFF"
@@ -235,9 +239,14 @@
         "lineHeight": 20
       },
       "appNoticeText": {
-        "size": 14,
+        "size": 12,
         "weight": 400,
-        "lineHeight": 20
+        "lineHeight": 16
+      },
+      "appNoticeAction": {
+        "size": 12,
+        "weight": 600,
+        "lineHeight": 16
       },
       "description": {
         "size": 15,
@@ -404,11 +413,13 @@
       "bottomGap": 16
     },
     "appNotice": {
+      "_说明": "全端首页公告。默认单行高度为 50（48 的控件和上下各 1 留白）；内容较长时正文和句尾链接一起换行。Vision Pro 使用系统材质并遵循本端操作范围。",
       "paddingV": 8,
       "actionGap": 8,
-      "closeIconSize": 20,
-      "inlineTextWidth": 140,
-      "inlineLinkMaxFraction": 0.33
+      "compactPaddingV": 1,
+      "inlineCloseGap": 4,
+      "controlSize": 48,
+      "closeIconSize": 20
     },
     "updatingHint": {
       "_说明": "主页后台更新时顶部的“正在更新…”：在顶栏正中，系统转圈在左、小字在右（2026-10-30 用户定，按常见做法；位置选了居中左右排）。iOS 转圈用系统 small 尺寸，Android 用下面的尺寸；gap 是圈和字之间的距离",

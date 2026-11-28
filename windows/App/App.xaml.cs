@@ -16,7 +16,7 @@ public partial class App : Application
             var root = design.RootElement;
             var component = root.GetProperty("component");
             var colors = root.GetProperty("color");
-            foreach (var key in new[] { "appNoticeBackground", "appNoticeForeground" })
+            foreach (var key in new[] { "appNoticeBackground", "appNoticeForeground", "appNoticeLink" })
                 Resources[key] = new SolidColorBrush((Color)ColorConverter.ConvertFromString(colors.GetProperty(key).GetProperty("light").GetString())!);
             var banner = component.GetProperty("banner");
             var notice = component.GetProperty("appNotice");
@@ -25,11 +25,18 @@ public partial class App : Application
             double noticePaddingH = banner.GetProperty("paddingH").GetDouble();
             double noticePaddingV = notice.GetProperty("paddingV").GetDouble();
             Resources["NoticePadding"] = new Thickness(noticePaddingH, noticePaddingV, noticePaddingH, noticePaddingV);
+            double compactPaddingV = notice.GetProperty("compactPaddingV").GetDouble();
+            double actionGap = notice.GetProperty("actionGap").GetDouble();
+            Resources["AppNoticePadding"] = new Thickness(noticePaddingH, compactPaddingV, 0, compactPaddingV);
+            Resources["AppNoticeWrappedPadding"] = new Thickness(0, noticePaddingV, actionGap, noticePaddingV);
+            Resources["AppNoticeActionMargin"] = new Thickness(actionGap, 0, notice.GetProperty("inlineCloseGap").GetDouble(), 0);
+            Resources["AppNoticeActionPadding"] = new Thickness(actionGap, 0, actionGap, 0);
+            Resources["AppNoticeControlSize"] = notice.GetProperty("controlSize").GetDouble();
             Resources["NoticeMargin"] = new Thickness(0, 0, 0, banner.GetProperty("bottomGap").GetDouble());
             Resources["NoticeActionMargin"] = new Thickness(notice.GetProperty("actionGap").GetDouble(), 0, 0, 0);
             Resources["NoticeCloseIconSize"] = notice.GetProperty("closeIconSize").GetDouble();
             var fontStyles = root.GetProperty("font").GetProperty("style");
-            foreach (var role in new[] { "bannerText", "bannerAction" })
+            foreach (var role in new[] { "bannerText", "bannerAction", "appNoticeText", "appNoticeAction" })
             {
                 var font = fontStyles.GetProperty(role);
                 Resources[role + ".Size"] = font.GetProperty("size").GetDouble();

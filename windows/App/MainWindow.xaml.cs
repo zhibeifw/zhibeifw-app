@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Net.Http;
 using System.Reflection;
@@ -8,6 +9,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -393,10 +395,50 @@ public partial class MainWindow : Window
 
     void UpdateHomeNotice()
     {
-        HomeNotice.Visibility = location.Page == "主页" && appNotice != null ? Visibility.Visible : Visibility.Collapsed;
-        HomeNoticeMessage.Text = appNotice?.Message;
-        HomeNoticeLink.Content = appNotice?.Link?.Label;
-        HomeNoticeLink.Visibility = appNotice?.Link == null ? Visibility.Collapsed : Visibility.Visible;
+        bool visible = location.Page == "主页" && appNotice != null;
+        HomeNotice.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible) LayoutHomeNotice(HomeNotice.ActualWidth);
+    }
+
+    void HomeNoticeSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (e.WidthChanged && HomeNotice.IsVisible) LayoutHomeNotice(e.NewSize.Width);
+    }
+
+    void LayoutHomeNotice(double width)
+    {
+        if (appNotice is not { } notice) return;
+        var link = notice.Link;
+        var available = width - HomeNotice.Padding.Left - HomeNoticeClose.MinWidth;
+        var typography = new Typeface(HomeNoticeMessage.FontFamily, HomeNoticeMessage.FontStyle,
+            HomeNoticeMessage.FontWeight, HomeNoticeMessage.FontStretch);
+        var actionTypography = new Typeface(HomeNoticeLink.FontFamily, HomeNoticeLink.FontStyle,
+            HomeNoticeLink.FontWeight, HomeNoticeLink.FontStretch);
+        double pixelsPerDip = VisualTreeHelper.GetDpi(HomeNotice).PixelsPerDip;
+        double Measure(string value, Typeface typeface, double fontSize) => new FormattedText(value,
+            CultureInfo.CurrentUICulture, HomeNoticeMessage.FlowDirection, typeface, fontSize, Brushes.Black, pixelsPerDip).WidthIncludingTrailingWhitespace;
+        double labelWidth = link is null ? 0 : Measure(link.Label, actionTypography, HomeNoticeLink.FontSize);
+        double buttonWidth = Math.Max(HomeNoticeLink.MinWidth, labelWidth + HomeNoticeLink.Padding.Left + HomeNoticeLink.Padding.Right);
+        bool compact = link is not null && notice.Message.IndexOfAny(['\r', '\n']) < 0 && link.Label.IndexOfAny(['\r', '\n']) < 0 &&
+            Measure(notice.Message, typography, HomeNoticeMessage.FontSize) + buttonWidth + HomeNoticeLink.Margin.Left + HomeNoticeLink.Margin.Right <= available;
+
+        HomeNoticeMessage.Padding = compact ? new Thickness() : (Thickness)FindResource("AppNoticeWrappedPadding");
+        HomeNoticeMessage.Inlines.Clear();
+        HomeNoticeMessage.Inlines.Add(new Run(notice.Message));
+        HomeNoticeLink.Content = link?.Label;
+        HomeNoticeLink.Visibility = compact ? Visibility.Visible : Visibility.Collapsed;
+        object linkBrush = SystemParameters.HighContrast ? SystemColors.HotTrackBrushKey : "appNoticeLink";
+        HomeNoticeLink.SetResourceReference(ForegroundProperty, linkBrush);
+        if (link is null || compact) return;
+
+        var label = labelWidth <= available - HomeNoticeMessage.Padding.Right
+            ? System.Text.RegularExpressions.Regex.Replace(link.Label, "(?<=[\u4e00-\u9fff])(?=[\u4e00-\u9fff])", "\u2060")
+            : link.Label;
+        var action = new Hyperlink(new Run(label)) { FontWeight = HomeNoticeLink.FontWeight, TextDecorations = null };
+        action.SetResourceReference(TextElement.ForegroundProperty, linkBrush);
+        action.Click += OpenHomeNotice;
+        HomeNoticeMessage.Inlines.Add(new Run(" "));
+        HomeNoticeMessage.Inlines.Add(action);
     }
 
     void OpenHomeNotice(object sender, RoutedEventArgs e)

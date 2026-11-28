@@ -321,8 +321,8 @@
             </DockPanel>
           </Border>
           <Border x:Name="HomeNotice" DockPanel.Dock="Top" Visibility="Collapsed"
-                  Padding="{DynamicResource NoticePadding}" Margin="{DynamicResource NoticeMargin}"
-                  CornerRadius="{DynamicResource NoticeRadius}" MinHeight="{DynamicResource NoticeHeight}">
+                  Padding="{DynamicResource AppNoticePadding}" Margin="{DynamicResource NoticeMargin}"
+                  CornerRadius="{DynamicResource NoticeRadius}" SizeChanged="HomeNoticeSizeChanged">
             <Border.Style>
               <Style TargetType="Border">
                 <Setter Property="Background" Value="{DynamicResource appNoticeBackground}"/>
@@ -336,26 +336,26 @@
               </Style>
             </Border.Style>
             <DockPanel>
-              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
-                <Button x:Name="HomeNoticeLink" Click="OpenHomeNotice" Visibility="Collapsed" Margin="{DynamicResource NoticeActionMargin}"
-                        MinHeight="{DynamicResource NoticeHeight}" Style="{StaticResource Plain}"
-                        Foreground="{Binding Foreground, ElementName=HomeNoticeMessage}"
-                        FontSize="{DynamicResource bannerAction.Size}" FontWeight="{DynamicResource bannerAction.Weight}">
+                <Button DockPanel.Dock="Right" x:Name="HomeNoticeClose" Click="DismissHomeNotice"
+                        Content="&#x00D7;" FontSize="{DynamicResource NoticeCloseIconSize}" FontWeight="{DynamicResource bannerAction.Weight}"
+                        Padding="0" VerticalAlignment="Center"
+                        MinWidth="{DynamicResource AppNoticeControlSize}" MinHeight="{DynamicResource AppNoticeControlSize}"
+                        Style="{StaticResource Plain}" Foreground="{Binding Foreground, ElementName=HomeNoticeMessage}"
+                        AutomationProperties.Name="关闭公告"/>
+                <Button DockPanel.Dock="Right" x:Name="HomeNoticeLink" Click="OpenHomeNotice" Visibility="Collapsed"
+                        Margin="{DynamicResource AppNoticeActionMargin}" Padding="{DynamicResource AppNoticeActionPadding}"
+                        MinWidth="{DynamicResource AppNoticeControlSize}" MinHeight="{DynamicResource AppNoticeControlSize}"
+                        VerticalAlignment="Center" Style="{StaticResource Plain}"
+                        FontSize="{DynamicResource appNoticeAction.Size}" FontWeight="{DynamicResource appNoticeAction.Weight}">
                   <Button.ContentTemplate>
                     <DataTemplate>
-                      <TextBlock Text="{Binding}" LineHeight="{DynamicResource bannerAction.LineHeight}" TextWrapping="Wrap"/>
+                      <TextBlock Text="{Binding}" LineHeight="{DynamicResource appNoticeAction.LineHeight}"/>
                     </DataTemplate>
                   </Button.ContentTemplate>
                 </Button>
-                <Button x:Name="HomeNoticeClose" Click="DismissHomeNotice" Margin="{DynamicResource NoticeActionMargin}"
-                        Content="&#x00D7;" FontSize="{DynamicResource NoticeCloseIconSize}" FontWeight="{DynamicResource bannerAction.Weight}"
-                        MinWidth="{DynamicResource NoticeHeight}" MinHeight="{DynamicResource NoticeHeight}"
-                        Style="{StaticResource Plain}" Foreground="{Binding Foreground, ElementName=HomeNoticeMessage}"
-                        AutomationProperties.Name="关闭公告"/>
-              </StackPanel>
               <TextBlock x:Name="HomeNoticeMessage" VerticalAlignment="Center" TextWrapping="Wrap"
-                         FontSize="{DynamicResource bannerText.Size}" FontWeight="{DynamicResource bannerText.Weight}"
-                         LineHeight="{DynamicResource bannerText.LineHeight}"/>
+                         FontSize="{DynamicResource appNoticeText.Size}" FontWeight="{DynamicResource appNoticeText.Weight}"
+                         LineHeight="{DynamicResource appNoticeText.LineHeight}"/>
             </DockPanel>
           </Border>
           <WrapPanel x:Name="Actions" DockPanel.Dock="Top"/>

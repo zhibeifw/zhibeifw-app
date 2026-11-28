@@ -20,10 +20,10 @@ style = style.replace('{{baseFontPercent}}', f'{base_px / 16 * 100:g}%')
 for key,value in t['_pwa']['dimensions'].items():style=style.replace('{{'+key+'}}',value)
 style=style.replace('{{accent}}',t['_pwa']['accent'])
 for group, keys in [('banner', ['height', 'radius', 'paddingH', 'bottomGap']),
-                    ('appNotice', ['paddingV', 'actionGap', 'closeIconSize', 'inlineTextWidth'])]:
+                    ('appNotice', ['paddingV', 'actionGap', 'compactPaddingV', 'inlineCloseGap', 'controlSize', 'closeIconSize'])]:
  for key in keys:
   style=style.replace('{{'+group+'.'+key+'}}', f"{t['component'][group][key]:g}px")
-for role in ['bannerText', 'bannerAction']:
+for role in ['bannerText', 'bannerAction', 'appNoticeText', 'appNoticeAction']:
  font=t['font']['style'][role]
  for key,value in {'size':f"{font['size']/16:g}rem", 'weight':str(font['weight']),
                    'lineHeight':f"{font['lineHeight']/font['size']:g}"}.items():
