@@ -304,6 +304,22 @@
             <TextBlock Text="无法更新，显示的是上一次更新的内容" VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite"/>
             <Button Content="重试" Click="RefreshClick" Margin="8,0,0,0"/>
           </StackPanel>
+          <Border x:Name="OutdatedBanner" DockPanel.Dock="Top" Visibility="Collapsed"
+                  Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                  Padding="{DynamicResource NoticePadding}" Margin="{DynamicResource NoticeMargin}"
+                  CornerRadius="{DynamicResource NoticeRadius}" MinHeight="{DynamicResource NoticeHeight}">
+            <DockPanel>
+              <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+                <Button Content="关闭" Click="DismissOutdated" Margin="{DynamicResource NoticeActionMargin}"
+                        AutomationProperties.Name="关闭版本过旧提示"/>
+                <Button Content="更新" Click="OpenOutdatedDownload" Margin="{DynamicResource NoticeActionMargin}"
+                        AutomationProperties.Name="更新 Windows 版"/>
+              </StackPanel>
+              <TextBlock Text="此版本过旧，已无法获得最新的内容更新，请更新应用" TextWrapping="Wrap"
+                         VerticalAlignment="Center" FontSize="{DynamicResource bannerText.Size}"
+                         LineHeight="{DynamicResource bannerText.LineHeight}" AutomationProperties.LiveSetting="Polite"/>
+            </DockPanel>
+          </Border>
           <Border x:Name="HomeNotice" DockPanel.Dock="Top" Visibility="Collapsed"
                   Padding="{DynamicResource NoticePadding}" Margin="{DynamicResource NoticeMargin}"
                   CornerRadius="{DynamicResource NoticeRadius}" MinHeight="{DynamicResource NoticeHeight}">

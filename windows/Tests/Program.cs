@@ -34,6 +34,23 @@ using (var vectors = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(AppContex
             notice?.DismissalKey == row[5].GetString(), "公告：" + row[0].GetString());
     }
 }
+using (var versions = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "vectors", "versions.json"))))
+{
+    foreach (var row in versions.RootElement.GetProperty("compare").EnumerateArray())
+        Check(WindowsUpgrade.CompareVersions(row[0].GetString(), row[1].GetString()) == row[2].GetInt32(), "版本比较：" + row);
+    foreach (var row in versions.RootElement.GetProperty("invalid").EnumerateArray())
+        Check(WindowsUpgrade.CompareVersions(row[0].GetString(), row[1].GetString()) == null, "无效版本：" + row);
+}
+const string windowsManifest = """{"windows":{"latestVersion":"2026.12.01","minVersion":"2026.11.01","exePath":"releases/zhibeifw-2026.12.01-win-setup.exe"}}""";
+Check(WindowsUpgrade.Parse("""{"latestVersion":"2026.11.27"}"""u8.ToArray()) == null, "已发布的清单可以没有 Windows 段");
+foreach (string invalid in new[] { "{", windowsManifest.Replace("2026.11.01", "2026.12.02"),
+    windowsManifest.Replace("releases/", "https://example.org/"), windowsManifest.Replace("win-setup.exe", "other.exe") })
+{
+    bool rejected = false;
+    try { WindowsUpgrade.Parse(System.Text.Encoding.UTF8.GetBytes(invalid)); }
+    catch (Exception e) when (e is JsonException or InvalidDataException) { rejected = true; }
+    Check(rejected, "拒绝无效 Windows 清单：" + invalid);
+}
 Check(!Progress.Finished(69, 100) && Progress.Finished(70, 100), "长音频结尾");
 Check(!Progress.Finished(18, 20) && Progress.Finished(19, 20) && !Progress.Finished(0, 0), "短音频结尾");
 foreach (var (bin, band) in new[] { (2, 0), (12, 1), (50, 2), (200, 3) })
@@ -79,6 +96,24 @@ try
     using var http = new HttpClient(handler);
     var network = new ContentService(reopened, http);
     Check((await network.RefreshCatalog("", default))?.Courses.Count == 1, "同步目录");
+    handler.UpgradeBody = windowsManifest;
+    var updates = new WindowsUpdateChecker(reopened, network, "2026.11.27");
+    DateTimeOffset now = DateTimeOffset.UtcNow;
+    var update = await updates.Check(false, now, default);
+    Check(update.Status == WindowsUpdateStatus.Available && update.ShowDialog &&
+        network.UriFor(update.Release!.ExePath).AbsoluteUri == "https://zbfw.org/releases/zhibeifw-2026.12.01-win-setup.exe", "新版来自选中的内容线路");
+    updates.RemindLater(update.Release!.LatestVersion, now);
+    Check(!(await updates.Check(false, now.AddHours(1), default)).ShowDialog && handler.UpgradeRequests == 1, "自动检查限频并记住稍后提醒");
+    Check((await updates.Check(true, now.AddHours(2), default)).ShowDialog && handler.UpgradeValidations == 1, "手动检查绕过提醒并复用 304 缓存");
+    Check((await updates.Check(false, now.AddDays(7), default)).ShowDialog, "七天后再次提醒");
+    var afterReminder = now.AddDays(7).AddMinutes(1);
+    Check((await new WindowsUpdateChecker(reopened, network, "2026.12.01").Check(true, afterReminder, default)).Status == WindowsUpdateStatus.Current, "同版本即为最新");
+    Check((await new WindowsUpdateChecker(reopened, network, "2026.10.01").Check(true, afterReminder, default)).Status == WindowsUpdateStatus.Outdated, "低于最低版本");
+    handler.UpgradeBody = """{"windows":{}}""";
+    handler.UpgradeTag = "\"broken\"";
+    Check((await updates.Check(true, afterReminder, default)).Status == WindowsUpdateStatus.Failed &&
+        (await updates.Check(false, afterReminder.AddHours(1), default)).Status == WindowsUpdateStatus.Available,
+        "无效清单报错且保留有效缓存");
     foreach (var code in new[] { 200, 404, 410, 503 })
     {
         handler.AudioStatus = (System.Net.HttpStatusCode)code;
@@ -108,6 +143,14 @@ try
     Check(reopened.ReadCatalog() == cache, "线路检测不修改课程目录");
     handler.BlockedHosts.Clear();
     Check((await network.EnsureOrigin(default)) == "https://zbfw.org", "失败后再次联网会重选线路");
+    reopened.Set("domains", "https://backup.example.org");
+    handler.BlockedHosts.UnionWith(["zbfw.org", "zbfw.app"]);
+    handler.UpgradeBody = windowsManifest;
+    handler.UpgradeTag = "\"backup\"";
+    Check(await network.RefreshRoutes(default) == RouteStatus.Switched, "内置线路不可用时选到已保存的备用线路");
+    var fromBackup = await updates.Check(true, afterReminder, default);
+    Check(fromBackup.Status == WindowsUpdateStatus.Available && handler.UpgradeHost == "backup.example.org" &&
+        network.UriFor(fromBackup.Release!.ExePath).Host == "backup.example.org", "清单和安装包都使用选中的备用线路");
     var oldest = episode with { Id = "oldest" };
     reopened.Save(course, oldest, 31, 180, false, true);
     await Task.Delay(20);
@@ -182,6 +225,11 @@ sealed class CatalogServer(string sample) : HttpMessageHandler
 {
     public System.Net.HttpStatusCode AudioStatus { get; set; }
     public string Body { get; set; } = sample;
+    public string UpgradeBody { get; set; } = "{}";
+    public string UpgradeTag { get; set; } = "\"upgrade\"";
+    public int UpgradeRequests { get; private set; }
+    public int UpgradeValidations { get; private set; }
+    public string? UpgradeHost { get; private set; }
     public HashSet<string> BlockedHosts { get; } = [];
     public int Probes { get; private set; }
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -193,6 +241,21 @@ sealed class CatalogServer(string sample) : HttpMessageHandler
             Probes++;
             if (BlockedHosts.Contains(request.RequestUri.Host)) throw new HttpRequestException();
             reply.Content = new StringContent("""{"domains":["https://zbfw.org"]}""");
+        }
+        else if (request.RequestUri?.AbsolutePath == "/upgrade.json")
+        {
+            UpgradeRequests++;
+            UpgradeHost = request.RequestUri.Host;
+            if (request.Headers.IfNoneMatch.Any(t => t.Tag == UpgradeTag))
+            {
+                UpgradeValidations++;
+                reply.StatusCode = System.Net.HttpStatusCode.NotModified;
+            }
+            else
+            {
+                reply.Content = new StringContent(UpgradeBody);
+                reply.Headers.ETag = new(UpgradeTag);
+            }
         }
         else if (request.Headers.IfNoneMatch.Any(t => t.Tag == "\"catalog\""))
             reply.StatusCode = System.Net.HttpStatusCode.NotModified;

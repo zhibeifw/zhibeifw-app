@@ -26,6 +26,8 @@ public partial class MainWindow : Window
     Window? aboutWindow;
     readonly HttpClient http = new(new HttpClientHandler { UseCookies = false });
     readonly ContentService network;
+    readonly WindowsUpdateChecker updates;
+    static readonly string Version = typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0];
     readonly Covers covers;
     readonly Player player;
     readonly PlaybackSpectrum spectrum;
@@ -43,6 +45,9 @@ public partial class MainWindow : Window
     TrackRow? activeRow;
     string tag = "";
     bool catalogRefreshFailed;
+    WindowsUpgrade? outdatedUpgrade;
+    bool outdatedDismissed, updateDialogOpen, backgroundUpdateInProgress;
+    DateTimeOffset lastUpdateCheck;
     AppNotice? appNotice;
     Task? appNoticeRequest;
     readonly HashSet<string> dismissedAppNotices = new(StringComparer.Ordinal);
@@ -66,6 +71,7 @@ public partial class MainWindow : Window
         };
         store = new Store(Path.Combine(directory, "zhibeifw.db"), out var cached);
         network = new(store, http);
+        updates = new(store, network, Version);
         covers = new(network, Path.Combine(directory, "covers"), lifetime.Token);
         player = new(store, network, Dispatcher, lifetime.Token);
         player.PlaybackFailed += ShowPlaybackFailure;
@@ -106,10 +112,12 @@ public partial class MainWindow : Window
             ready = true;
             LaunchScreen.Visibility = Visibility.Collapsed;
             Render();
-            await Refresh();
+            await Task.WhenAll(Refresh(), CheckForUpdatesInBackground());
         };
         Activated += async (_, _) => {
-            if (ready && DateTime.UtcNow - lastSync >= TimeSpan.FromMinutes(1)) await Refresh();
+            if (!ready || closed) return;
+            await Task.WhenAll(DateTime.UtcNow - lastSync >= TimeSpan.FromMinutes(1) ? Refresh() : Task.CompletedTask,
+                CheckForUpdatesInBackground());
         };
         Deactivated += (_, _) => { if (ready) player.Save(); };
         PreviewKeyDown += (_, e) => {
@@ -279,6 +287,91 @@ public partial class MainWindow : Window
     void UpdateCatalogFailure() =>
         CatalogFailure.Visibility = catalogRefreshFailed && location.Page == "主页" ? Visibility.Visible : Visibility.Collapsed;
 
+    async Task CheckForUpdatesInBackground()
+    {
+        if (backgroundUpdateInProgress || DateTimeOffset.UtcNow - lastUpdateCheck < TimeSpan.FromHours(24)) return;
+        backgroundUpdateInProgress = true;
+        try { await CheckForUpdates(false); }
+        finally { backgroundUpdateInProgress = false; }
+    }
+
+    async Task<string> CheckForUpdates(bool manual)
+    {
+        WindowsUpdateResult result;
+        try { result = await updates.Check(manual, DateTimeOffset.UtcNow, lifetime.Token); }
+        catch (OperationCanceledException) when (closed) { return "检查失败"; }
+        if (closed || result.Status == WindowsUpdateStatus.Failed) return "检查失败";
+
+        lastUpdateCheck = DateTimeOffset.UtcNow;
+        outdatedUpgrade = result.Status == WindowsUpdateStatus.Outdated ? result.Release : null;
+        UpdateOutdatedBanner();
+        if (result.ShowDialog && result.Release is {} release)
+            _ = Dispatcher.BeginInvoke(() => ShowUpdateDialog(release, result.Status == WindowsUpdateStatus.Outdated));
+
+        return result.Status switch {
+            WindowsUpdateStatus.Available => $"有新版本 {result.Release!.LatestVersion}",
+            WindowsUpdateStatus.Outdated => "版本过旧，请更新",
+            _ => "已是最新版本"
+        };
+    }
+
+    void UpdateOutdatedBanner() => OutdatedBanner.Visibility =
+        location.Page == "主页" && outdatedUpgrade != null && !outdatedDismissed ? Visibility.Visible : Visibility.Collapsed;
+
+    void DismissOutdated(object sender, RoutedEventArgs e)
+    {
+        outdatedDismissed = true;
+        UpdateOutdatedBanner();
+    }
+
+    void OpenOutdatedDownload(object sender, RoutedEventArgs e)
+    {
+        if (outdatedUpgrade is {} release) OpenUpdateDownload(release);
+    }
+
+    void OpenUpdateDownload(WindowsUpgrade release)
+    {
+        var url = network.UriFor(release.ExePath);
+        try { Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true }); }
+        catch (Win32Exception)
+        { MessageBox.Show(aboutWindow ?? this, "无法打开下载链接，请稍后重试。", "检查更新", MessageBoxButton.OK); }
+    }
+
+    void ShowUpdateDialog(WindowsUpgrade release, bool outdated)
+    {
+        if (closed || updateDialogOpen) return;
+        updateDialogOpen = true;
+        try
+        {
+            var dialog = new Window {
+                Owner = aboutWindow ?? this, Title = $"发现新版本 {release.LatestVersion}",
+                WindowStartupLocation = WindowStartupLocation.CenterOwner, ResizeMode = ResizeMode.NoResize,
+                SizeToContent = SizeToContent.WidthAndHeight, ShowInTaskbar = false
+            };
+            var content = new StackPanel { Margin = new Thickness(20) };
+            if (outdated) content.Children.Add(Label("此版本过旧，已无法获得最新的内容更新。"));
+            content.Children.Add(Label("下载完成后，请打开 EXE 安装包更新。"));
+            var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
+                Margin = new Thickness(0, 16, 0, 0) };
+            var later = Button(outdated ? "关闭" : "稍后提醒", () => dialog.DialogResult = false);
+            later.IsCancel = true;
+            buttons.Children.Add(later);
+            var download = Button("立刻更新", () => dialog.DialogResult = true);
+            download.Margin = new Thickness(8, 0, 0, 0);
+            download.IsDefault = true;
+            buttons.Children.Add(download);
+            content.Children.Add(buttons);
+            dialog.Content = content;
+            if (dialog.ShowDialog() == true) OpenUpdateDownload(release);
+            else if (!closed && !outdated)
+            {
+                try { updates.RemindLater(release.LatestVersion, DateTimeOffset.UtcNow); }
+                catch (IOException error) { Trace.TraceWarning(error.Message); }
+            }
+        }
+        finally { updateDialogOpen = false; }
+    }
+
     void RefreshAppNotice(string origin)
     {
         if (appNoticeRequest is { IsCompleted: false }) return;
@@ -332,6 +425,7 @@ public partial class MainWindow : Window
         Heading.Text = location.Page;
         Back.Visibility = history.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         UpdateCatalogFailure();
+        UpdateOutdatedBanner();
         UpdateHomeNotice();
         EmptyState.Visibility = Visibility.Collapsed;
         ClearRecentButton.Visibility = location.Page == "最近播放" ? Visibility.Visible : Visibility.Collapsed;
@@ -802,12 +896,12 @@ public partial class MainWindow : Window
         var settings = Group("设置");
         Row(settings, "清除缓存", "清除", "drive", () => { covers.Clear(); return Task.FromResult("已清除"); });
         Row(settings, "刷新网络线路", "刷新", "refresh", RefreshRoutes, "正在检测…");
+        Row(settings, "检查更新", "检查", "refresh", () => CheckForUpdates(true), "正在检查…");
         var links = Group("关于");
         foreach (var (name, caption, glyph, url) in new[] { ("联系", "hello@zhibeifw.com", "email", "mailto:hello@zhibeifw.com"),
             ("隐私政策", "打开", "privacy", "https://zhibeifw.com/privacy"), ("源代码", "打开", "code", "https://github.com/zhibeifw/zhibeifw-app") })
             Row(links, name, caption, glyph, () => { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); return Task.FromResult(caption); });
-        var version = typeof(App).Assembly.GetCustomAttribute<AssemblyInformationalVersionAttribute>()!.InformationalVersion.Split('+')[0];
-        var footer = new TextBlock { Text = $"智悲佛网\n版本 {version}", FontSize = 12, TextAlignment = TextAlignment.Center, Margin = new(0, 16, 0, 0) };
+        var footer = new TextBlock { Text = $"智悲佛网\n版本 {Version}", FontSize = 12, TextAlignment = TextAlignment.Center, Margin = new(0, 16, 0, 0) };
         footer.SetResourceReference(TextBlock.ForegroundProperty, "TextFillColorSecondaryBrush");
         DockPanel.SetDock(footer, Dock.Bottom);
         body.Children.Add(footer);
