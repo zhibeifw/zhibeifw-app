@@ -82,10 +82,16 @@ private struct MacMainView: View {
                     set: { if !$0, let d = model.updates.dialog { model.updates.remindLater(d.version) } }
                 )
             ) {
-                Button("立刻更新") { if let d = model.updates.dialog { model.updates.openDownload(d.dmgPath) } }
+                Button("立刻更新") { if let d = model.updates.dialog { model.updates.startDownload(d.dmgPath) } }
                 Button("稍后提醒", role: .cancel) { if let d = model.updates.dialog { model.updates.remindLater(d.version) } }
             } message: {
                 Text("下载后打开 dmg，把“智悲佛网”拖进“应用程序”替换旧版。")
+            }
+            .sheet(isPresented: Binding(
+                get: { model.updates.download != nil },
+                set: { if !$0 { model.updates.closeDownload() } }
+            )) {
+                MacUpdateDownloadView(updates: model.updates)
             }
     }
 
@@ -142,6 +148,44 @@ private struct MacMainView: View {
             // 打字时回到搜索结果；清空时不动（“前往课程”“进分类”会先清空搜索词，再进页面）
             if !v.isEmpty { model.path = [] }
         }
+    }
+}
+
+private struct MacUpdateDownloadView: View {
+    let updates: MacUpdateChecker
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: MacLayout.cardGap) {
+            switch updates.download {
+            case .transferring(let fraction):
+                Text("正在下载安装包…").font(.headline)
+                if let fraction {
+                    ProgressView(value: fraction) { Text(fraction, format: .percent.precision(.fractionLength(0))) }
+                } else {
+                    ProgressView().progressViewStyle(.linear)
+                }
+            case .ready:
+                Text("安装包已下载").font(.headline)
+                Text("打开安装包后，把“智悲佛网”拖进“应用程序”替换旧版。")
+            case .failed:
+                Text("无法下载或打开安装包，请稍后重试。").font(.headline)
+            case nil:
+                EmptyView()
+            }
+            HStack {
+                Spacer()
+                if case .transferring? = updates.download {
+                    Button("取消", role: .cancel, action: updates.closeDownload)
+                } else {
+                    Button("关闭", role: .cancel, action: updates.closeDownload)
+                }
+                if case .ready(let file)? = updates.download {
+                    Button("打开安装包") { updates.openInstaller(file) }.keyboardShortcut(.defaultAction)
+                }
+            }
+        }
+        .padding(MacLayout.pageMargin)
+        .frame(minWidth: 340)
     }
 }
 

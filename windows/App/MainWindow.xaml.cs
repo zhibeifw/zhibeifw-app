@@ -332,9 +332,7 @@ public partial class MainWindow : Window
     void OpenUpdateDownload(WindowsUpgrade release)
     {
         var url = network.UriFor(release.ExePath);
-        try { Process.Start(new ProcessStartInfo(url.AbsoluteUri) { UseShellExecute = true }); }
-        catch (Win32Exception)
-        { MessageBox.Show(aboutWindow ?? this, "无法打开下载链接，请稍后重试。", "检查更新", MessageBoxButton.OK); }
+        new UpdateDownloadWindow(aboutWindow ?? this, network, url, lifetime.Token).ShowDialog();
     }
 
     void ShowUpdateDialog(WindowsUpgrade release, bool outdated)
@@ -350,7 +348,7 @@ public partial class MainWindow : Window
             };
             var content = new StackPanel { Margin = new Thickness(20) };
             if (outdated) content.Children.Add(Label("此版本过旧，已无法获得最新的内容更新。"));
-            content.Children.Add(Label("下载完成后，请打开 EXE 安装包更新。"));
+            content.Children.Add(Label("下载完成后，可以打开安装包更新。"));
             var buttons = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right,
                 Margin = new Thickness(0, 16, 0, 0) };
             var later = Button(outdated ? "关闭" : "稍后提醒", () => dialog.DialogResult = false);

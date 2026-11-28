@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.asPaddingValues
@@ -26,6 +27,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.IconButton
@@ -56,6 +58,7 @@ import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.rememberTextMeasurer
 import com.zhibeifw.app.AppModel
 import com.zhibeifw.app.Routes
 import com.zhibeifw.app.Tab
@@ -167,40 +170,58 @@ fun HomeView(model: AppModel) {
 private fun AppNoticeBanner(notice: AppNotice, openExternal: (String) -> Unit, dismiss: () -> Unit) {
     val foreground = Tok.Color.appNoticeForeground.c()
     val margin = Layout.pageMargin(windowWidth())
+    val gap = CP.AppNotice.actionGap.d
+    val closeSize = Tok.Space.MinTouchTarget.android.d
+    val measurer = rememberTextMeasurer()
     BoxWithConstraints(
         Modifier.padding(horizontal = margin.d).fillMaxWidth()
             .heightIn(min = CP.Banner.height.d)
             .clip(RoundedCornerShape(CP.Banner.radius.d))
             .background(Tok.Color.appNoticeBackground.c())
-            .padding(horizontal = CP.Banner.paddingH.d, vertical = CP.AppNotice.paddingV.d),
+            .padding(start = CP.Banner.paddingH.d, top = CP.AppNotice.paddingV.d, bottom = CP.AppNotice.paddingV.d),
         contentAlignment = Alignment.CenterStart
     ) {
-        val linkWidth = maxWidth * CP.AppNotice.inlineLinkMaxFraction
+        val link = notice.link
+        val inline = link != null && with(LocalDensity.current) {
+            val message = measurer.measure(notice.message, S.appNoticeText.ts(foreground))
+            val label = measurer.measure(link.label, S.captionStrong.ts(foreground))
+            val buttonWidth = maxOf(ButtonDefaults.MinWidth, label.size.width.toDp() + gap * 2)
+            message.lineCount == 1 && label.lineCount == 1 &&
+                message.size.width.toDp() + buttonWidth + closeSize + gap * 2 <= maxWidth
+        }
         Row(
             Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(CP.AppNotice.actionGap.d)
+            verticalAlignment = if (link == null || inline) Alignment.CenterVertically else Alignment.Top,
+            horizontalArrangement = Arrangement.spacedBy(gap)
         ) {
-            Txt(
-                notice.message, S.bannerText, foreground,
-                Modifier.weight(1f)
-            )
-            notice.link?.let { link ->
-                TextButton(
-                    onClick = { openExternal(link.url) },
-                    modifier = Modifier.widthIn(max = linkWidth)
-                ) {
-                    Txt(link.label, S.bannerAction, foreground)
+            if (link != null && !inline) {
+                Column(Modifier.weight(1f)) {
+                    Txt(notice.message, S.appNoticeText, foreground)
+                    AppNoticeLink(link, foreground, openExternal, inline = false)
                 }
+            } else {
+                Txt(notice.message, S.appNoticeText, foreground, Modifier.weight(1f))
+                if (link != null) AppNoticeLink(link, foreground, openExternal, inline = true)
             }
             IconButton(
                 onClick = dismiss,
-                modifier = Modifier.size(Tok.Space.MinTouchTarget.android.d)
+                modifier = Modifier.size(closeSize)
                     .semantics { contentDescription = "关闭公告" }
             ) {
                 ZIcon("close", CP.AppNotice.closeIconSize.d, foreground)
             }
         }
+    }
+}
+
+@Composable
+private fun AppNoticeLink(link: AppNotice.Link, color: Color, openExternal: (String) -> Unit, inline: Boolean) {
+    TextButton(
+        onClick = { openExternal(link.url) },
+        modifier = if (inline) Modifier else Modifier.widthIn(min = Tok.Space.MinTouchTarget.android.d),
+        contentPadding = if (inline) PaddingValues(horizontal = CP.AppNotice.actionGap.d) else PaddingValues()
+    ) {
+        Txt(link.label, S.captionStrong, color)
     }
 }
 

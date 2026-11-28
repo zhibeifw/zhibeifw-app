@@ -234,6 +234,11 @@
         "weight": 600,
         "lineHeight": 20
       },
+      "appNoticeText": {
+        "size": 14,
+        "weight": 400,
+        "lineHeight": 20
+      },
       "description": {
         "size": 15,
         "weight": 400,

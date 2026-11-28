@@ -70,6 +70,7 @@ object Tok {
             val buttonLarge = ZTextStyle(size = 17f, weight = 600, lineHeight = 22f)
             val bannerText = ZTextStyle(size = 15f, weight = 400, lineHeight = 20f)
             val bannerAction = ZTextStyle(size = 15f, weight = 600, lineHeight = 20f)
+            val appNoticeText = ZTextStyle(size = 14f, weight = 400, lineHeight = 20f)
             val description = ZTextStyle(size = 15f, weight = 400, lineHeight = 20f)
             val moreLink = ZTextStyle(size = 15f, weight = 600, lineHeight = 20f)
             val captionStrong = ZTextStyle(size = 13f, weight = 600, lineHeight = 18f)

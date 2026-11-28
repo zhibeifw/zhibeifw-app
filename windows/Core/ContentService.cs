@@ -9,6 +9,37 @@ public enum RouteStatus { Unavailable, Unchanged, Switched }
 
 public sealed class ContentService(Store store, HttpClient http)
 {
+    public async Task DownloadInstaller(Uri uri, Stream destination, IProgress<int?> progress, CancellationToken token)
+    {
+        using var response = await http.GetAsync(uri, HttpCompletionOption.ResponseHeadersRead, token).ConfigureAwait(false);
+        response.EnsureSuccessStatusCode();
+        if (response.StatusCode != HttpStatusCode.OK) throw new InvalidDataException("安装包响应无效");
+
+        await using var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        var total = response.Content.Headers.ContentLength;
+        int? percent = total is > 0 ? 0 : null;
+        progress.Report(percent);
+        var buffer = new byte[65536];
+        long downloaded = 0;
+        int read;
+        while ((read = await source.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
+        {
+            await destination.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+            downloaded += read;
+            if (total is > 0)
+            {
+                int next = (int)Math.Min(100, 100.0 * downloaded / total.Value);
+                if (next != percent)
+                {
+                    percent = next;
+                    progress.Report(percent);
+                }
+            }
+        }
+        if (downloaded == 0 || (total.HasValue && downloaded != total.Value))
+            throw new InvalidDataException("安装包下载不完整");
+    }
+
     public async Task<bool> AudioRemoved(Uri uri, CancellationToken token)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(token);

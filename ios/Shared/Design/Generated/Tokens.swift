@@ -68,6 +68,7 @@ enum Tok {
             static let buttonLarge = ZTextStyle(size: 17, weight: 600, lineHeight: 22)
             static let bannerText = ZTextStyle(size: 15, weight: 400, lineHeight: 20)
             static let bannerAction = ZTextStyle(size: 15, weight: 600, lineHeight: 20)
+            static let appNoticeText = ZTextStyle(size: 14, weight: 400, lineHeight: 20)
             static let description = ZTextStyle(size: 15, weight: 400, lineHeight: 20)
             static let moreLink = ZTextStyle(size: 15, weight: 600, lineHeight: 20)
             static let captionStrong = ZTextStyle(size: 13, weight: 600, lineHeight: 18)
